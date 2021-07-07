@@ -77,6 +77,15 @@ pub struct Sides {
 // }
 
 #[wasm_bindgen]
+#[derive(Copy, Clone)]
+pub enum Rotation {
+    Rotate0,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+}
+
+#[wasm_bindgen]
 #[derive(Default, Copy, Clone)]
 pub struct ImageBorderOptions {
     pub output_size: Option<Size>,
@@ -84,7 +93,8 @@ pub struct ImageBorderOptions {
     pub crop: Option<Crop>,
     pub border_width: Option<Sides>,
     // pub padding: Option<Sides>,
-    pub rotate_angle: Option<i16>,
+    pub rotate_angle: Option<Rotation>,
+    pub preview: bool,
 }
 
 pub struct ImageBorders {
@@ -119,6 +129,13 @@ impl ImageBorders {
         if let Some(output_size) = options.output_size {
             size = output_size
         };
+        if options.preview {
+            size = Size {
+                width: (size.width as f32 * 0.25) as u32,
+                height: (size.height as f32 * 0.25) as u32,
+            };
+        };
+
         let mut final_image = RgbaImage::new(size.width, size.height);
 
         // fill white
@@ -147,6 +164,16 @@ impl ImageBorders {
                 crop_height,
             )
             .to_image()
+        };
+
+        // rotate the image
+        if let Some(rotate_angle) = options.rotate_angle {
+            match rotate_angle {
+                Rotation::Rotate0 => {}
+                Rotation::Rotate90 => {}
+                Rotation::Rotate180 => {}
+                Rotation::Rotate270 => {}
+            };
         };
 
         // resize the image to fit the screen
@@ -195,6 +222,25 @@ impl ImageBorders {
         };
 
         overlay(&mut final_image, &fitted_image, overlay_x, overlay_y);
+
+        // show the center of the final image
+        if options.preview {
+            let highlight_color = Rgba::from_channels(255, 0, 0, 50);
+            FilmImage::fill_rect(
+                &mut final_image,
+                highlight_color,
+                Point {
+                    x: 0,
+                    y: (size.height - size.width) / 2,
+                },
+                Point {
+                    x: size.width,
+                    y: ((size.height - size.width) / 2) + size.width,
+                },
+            );
+        };
+        // let line_width = 10;
+        // let top_line = (Point{ x: 0, y: (size.height - size.width) / 2
 
         Ok(final_image)
     }

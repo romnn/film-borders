@@ -2,9 +2,9 @@ use crate::borders::{Point, Size};
 use crate::utils;
 use image::codecs::jpeg::JpegEncoder;
 use image::error::{DecodingError, ImageError, ImageFormatHint, ImageResult};
-use image::imageops::{crop, resize, overlay, FilterType};
+use image::imageops::{crop, overlay, resize, FilterType};
 use image::io::Reader as ImageReader;
-use image::{DynamicImage, ImageBuffer, Rgba, RgbaImage, SubImage};
+use image::{DynamicImage, ImageBuffer, Pixel, Rgba, RgbaImage, SubImage};
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min, PartialOrd};
 use std::env;
@@ -85,16 +85,6 @@ fn get_image_data(
 //         JsValue {}
 //     }
 // }
-
-pub fn clamp<T: PartialOrd>(v: T, lower: T, upper: T) -> T {
-    if v < lower {
-        lower
-    } else if v > upper {
-        upper
-    } else {
-        v
-    }
-}
 
 impl FilmImage {
     // pub fn new(pixels: Vec<u8>, width: u32, height: u32) -> FilmImage {
@@ -210,13 +200,14 @@ impl FilmImage {
         top_left: Point,
         bottom_right: Point,
     ) -> () {
-        let x1 = clamp(min(top_left.x, bottom_right.x), 0, buffer.width());
-        let x2 = clamp(max(top_left.x, bottom_right.x), 0, buffer.width());
-        let y1 = clamp(min(top_left.y, bottom_right.y), 0, buffer.height());
-        let y2 = clamp(max(top_left.y, bottom_right.y), 0, buffer.height());
+        let x1 = utils::clamp(min(top_left.x, bottom_right.x), 0, buffer.width());
+        let x2 = utils::clamp(max(top_left.x, bottom_right.x), 0, buffer.width());
+        let y1 = utils::clamp(min(top_left.y, bottom_right.y), 0, buffer.height());
+        let y2 = utils::clamp(max(top_left.y, bottom_right.y), 0, buffer.height());
         for x in x1..x2 {
             for y in y1..y2 {
-                buffer.put_pixel(x, y, color);
+                // buffer.put_pixel(x, y, (*buffer.get_pixel(x, y)).blend(color));
+                buffer.get_pixel_mut(x, y).blend(&color);
             }
         }
     }

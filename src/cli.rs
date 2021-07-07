@@ -62,7 +62,7 @@ fn main() {
                         let border_options = borders::ImageBorderOptions {
                             output_size: Some(borders::Size {
                                 width: 1000,
-                                height: 1000,
+                                height: 1500,
                             }),
                             crop: None,
                             scale_factor: Some(0.75),
@@ -77,7 +77,9 @@ fn main() {
                             //     top: 10,
                             //     ..borders::Sides::default()
                             // }),
-                            rotate_angle: Some(90),
+                            rotate_angle: None,
+                            // rotate_angle: Some(borders::Rotation::Rotation0),
+                            preview: true,
                         };
                         match b
                             .apply(border_options)
