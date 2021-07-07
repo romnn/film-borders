@@ -1,9 +1,12 @@
+use crate::borders::{Point, Size};
 use crate::utils;
 use image::codecs::jpeg::JpegEncoder;
 use image::error::{DecodingError, ImageError, ImageFormatHint, ImageResult};
+use image::imageops::{crop, resize, overlay, FilterType};
 use image::io::Reader as ImageReader;
-use image::{DynamicImage, ImageBuffer};
+use image::{DynamicImage, ImageBuffer, Rgba, RgbaImage, SubImage};
 use serde::{Deserialize, Serialize};
+use std::cmp::{max, min, PartialOrd};
 use std::env;
 use std::error::Error;
 use std::fs::File;
@@ -16,10 +19,10 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 pub struct FilmImage {
     // pixels: Vec<u8>,
-    img: DynamicImage,
-    file_path: Option<PathBuf>,
-    // width: u32,
-    // height: u32,
+    // img: DynamicImage,
+    pub buffer: RgbaImage,
+    pub file_path: Option<PathBuf>,
+    pub size: Size,
 }
 
 // impl FilmImage {
@@ -83,6 +86,16 @@ fn get_image_data(
 //     }
 // }
 
+pub fn clamp<T: PartialOrd>(v: T, lower: T, upper: T) -> T {
+    if v < lower {
+        lower
+    } else if v > upper {
+        upper
+    } else {
+        v
+    }
+}
+
 impl FilmImage {
     // pub fn new(pixels: Vec<u8>, width: u32, height: u32) -> FilmImage {
     //     FilmImage {
@@ -96,10 +109,17 @@ impl FilmImage {
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
     ) -> Result<FilmImage, ImageError> {
-        let img = get_image_data(&canvas, &ctx)?;
+        let buffer = get_image_data(&canvas, &ctx)?.to_rgba8();
+        let width = buffer.width();
+        let height = buffer.height();
         Ok(FilmImage {
-            img,
+            // img,
+            buffer: buffer,
             file_path: None,
+            size: Size {
+                width: width,
+                height: height,
+            },
         })
         // let raw_pixels = to_raw_pixels(imgdata);
         // match get_image_data(&canvas, &ctx) {
@@ -112,10 +132,20 @@ impl FilmImage {
     }
 
     pub fn from_file(image_path: PathBuf) -> Result<FilmImage, ImageError> {
-        let img = ImageReader::open(image_path.to_owned())?.decode()?;
+        let buffer = ImageReader::open(image_path.to_owned())?
+            .decode()?
+            .to_rgba8();
+        // let buffer = img.to_rgba8();
+        let width = buffer.width();
+        let height = buffer.height();
         Ok(FilmImage {
-            img: img.clone(),
+            // img: img.clone(),
+            buffer: buffer,
             file_path: Some(image_path),
+            size: Size {
+                width: width,
+                height: height,
+            },
         })
         // Ok(ImageBorders {
         //     image_path: image_path,
@@ -124,11 +154,7 @@ impl FilmImage {
         // })
     }
 
-    pub fn save_to_file(
-        &self,
-        output_path: Option<String>,
-        quality: Option<u8>,
-    ) -> Result<(), ImageError> {
+    fn get_output_path(&self, output_path: Option<String>) -> Result<String, ImageError> {
         let base_dir = (self
             .file_path
             .as_ref()
@@ -139,33 +165,98 @@ impl FilmImage {
             match self
                 .file_path
                 .as_ref()
-                // .ok()
-                // .ok_or(ImageError::IoError(IOError::new(ErrorKind::Other, "nooo")))?
                 .and_then(|name| name.file_stem())
                 .and_then(|name| name.to_str())
             {
-                Some(stem) => Some(b.join(format!("{}_with_border.jpg", stem))),
+                Some(stem) => Some(b.join(format!("{}_with_border.png", stem))),
                 None => None,
             }
         });
 
-        // let filename = // .ok_or_else(|| ImageError::IoError(IOError::new(ErrorKind::Other, "nooo")))? // .ok() // .to_str()
-        // .ok() // .ok_or_else(|| ImageError::IoError(IOError::new(
-        //     ErrorKind::Other,
-        //     "nooo"
-        // )))
-        // ));
-        // Some(filename)
-        // });
         let default_output = default_output.and_then(|p| p.into_os_string().into_string().ok());
-        let output_path = output_path
+        output_path
             .or(default_output)
-            .ok_or(ImageError::IoError(IOError::new(ErrorKind::Other, "nooo")))?;
+            .ok_or(ImageError::IoError(IOError::new(ErrorKind::Other, "nooo")))
+    }
+
+    pub fn save_jpeg_to_file(
+        &self,
+        buffer: RgbaImage,
+        output_path: Option<String>,
+        quality: Option<u8>,
+    ) -> Result<(), ImageError> {
+        let output_path = self.get_output_path(output_path)?;
         println!("saving to {}...", output_path);
         let mut file = File::create(&output_path)?;
         let mut encoder = JpegEncoder::new_with_quality(&mut file, quality.unwrap_or(80));
-        encoder.encode_image(&self.img);
-        // self.img.save(&output_path.unwrap_or(default_output))?;
+        encoder.encode_image(&DynamicImage::ImageRgba8(buffer.clone()));
         Ok(())
+    }
+
+    pub fn save_to_file(
+        &self,
+        buffer: RgbaImage,
+        output_path: Option<String>,
+    ) -> Result<(), ImageError> {
+        let output_path = self.get_output_path(output_path)?;
+        println!("saving to {}...", output_path);
+        DynamicImage::ImageRgba8(buffer.clone()).save(&output_path)?;
+        Ok(())
+    }
+
+    pub fn fill_rect(
+        buffer: &mut RgbaImage,
+        color: Rgba<u8>,
+        top_left: Point,
+        bottom_right: Point,
+    ) -> () {
+        let x1 = clamp(min(top_left.x, bottom_right.x), 0, buffer.width());
+        let x2 = clamp(max(top_left.x, bottom_right.x), 0, buffer.width());
+        let y1 = clamp(min(top_left.y, bottom_right.y), 0, buffer.height());
+        let y2 = clamp(max(top_left.y, bottom_right.y), 0, buffer.height());
+        for x in x1..x2 {
+            for y in y1..y2 {
+                buffer.put_pixel(x, y, color);
+            }
+        }
+    }
+
+    // pub fn crop(&self, x: u32, y: u32, width: u32, height: u32) -> Result<(), ImageError> {
+    pub fn crop(
+        // buffer: &mut RgbaImage,
+        buffer: RgbaImage,
+        // buffer: ImageBuffer<Rgba<u8>, Vec<u8>>,
+        top_left: Point,
+        bottom_right: Point,
+        // ) -> Result<SubImage<&mut DynamicImage>, ImageError> {
+        // ) -> Result<(), ImageError> {
+    ) -> Result<RgbaImage, ImageError> {
+        let x = top_left.x;
+        let y = top_left.y;
+        let width = (bottom_right.x as i64 - x as i64).abs() as u32;
+        let height = (bottom_right.y as i64 - y as i64).abs() as u32;
+        // self.img = DynamicImage::ImageRgba8(crop(&mut self.img, x, y, width, height).to_image());
+        let mut buffer2 = buffer.clone();
+        Ok(crop(&mut buffer2, x, y, width, height).to_image())
+        // Ok(crop(&mut self.img, x, y, width, height))
+    }
+
+    // pub fn overlay(
+    //     background: &mut RgbaImage,
+    //     buffer: &RgbaImage,
+    //     x: u32,
+    //     y: u32,
+    // ) -> Result<(), ImageError> {
+    //     // self.img = DynamicImage::ImageRgba8(resize(&self.img, width, height, FilterType::Lanczos3));
+    //     // Ok(DynamicImage::ImageRgba8(resize(&self.img, width, height, FilterType::Lanczos3)))
+    //     // self.img = DynamicImage::ImageRgba8(resize(&self.img, width, height, FilterType::Lanczos3));
+    //     Ok(overlay(&mut background, &buffer, x, y))
+    // }
+
+    pub fn resize(buffer: RgbaImage, width: u32, height: u32) -> Result<RgbaImage, ImageError> {
+        // self.img = DynamicImage::ImageRgba8(resize(&self.img, width, height, FilterType::Lanczos3));
+        // Ok(DynamicImage::ImageRgba8(resize(&self.img, width, height, FilterType::Lanczos3)))
+        // self.img = DynamicImage::ImageRgba8(resize(&self.img, width, height, FilterType::Lanczos3));
+        Ok(resize(&buffer, width, height, FilterType::Lanczos3))
     }
 }

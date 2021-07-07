@@ -18,7 +18,8 @@ macro_rules! console_log {
 
 #[wasm_bindgen]
 struct WasmImageBorders {
-    img: img::FilmImage,
+    // img: img::FilmImage,
+    borders: borders::ImageBorders,
 }
 
 #[wasm_bindgen]
@@ -31,10 +32,13 @@ impl WasmImageBorders {
         utils::set_panic_hook();
         let img = img::FilmImage::from_canvas(&canvas, &ctx)
             .map_err(|err| JsValue::from_str(&err.to_string()))?;
-        Ok(WasmImageBorders { img })
+        Ok(WasmImageBorders { borders: borders::ImageBorders::new(img) })
     }
 
-    pub fn apply(&self, options: borders::ImageBorderOptions) -> Result<(), JsValue> {
+    pub fn apply(&mut self, options: borders::ImageBorderOptions) -> Result<(), JsValue> {
+        self.borders.apply(options)
+            .map_err(|err| JsValue::from_str(&err.to_string()))?;
         Ok(())
     }
-}
+
+    }

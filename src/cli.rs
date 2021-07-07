@@ -1,5 +1,4 @@
 mod borders;
-mod fs;
 mod img;
 mod utils;
 use clap::Clap;
@@ -59,23 +58,34 @@ fn main() {
                 // match img::ImageBorders::new(PathBuf::from(&cfg.image_path)) {
                 match img::FilmImage::from_file(PathBuf::from(&cfg.image_path)) {
                     Ok(image) => {
-                        let b = borders::ImageBorders::new(image);
+                        let mut b = borders::ImageBorders::new(image);
                         let border_options = borders::ImageBorderOptions {
-                            output_size: None,
+                            output_size: Some(borders::Size {
+                                width: 1000,
+                                height: 1000,
+                            }),
                             crop: None,
+                            scale_factor: Some(0.75),
                             border_width: Some(borders::Sides {
-                                top: 10,
+                                top: 50,
+                                bottom: 50,
+                                left: 50,
+                                right: 50,
                                 ..borders::Sides::default()
                             }),
-                            padding: Some(borders::Sides {
-                                top: 10,
-                                ..borders::Sides::default()
-                            }),
+                            // padding: Some(borders::Sides {
+                            //     top: 10,
+                            //     ..borders::Sides::default()
+                            // }),
                             rotate_angle: Some(90),
                         };
-                        b.apply(border_options);
-                        b.save(cfg.output_path, Some(80));
-                        println!("done after {:?}", start.elapsed());
+                        match b
+                            .apply(border_options)
+                            .and_then(|result| b.save(result, cfg.output_path))
+                        {
+                            Ok(_) => println!("done after {:?}", start.elapsed()),
+                            Err(err) => println!("{}", err),
+                        };
                     }
                     Err(err) => println!("{}", err),
                 }
