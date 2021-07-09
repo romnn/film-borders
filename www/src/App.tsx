@@ -62,20 +62,19 @@ export default class App extends React.Component<AppProps, AppState> {
       canvas.height = this.img.height;
       offscreenCanvas.width = this.img.width;
       offscreenCanvas.height = this.img.height;
-      offscreenCanvas?.getContext("2d").drawImage(this.img, 0, 0);
-      // canvas
-      //   ?.getContext("2d")
-      //   ?.drawImage(
-      //     this.img,
-      //     0,
-      //     0,
-      //     this.img.width,
-      //     this.img.height,
-      //     0,
-      //     0,
-      //     canvas.width,
-      //     canvas.height
-      //   );
+      offscreenCanvas
+        ?.getContext("2d")
+        ?.drawImage(
+          this.img,
+          0,
+          0,
+          this.img.width,
+          this.img.height,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
       this.update();
     };
     this.img.src = await this.getB64Image(

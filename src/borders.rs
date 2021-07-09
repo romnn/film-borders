@@ -138,7 +138,6 @@ impl ImageBorders {
     ) -> Result<(), JsValue> {
         // Convert the raw pixels back to an ImageData object.
         let img_data = ImageData::new_with_u8_clamped_array_and_sh(
-            // Clamped(&img.raw_pixels),
             Clamped(img.as_raw()),
             canvas.width(),
             canvas.height(),
@@ -147,12 +146,9 @@ impl ImageBorders {
         // Place the new imagedata onto the canvas
         ctx.put_image_data(&img_data, 0.0, 0.0)?;
         Ok(())
-        // .expect("Should put image data on Canvas");
-        // Ok(())
     }
 
     pub fn apply(&mut self, options: ImageBorderOptions) -> Result<RgbaImage, ImageError> {
-        // let size = self.img.size;
         let mut size = Size {
             width: self.img.buffer.width(),
             height: self.img.buffer.height(),
@@ -266,7 +262,7 @@ impl ImageBorders {
                     "failed to read film border image data",
                 )))?
                 .clone();
-        println!("is portrait: {}", photo_is_portrait);
+        // println!("is portrait: {}", photo_is_portrait);
         if photo_is_portrait {
             film_borders = rotate90(&film_borders);
         };
@@ -285,7 +281,7 @@ impl ImageBorders {
         };
         // println!("direction: {:?}", fade_transition_direction);
         let fade_width = (0.05 * fit_height as f32) as u32;
-        let fb_useable_frac = 0.2;
+        let fb_useable_frac = 0.75;
 
         // top border
         let mut top_fb = film_borders.clone();
@@ -340,9 +336,9 @@ impl ImageBorders {
             ),
         };
 
-        println!("step size is {}", inter_fb_crop.height);
+        // println!("step size is {}", inter_fb_crop.height);
         let end = fit_height - btm_fb_crop.height;
-        println!("from {} to {}", top_fb_crop.height - fade_width, end);
+        // println!("from {} to {}", top_fb_crop.height - fade_width, end);
 
         for i in (top_fb_crop.height..=end).step_by(inter_fb_crop.height as usize) {
             println!("{}", i);
@@ -389,9 +385,6 @@ impl ImageBorders {
                 },
             );
         };
-        // let line_width = 10;
-        // let top_line = (Point{ x: 0, y: (size.height - size.width) / 2
-
         Ok(final_image)
     }
 

@@ -19,7 +19,6 @@ macro_rules! console_log {
 
 #[wasm_bindgen]
 struct WasmImageBorders {
-    // img: img::FilmImage,
     borders: borders::ImageBorders,
     result: Option<RgbaImage>,
 }
@@ -33,7 +32,6 @@ impl WasmImageBorders {
     ) -> Result<WasmImageBorders, JsValue> {
         utils::set_panic_hook();
         let img = img::FilmImage::from_canvas(&canvas, &ctx)?;
-            // .map_err(|err| JsValue::from_str(&err.to_string()))?;
         Ok(WasmImageBorders {
             borders: borders::ImageBorders::new(img),
             result: None,
@@ -49,11 +47,13 @@ impl WasmImageBorders {
         Ok(())
     }
 
-    pub fn update(&self, canvas: HtmlCanvasElement, ctx: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    pub fn update(
+        &self,
+        canvas: HtmlCanvasElement,
+        ctx: CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
         if let Some(result) = &self.result {
-            self.borders
-                .store(result, canvas, ctx)?
-                // .map_err(|err| JsValue::from_str(&err.to_string()))?;
+            self.borders.store(result, canvas, ctx)?
         }
         Ok(())
     }
