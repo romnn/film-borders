@@ -12,6 +12,7 @@ use std::io::Cursor;
 use std::io::{Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 static film_border_bytes: &[u8; 170143] = include_bytes!("border.png");
@@ -23,14 +24,13 @@ pub struct Size {
     pub height: u32,
 }
 
-// impl Default for Size {
-//     fn default() -> Self {
-//         Size {
-//             width: 0,
-//             height: 0,
-//         }
-//     }
-// }
+#[wasm_bindgen]
+impl Size {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Size {
+        Size::default()
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Debug, Default, Copy, Clone)]
@@ -38,11 +38,14 @@ pub struct Point {
     pub x: u32,
     pub y: u32,
 }
-// impl Default for Point {
-//     fn default() -> Self {
-//         Point { x: 0, y: 0 }
-//     }
-// }
+
+#[wasm_bindgen]
+impl Point {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Point {
+        Point::default()
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Debug, Default, Copy, Clone)]
@@ -51,14 +54,13 @@ pub struct Crop {
     pub bottom_right: Point,
 }
 
-// impl Default for Crop {
-//     fn default() -> Self {
-//         Crop {
-//             top_left: 0,
-//             bottom_right: 0,
-//         }
-//     }
-// }
+#[wasm_bindgen]
+impl Crop {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Crop {
+        Crop::default()
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Debug, Default, Copy, Clone)]
@@ -69,16 +71,13 @@ pub struct Sides {
     pub bottom: u32,
 }
 
-// impl Default for Sides {
-//     fn default() -> Self {
-//         Sides {
-//             top: 0,
-//             left: 0,
-//             right: 0,
-//             bottom: 0,
-//         }
-//     }
-// }
+#[wasm_bindgen]
+impl Sides {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Sides {
+        Sides::default()
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Debug, Copy, Clone)]
@@ -96,9 +95,16 @@ pub struct ImageBorderOptions {
     pub scale_factor: Option<f32>,
     pub crop: Option<Crop>,
     pub border_width: Option<Sides>,
-    // pub padding: Option<Sides>,
     pub rotate_angle: Option<Rotation>,
     pub preview: bool,
+}
+
+#[wasm_bindgen]
+impl ImageBorderOptions {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> ImageBorderOptions {
+        ImageBorderOptions::default()
+    }
 }
 
 pub struct ImageBorders {
@@ -124,6 +130,27 @@ impl ImageBorders {
         self.img.save_to_file(buffer, output_path)
     }
 
+    pub fn store(
+        &self,
+        img: &RgbaImage,
+        canvas: HtmlCanvasElement,
+        ctx: CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        // Convert the raw pixels back to an ImageData object.
+        let img_data = ImageData::new_with_u8_clamped_array_and_sh(
+            // Clamped(&img.raw_pixels),
+            Clamped(img.as_raw()),
+            canvas.width(),
+            canvas.height(),
+        )?;
+
+        // Place the new imagedata onto the canvas
+        ctx.put_image_data(&img_data, 0.0, 0.0)?;
+        Ok(())
+        // .expect("Should put image data on Canvas");
+        // Ok(())
+    }
+
     pub fn apply(&mut self, options: ImageBorderOptions) -> Result<RgbaImage, ImageError> {
         // let size = self.img.size;
         let mut size = Size {
@@ -133,7 +160,8 @@ impl ImageBorders {
         if let Some(output_size) = options.output_size {
             size = output_size
         };
-        if options.preview {
+        if false && options.preview {
+            // deprecated: changing the size of result does not speed things up much
             size = Size {
                 width: (size.width as f32 * 0.25) as u32,
                 height: (size.height as f32 * 0.25) as u32,

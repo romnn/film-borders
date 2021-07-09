@@ -49,30 +49,32 @@ pub struct FilmImage {
 fn get_image_data(
     canvas: &HtmlCanvasElement,
     ctx: &CanvasRenderingContext2d,
-) -> Result<DynamicImage, ImageError> {
+) -> Result<DynamicImage, JsValue> {
     let width = canvas.width();
     let height = canvas.height();
     // let data: ImageData = ctx.get_image_data(0.0, 0.0, 100.0, 100.0);
     let pixels = ctx
-        .get_image_data(0.0, 0.0, width as f64, height as f64)
-        .map_err(|err: JsValue| {
-            ImageError::IoError(IOError::new(
-                ErrorKind::Other,
-                err.as_string()
-                    .unwrap_or(String::from("failed to read image data from canvas.")),
-            ))
-        })?
+        .get_image_data(0.0, 0.0, width as f64, height as f64)?
+        // .map_err(|err: JsValue| {
+        //     ImageError::IoError(IOError::new(
+        //         ErrorKind::Other,
+        //         err.as_string()
+        //             .unwrap_or(String::from("failed to read image data from canvas.")),
+        //     ))
+        // })?
         .data()
         .to_vec();
     // let pixels = data
     // let _len_vec = photon_image.raw_pixels.len() as u128;
     // let raw_pixels = &photon_image.raw_pixels;
-    let img_buffer = ImageBuffer::from_vec(width, height, pixels).ok_or_else(|| {
-        ImageError::Decoding(DecodingError::new(
-            ImageFormatHint::Unknown,
-            IOError::new(ErrorKind::Other, "nooo"),
-        ))
-    })?;
+    let img_buffer = ImageBuffer::from_vec(width, height, pixels)
+        .ok_or_else(|| JsValue::from_str("failed to create ImageBuffer"))?;
+    /*.ok_or_else(|| {
+    ImageError::Decoding(DecodingError::new(
+        ImageFormatHint::Unknown,
+        IOError::new(ErrorKind::Other, "nooo"),
+    ))*/
+    // })?;
     // .unwrap();
     Ok(DynamicImage::ImageRgba8(img_buffer))
 
@@ -104,7 +106,7 @@ impl FilmImage {
     pub fn from_canvas(
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
-    ) -> Result<FilmImage, ImageError> {
+    ) -> Result<FilmImage, JsValue> {
         let buffer = get_image_data(&canvas, &ctx)?.to_rgba8();
         let width = buffer.width();
         let height = buffer.height();
