@@ -86,6 +86,12 @@ fn get_image_data(
 //     }
 // }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Direction {
+    Horizontal,
+    Vertical,
+}
+
 impl FilmImage {
     // pub fn new(pixels: Vec<u8>, width: u32, height: u32) -> FilmImage {
     //     FilmImage {
@@ -192,6 +198,49 @@ impl FilmImage {
         println!("saving to {}...", output_path);
         DynamicImage::ImageRgba8(buffer.clone()).save(&output_path)?;
         Ok(())
+    }
+
+    pub fn fade_out(
+        buffer: &mut RgbaImage,
+        // iter: std::iter::Iterator<Item=u32>,
+        start: u32,
+        end: u32,
+        direction: Direction,
+    ) -> () {
+        let other = match direction {
+            Direction::Horizontal => buffer.height(),
+            Direction::Vertical => buffer.width(),
+        };
+        let diff = (end as f32 - start as f32).abs();
+        for i in min(start, end)..=max(start, end) {
+            let ir = i - min(start, end);
+            let mut frac = ir as f32 / diff;
+            if start < end {
+                frac = 1.0 - frac;
+            }
+            let alpha = (255.0 * frac) as u8;
+            // println!("alpha = {} = {} / {}", alpha, ir, range);
+            for j in 0..other {
+                let (x, y) = match direction {
+                    Direction::Horizontal => (i, j),
+                    Direction::Vertical => (j, i),
+                };
+                let channels = buffer.get_pixel_mut(x, y).channels_mut();
+                channels[3] = min(channels[3], alpha);
+
+                // buffer.put_pixel(x, y, Rgba.from_slice(channels));
+                // pixel.map(|channels| {
+                //     // channels.0 = 255;
+                //     channels
+                // });
+                // pixel.apply_with_alpha(
+                //     |channels| channels,
+                //     |alpha| ,
+                // );
+                // buffer.put_pixel(x, y, (*buffer.get_pixel(x, y)).blend(color));
+                // buffer.get_pixel_mut(x, y).blend(&color);
+            }
+        }
     }
 
     pub fn fill_rect(
