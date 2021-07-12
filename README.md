@@ -3,10 +3,11 @@
 If you have a modern browser, you can use the live WASM web version [here]().
 
 #### Installation
-You can use the [web application] that uses WASM or the CLI tool for batch processing.
+You can use the [web application]() that uses WASM or the CLI tool for batch processing.
+
 To install the CLI, run
 ```bash
-cargo install
+cargo install --git https://github.com/romnn/wasm-film-borders.git --bin cli
 ```
 
 #### Usage
