@@ -1,7 +1,20 @@
-## Hipster Film Borders
+## WASM Film Borders
 
-see a live version [here]().
+If you have a modern browser, you can use the live WASM web version [here]().
+
+#### Installation
+You can use the [web application] that uses WASM or the CLI tool for batch processing.
+To install the CLI, run
+```bash
+cargo install
+```
 
 #### Usage
+```bash
+wasm-film-borders apply --image ~/Downloads/testscan.jpg --width 2000 --height 1500 --border 10 --rotate 90
+```
 
-You can use as part of your web application using WASM or as a CLI tool for batch processing.
+For a list of options, see
+```bash
+wasm-film-borders apply --help
+```
