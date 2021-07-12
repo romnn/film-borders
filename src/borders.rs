@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::env;
 use std::error::Error;
+use std::fmt;
 use std::io::Cursor;
 use std::io::{Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -50,8 +51,10 @@ impl Point {
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct Crop {
-    pub top_left: Point,
-    pub bottom_right: Point,
+    pub top: Option<u32>,
+    pub right: Option<u32>,
+    pub bottom: Option<u32>,
+    pub left: Option<u32>,
 }
 
 #[wasm_bindgen]
@@ -77,6 +80,14 @@ impl Sides {
     pub fn new() -> Sides {
         Sides::default()
     }
+    pub fn uniform(side: u32) -> Sides {
+        Sides {
+            top: side,
+            left: side,
+            right: side,
+            bottom: side,
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -86,6 +97,38 @@ pub enum Rotation {
     Rotate90,
     Rotate180,
     Rotate270,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseEnumError {
+    msg: String,
+}
+
+impl ParseEnumError {
+    pub fn new(msg: String) -> ParseEnumError {
+        ParseEnumError { msg }
+    }
+}
+
+impl fmt::Display for ParseEnumError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+
+impl std::str::FromStr for Rotation {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let ss = &*s.to_lowercase().to_owned();
+        match ss {
+            "270" => Ok(Rotation::Rotate270),
+            "180" => Ok(Rotation::Rotate180),
+            "90" => Ok(Rotation::Rotate90),
+            "0" => Ok(Rotation::Rotate0),
+            _ => Err(ParseEnumError::new(format!("unknown rotation: {}", ss))),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -165,19 +208,10 @@ impl ImageBorders {
         if let Some(output_size) = options.output_size {
             size = output_size
         };
-        if false && options.preview {
-            // deprecated: changing the size of result does not speed things up much
-            // TODO: remove
-            size = Size {
-                width: (size.width as f32 * 0.25) as u32,
-                height: (size.height as f32 * 0.25) as u32,
-            };
-        };
 
         let mut final_image = RgbaImage::new(size.width, size.height);
         let mut photo = self.img.buffer.clone();
         let output_is_portrait = size.width <= size.height;
-        // let ref_size = options.reference_size.unwrap_or(size);
         let rem = max(size.width, size.height) as f32 / 1000.0;
 
         // fill background
@@ -209,14 +243,16 @@ impl ImageBorders {
         let photo_is_portrait = photo.width() <= photo.height();
 
         // crop the image
-        if let Some(crop_options) = options.crop {
-            let crop_tl_x = (crop_options.top_left.x as f32 * rem) as u32;
-            let crop_tl_y = (crop_options.top_left.y as f32 * rem) as u32;
-            let crop_br_x = (crop_options.bottom_right.x as f32 * rem) as u32;
-            let crop_br_y = (crop_options.bottom_right.y as f32 * rem) as u32;
-            let crop_width = (crop_br_x as i64 - crop_tl_x as i64).abs() as u32;
-            let crop_height = (crop_br_y as i64 - crop_tl_y as i64).abs() as u32;
-            photo = crop(&mut photo, crop_tl_x, crop_tl_y, crop_width, crop_height).to_image()
+        if let Some(crop_opts) = options.crop {
+            let crop_top = (crop_opts.top.unwrap_or(0) as f32 * rem) as u32;
+            let crop_right = photo.width() - ((crop_opts.right.unwrap_or(0) as f32 * rem) as u32);
+            let crop_bottom =
+                photo.height() - ((crop_opts.bottom.unwrap_or(0) as f32 * rem) as u32);
+            let crop_left = (crop_opts.left.unwrap_or(0) as f32 * rem) as u32;
+
+            let crop_width = max(0, crop_right as i64 - crop_left as i64) as u32;
+            let crop_height = max(0, crop_bottom as i64 - crop_top as i64) as u32;
+            photo = crop(&mut photo, crop_left, crop_top, crop_width, crop_height).to_image()
         };
 
         // resize the image to fit the screen
@@ -227,20 +263,20 @@ impl ImageBorders {
             size.height,
             false,
         );
-        println!("fitting to {} x {}", fit_width, fit_height);
+        // println!("fitting to {} x {}", fit_width, fit_height);
 
         if let Some(scale_factor) = options.scale_factor {
             // scale the image by factor
             fit_width = (fit_width as f32 * utils::clamp(scale_factor, 0f32, 1f32)) as u32;
             fit_height = (fit_height as f32 * utils::clamp(scale_factor, 0f32, 1f32)) as u32;
-            println!("scaling to {} x {}", fit_width, fit_height);
+            // println!("scaling to {} x {}", fit_width, fit_height);
         };
 
-        let fitted_image = resize(&photo, fit_width, fit_height, FilterType::Lanczos3);
+        photo = resize(&photo, fit_width, fit_height, FilterType::Lanczos3);
 
-        let overlay_x = (size.width - fitted_image.width()) / 2;
-        let overlay_y = (size.height - fitted_image.height()) / 2;
-        println!("overlaying at {} {}", overlay_x, overlay_y);
+        let overlay_x = (size.width - photo.width()) / 2;
+        let overlay_y = (size.height - photo.height()) / 2;
+        // println!("overlaying at {} {}", overlay_x, overlay_y);
 
         // create the black borders
         if let Some(border_width) = options.border_width {
@@ -255,82 +291,114 @@ impl ImageBorders {
             let btm_right = Point {
                 x: max(
                     0,
-                    (overlay_x + fitted_image.width()) as i32
-                        + (border_width.right as f32 * rem) as i32,
+                    (overlay_x + photo.width()) as i32 + (border_width.right as f32 * rem) as i32,
                 ) as u32,
                 y: max(
                     0,
-                    (overlay_y + fitted_image.height()) as i32
-                        + (border_width.bottom as f32 * rem) as i32,
+                    (overlay_y + photo.height()) as i32 + (border_width.bottom as f32 * rem) as i32,
                 ) as u32,
             };
-            // println!("filling from {:?} to {:?}", top_left, btm_right);
             FilmImage::fill_rect(&mut final_image, black_color, top_left, btm_right);
         };
 
-        overlay(&mut final_image, &fitted_image, overlay_x, overlay_y);
+        overlay(&mut final_image, &photo, overlay_x, overlay_y);
 
         // add the film borders
-        let mut film_borders =
-            image::load_from_memory_with_format(film_border_bytes, ImageFormat::Png)?
-                .as_rgba8()
-                .ok_or(ImageError::IoError(IOError::new(
-                    ErrorKind::Other,
-                    "failed to read film border image data",
-                )))?
-                .clone();
-        // println!("is portrait: {}", photo_is_portrait);
+        let mut fb = image::load_from_memory_with_format(film_border_bytes, ImageFormat::Png)?
+            .as_rgba8()
+            .ok_or(ImageError::IoError(IOError::new(
+                ErrorKind::Other,
+                "failed to read film border image data",
+            )))?
+            .clone();
+
         if photo_is_portrait {
-            film_borders = rotate90(&film_borders);
+            fb = rotate90(&fb);
         };
-        film_borders = resize(
-            &film_borders,
-            fit_width,
-            (film_borders.height() as f32 * (fit_width as f32 / film_borders.width() as f32))
-                as u32,
-            FilterType::Lanczos3,
-        );
+        let mut fb_width = fit_width;
+        let mut fb_height = (fb.height() as f32 * (fit_width as f32 / fb.width() as f32)) as u32;
+        if !photo_is_portrait {
+            fb_height = fit_height;
+            fb_width = (fb.width() as f32 * (fit_height as f32 / fb.height() as f32)) as u32;
+        };
+        fb = resize(&fb, fb_width, fb_height, FilterType::Lanczos3);
 
         let fade_transition_direction = if photo_is_portrait {
             Direction::Vertical
         } else {
             Direction::Horizontal
         };
-        // println!("direction: {:?}", fade_transition_direction);
         let fade_width = (0.05 * fit_height as f32) as u32;
         let fb_useable_frac = 0.75;
 
         // top border
-        let mut top_fb = film_borders.clone();
+        let mut top_fb = fb.clone();
         let top_fb_crop = Size {
-            width: film_borders.width(),
-            height: min(
-                (fb_useable_frac * photo.height() as f32) as u32,
-                (fb_useable_frac * film_borders.height() as f32) as u32,
-            ),
+            width: if photo_is_portrait {
+                fb.width()
+            } else {
+                min(
+                    (fb_useable_frac * photo.width() as f32) as u32,
+                    (fb_useable_frac * fb.width() as f32) as u32,
+                )
+            },
+            height: if photo_is_portrait {
+                min(
+                    (fb_useable_frac * photo.height() as f32) as u32,
+                    (fb_useable_frac * fb.height() as f32) as u32,
+                )
+            } else {
+                fb.height()
+            },
         };
         top_fb = crop(&mut top_fb, 0, 0, top_fb_crop.width, top_fb_crop.height).to_image();
+        let fade_dim = if photo_is_portrait {
+            top_fb_crop.height
+        } else {
+            top_fb_crop.width
+        };
         FilmImage::fade_out(
             &mut top_fb,
-            max(0, top_fb_crop.height - fade_width),
-            top_fb_crop.height - 1,
+            max(0, fade_dim - fade_width),
+            fade_dim - 1,
             fade_transition_direction,
         );
         overlay(&mut final_image, &top_fb, overlay_x, overlay_y);
 
         // bottom border
-        let mut btm_fb = film_borders.clone();
+        let mut btm_fb = fb.clone();
         let btm_fb_crop = Size {
-            width: film_borders.width(),
-            height: min(
-                (fb_useable_frac * photo.height() as f32) as u32,
-                (fb_useable_frac * film_borders.height() as f32) as u32,
-            ),
+            width: if photo_is_portrait {
+                fb.width()
+            } else {
+                min(
+                    (fb_useable_frac * photo.width() as f32) as u32,
+                    (fb_useable_frac * fb.width() as f32) as u32,
+                )
+            },
+            height: if photo_is_portrait {
+                min(
+                    (fb_useable_frac * photo.height() as f32) as u32,
+                    (fb_useable_frac * fb.height() as f32) as u32,
+                )
+            } else {
+                fb.height()
+            },
         };
-        let btm_fb_y = btm_fb.height() - btm_fb_crop.height;
+        let btm_fb_x = if photo_is_portrait {
+            0
+        } else {
+            btm_fb.width() - btm_fb_crop.width
+        };
+        let btm_fb_y = if photo_is_portrait {
+            btm_fb.height() - btm_fb_crop.height
+        } else {
+            0
+        };
+
         btm_fb = crop(
             &mut btm_fb,
-            0,
+            btm_fb_x,
             btm_fb_y,
             btm_fb_crop.width,
             btm_fb_crop.height,
@@ -340,67 +408,124 @@ impl ImageBorders {
         overlay(
             &mut final_image,
             &btm_fb,
-            overlay_x,
+            if photo_is_portrait {
+                overlay_x
+            } else {
+                overlay_x + (photo.width() - btm_fb_crop.width)
+            },
             overlay_y + (fit_height - btm_fb_crop.height),
         );
 
         // intermediate borders
         let inter_fb_crop = Size {
-            width: film_borders.width(),
-            height: min(
-                (0.5 * photo.height() as f32) as u32,
-                (0.5 * film_borders.height() as f32) as u32,
-            ),
+            width: if photo_is_portrait {
+                fb.width()
+            } else {
+                min(
+                    (0.5 * photo.width() as f32) as u32,
+                    (0.5 * fb.width() as f32) as u32,
+                )
+            },
+            height: if photo_is_portrait {
+                min(
+                    (0.5 * photo.height() as f32) as u32,
+                    (0.5 * fb.height() as f32) as u32,
+                )
+            } else {
+                fb.height()
+            },
         };
 
-        // println!("step size is {}", inter_fb_crop.height);
-        let end = fit_height - btm_fb_crop.height;
-        // println!("from {} to {}", top_fb_crop.height - fade_width, end);
+        let (start, end, step_size) = if photo_is_portrait {
+            (
+                top_fb_crop.height - fade_width,
+                fit_height - btm_fb_crop.height + fade_width,
+                inter_fb_crop.height as usize,
+            )
+        } else {
+            (
+                top_fb_crop.width - fade_width,
+                fit_width - btm_fb_crop.width + fade_width,
+                inter_fb_crop.width as usize,
+            )
+        };
 
-        for i in (top_fb_crop.height..=end).step_by(inter_fb_crop.height as usize) {
-            println!("{}", i);
-            let mut inter_fb = film_borders.clone();
-            let inter_fb_height = min(inter_fb_crop.height, end - i);
-            let inter_fb_crop_y = (0.25 * film_borders.height() as f32) as u32;
-            println!("crop y is {}", inter_fb_crop_y);
+        // println!("from {} to {} with step size {}", start, end, step_size);
+        for i in (start..=end).step_by(step_size) {
+            let mut inter_fb = fb.clone();
+            let (inter_fb_x, inter_fb_y, inter_fb_width, inter_fb_height) = if photo_is_portrait {
+                (
+                    0,
+                    (0.25 * fb.height() as f32) as u32 - fade_width,
+                    inter_fb_crop.width,
+                    min(inter_fb_crop.height, end - i) + 2 * fade_width,
+                )
+            } else {
+                (
+                    (0.25 * fb.width() as f32) as u32 - fade_width,
+                    0,
+                    min(inter_fb_crop.width, end - i) + 2 * fade_width,
+                    inter_fb_crop.height,
+                )
+            };
             inter_fb = crop(
                 &mut inter_fb,
-                0,
-                inter_fb_crop_y - fade_width,
-                inter_fb_crop.width,
-                inter_fb_height + 2 * fade_width,
+                inter_fb_x,
+                inter_fb_y,
+                inter_fb_width,
+                inter_fb_height,
             )
             .to_image();
             FilmImage::fade_out(&mut inter_fb, fade_width, 0, fade_transition_direction);
+            let fade_dim = if photo_is_portrait {
+                inter_fb_height
+            } else {
+                inter_fb_width
+            };
             FilmImage::fade_out(
                 &mut inter_fb,
-                inter_fb_height + fade_width,
-                inter_fb_height + 2 * fade_width - 1,
+                fade_dim - fade_width,
+                fade_dim - 1,
                 fade_transition_direction,
             );
             overlay(
                 &mut final_image,
                 &inter_fb,
-                overlay_x,
-                overlay_y - fade_width + i,
+                if photo_is_portrait {
+                    overlay_x
+                } else {
+                    overlay_x - fade_width + i
+                },
+                if photo_is_portrait {
+                    overlay_y - fade_width + i
+                } else {
+                    overlay_y
+                },
             );
         }
 
         // show the center of the final image
         if options.preview {
             let highlight_color = Rgba::from_channels(255, 0, 0, 50);
-            FilmImage::fill_rect(
-                &mut final_image,
-                highlight_color,
-                Point {
-                    x: 0,
-                    y: (size.height - size.width) / 2,
-                },
-                Point {
-                    x: size.width,
-                    y: ((size.height - size.width) / 2) + size.width,
-                },
-            );
+            let mut ctr_tl = Point {
+                x: 0,
+                y: (size.height - size.width) / 2,
+            };
+            let mut ctr_br = Point {
+                x: size.width,
+                y: ((size.height - size.width) / 2) + size.width,
+            };
+            if !output_is_portrait {
+                ctr_tl = Point {
+                    x: (size.width - size.height) / 2,
+                    y: 0,
+                };
+                ctr_br = Point {
+                    x: ((size.width - size.height) / 2) + size.height,
+                    y: size.height,
+                };
+            }
+            FilmImage::fill_rect(&mut final_image, highlight_color, ctr_tl, ctr_br);
         };
         Ok(final_image)
     }

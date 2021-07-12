@@ -136,14 +136,10 @@ export default class App extends React.Component<AppProps, AppState> {
 
     // crop
     let crop = new this.wasm.Crop();
-    let topLeft = new this.wasm.Point();
-    topLeft.x = this.state.cropLeft ?? 0;
-    topLeft.y = this.state.cropTop ?? 0;
-    let bottomRight = new this.wasm.Point();
-    bottomRight.x = this.img.width - (this.state.cropRight ?? 0);
-    bottomRight.y = this.img.height - (this.state.cropBottom ?? 0);
-    crop.top_left = topLeft;
-    crop.bottom_right = bottomRight;
+    crop.top = this.state.cropTop;
+    crop.right = this.state.cropRight;
+    crop.bottom = this.state.cropBottom;
+    crop.left = this.state.cropLeft;
     options.crop = crop;
 
     // border width
@@ -175,8 +171,12 @@ export default class App extends React.Component<AppProps, AppState> {
           (canvasContainer?.clientWidth ?? 0) / this.state.outputWidth,
           (canvasContainer?.clientHeight ?? 0) / this.state.outputHeight
         );
+        // let newWidth = this.state.outputWidth * canvasScale;
+        // let newHeight = this.state.outputHeight * canvasScale;
+        // if (newWidth !== canvas.width || newHeight !== canvas.height) {
         canvas.width = this.state.outputWidth * canvasScale;
         canvas.height = this.state.outputHeight * canvasScale;
+        // }
 
         let renderID = uuidv4();
         console.time(renderID);
@@ -421,7 +421,6 @@ export default class App extends React.Component<AppProps, AppState> {
             />
             <canvas
               id="wasm-canvas"
-              className={this.state.rendering ? "hidden" : undefined}
               ref={this.canvas}
             ></canvas>
           </div>

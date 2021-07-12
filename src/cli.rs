@@ -12,11 +12,33 @@ struct ApplyOpts {
 
     #[clap(short = 'o', long = "output")]
     output_path: Option<String>,
-    // #[clap(short = 'p', long = "port", default_value = "3000")]
-    // port: u16,
 
-    // #[clap(short = 'n', long = "pages")]
-    // max_pages: Option<u32>,
+    #[clap(short = 'w', long = "width")]
+    output_width: Option<u32>,
+
+    #[clap(short = 'h', long = "height")]
+    output_height: Option<u32>,
+
+    #[clap(short = 's', long = "scale")]
+    scale_factor: Option<f32>,
+
+    #[clap(long = "crop_top")]
+    crop_top: Option<u32>,
+    #[clap(long = "crop_right")]
+    crop_right: Option<u32>,
+    #[clap(long = "crop_bottom")]
+    crop_bottom: Option<u32>,
+    #[clap(long = "crop_left")]
+    crop_left: Option<u32>,
+
+    #[clap(short = 'b', long = "border")]
+    border_width: Option<u32>,
+
+    #[clap(short = 'r', long = "rotate")]
+    rotation: Option<borders::Rotation>,
+
+    #[clap(short = 'p', long = "preview")]
+    preview: bool,
 }
 
 #[derive(Clap, Debug, Clone)]
@@ -36,7 +58,7 @@ enum Hipster {
 #[derive(Clap, Debug, Clone)]
 #[clap(
     name = "hipster",
-    about = "TODO",
+    about = "add hipster film borders to images",
     version = "1.0",
     author = "romnn <contact@romnn.com>"
 )]
@@ -55,33 +77,31 @@ fn main() {
         match subcommand {
             Hipster::Apply(cfg) => {
                 println!("apply:  {:?}", cfg);
-                // match img::ImageBorders::new(PathBuf::from(&cfg.image_path)) {
                 match img::FilmImage::from_file(PathBuf::from(&cfg.image_path)) {
                     Ok(image) => {
+                        let width = image.buffer.width();
+                        let height = image.buffer.height();
                         let mut b = borders::ImageBorders::new(image);
                         let border_options = borders::ImageBorderOptions {
                             reference_size: None,
                             output_size: Some(borders::Size {
-                                width: 1080,
-                                height: 1350,
+                                width: cfg.output_width.unwrap_or(1080),
+                                height: cfg.output_height.unwrap_or(1350),
                             }),
-                            crop: None,
-                            scale_factor: Some(0.90),
-                            border_width: Some(borders::Sides {
-                                top: 10,
-                                bottom: 10,
-                                left: 10,
-                                right: 10,
-                                ..borders::Sides::default()
+                            crop: Some(borders::Crop {
+                                top: cfg.crop_top,
+                                right: cfg.crop_right,
+                                bottom: cfg.crop_bottom,
+                                left: cfg.crop_left,
                             }),
-                            // padding: Some(borders::Sides {
-                            //     top: 10,
-                            //     ..borders::Sides::default()
-                            // }),
-                            rotate_angle: None,
-                            // rotate_angle: Some(borders::Rotation::Rotation0),
-                            preview: true,
+                            scale_factor: Some(cfg.scale_factor.unwrap_or(0.95)),
+                            border_width: Some(borders::Sides::uniform(
+                                cfg.border_width.unwrap_or(10),
+                            )),
+                            rotate_angle: Some(cfg.rotation.unwrap_or(borders::Rotation::Rotate0)),
+                            preview: cfg.preview,
                         };
+                        println!("options:  {:?}", border_options);
                         match b
                             .apply(border_options)
                             .and_then(|result| b.save(result, cfg.output_path))
