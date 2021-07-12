@@ -43,31 +43,28 @@ struct ApplyOpts {
 
 #[derive(Clap, Debug, Clone)]
 #[clap(
-    name = "hipster",
+    name = "film-borders",
     version = "1.0",
-    about = "todo",
+    about = "add film borders to an image",
     author = "romnn <contact@romnn.com>",
     setting = clap::AppSettings::ColoredHelp,
     setting = clap::AppSettings::ArgRequiredElseHelp
 )]
-enum Hipster {
+enum FilmBorders {
     #[clap(name = "apply")]
     Apply(ApplyOpts),
 }
 
 #[derive(Clap, Debug, Clone)]
 #[clap(
-    name = "hipster",
-    about = "add hipster film borders to images",
-    version = "1.0",
-    author = "romnn <contact@romnn.com>"
+    about = "apply film borders to an image",
 )]
 pub struct Opts {
     #[clap(short = 'v', parse(from_occurrences))]
     verbosity: u8,
 
     #[clap(subcommand)]
-    commands: Option<Hipster>,
+    commands: Option<FilmBorders>,
 }
 
 fn main() {
@@ -75,7 +72,7 @@ fn main() {
     if let Some(subcommand) = opts.commands {
         let start = Instant::now();
         match subcommand {
-            Hipster::Apply(cfg) => {
+            FilmBorders::Apply(cfg) => {
                 println!("apply:  {:?}", cfg);
                 match img::FilmImage::from_file(PathBuf::from(&cfg.image_path)) {
                     Ok(image) => {

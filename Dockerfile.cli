@@ -1,0 +1,13 @@
+FROM rust:1.53 as build
+
+WORKDIR /app
+ADD ./ /app
+
+ARG version=0.0.1
+LABEL MAINTAINER="roman <contact@romnn.com>"
+
+RUN cargo build --release --all-targets
+
+FROM gcr.io/distroless/cc
+COPY --from=build /app/target/release/cli /
+CMD ["./cli"]

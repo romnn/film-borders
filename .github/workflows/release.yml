@@ -3,10 +3,10 @@ name: release
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
-  publish-docker-container:
+  publish-cli-container:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -14,13 +14,56 @@ jobs:
       - uses: docker/setup-buildx-action@v1
       - id: query
         uses: romnnn/query-git-action@master
-      
-      - name: Login to registry.romnn.com
+
+      - name: Cache docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
-          registry: core.registry.romnn.com
-          username: ${{ secrets.CONTAINER_REG_USERNAME }}
-          password: ${{ secrets.CONTAINER_REG_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile.cli
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            version=${{ steps.query.outputs.stable_semver_version }}
+          tags: |
+            romnn/film-borders-cli:latest
+            romnn/film-borders-cli:${{ steps.query.outputs.stable_docker_tag }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+
+  publish-webapp-docker-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: docker/setup-qemu-action@v1
+      - uses: docker/setup-buildx-action@v1
+      - id: query
+        uses: romnnn/query-git-action@master
+
+      - name: Cache docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
         uses: docker/build-push-action@v2
@@ -32,5 +75,7 @@ jobs:
           build-args: |
             version=${{ steps.query.outputs.stable_semver_version }}
           tags: |
-            core.registry.romnn.com/romnn/hipster:latest
-            core.registry.romnn.com/romnn/hipster:${{ steps.query.outputs.stable_docker_tag }}
+            romnn/wasm-film-borders-webapp:latest
+            romnn/wasm-film-borders-webapp:${{ steps.query.outputs.stable_docker_tag }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
