@@ -60,6 +60,7 @@ fn main() {
                     Ok(image) => {
                         let mut b = borders::ImageBorders::new(image);
                         let border_options = borders::ImageBorderOptions {
+                            reference_size: None,
                             output_size: Some(borders::Size {
                                 width: 1080,
                                 height: 1350,

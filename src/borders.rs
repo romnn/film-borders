@@ -18,7 +18,7 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 static film_border_bytes: &[u8; 170143] = include_bytes!("border.png");
 
 #[wasm_bindgen]
-#[derive(Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct Size {
     pub width: u32,
     pub height: u32,
@@ -33,7 +33,7 @@ impl Size {
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct Point {
     pub x: u32,
     pub y: u32,
@@ -48,7 +48,7 @@ impl Point {
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct Crop {
     pub top_left: Point,
     pub bottom_right: Point,
@@ -63,7 +63,7 @@ impl Crop {
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct Sides {
     pub top: u32,
     pub left: u32,
@@ -80,7 +80,7 @@ impl Sides {
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum Rotation {
     Rotate0,
     Rotate90,
@@ -89,8 +89,9 @@ pub enum Rotation {
 }
 
 #[wasm_bindgen]
-#[derive(Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct ImageBorderOptions {
+    pub reference_size: Option<Size>,
     pub output_size: Option<Size>,
     pub scale_factor: Option<f32>,
     pub crop: Option<Crop>,
@@ -104,6 +105,14 @@ impl ImageBorderOptions {
     #[wasm_bindgen(constructor)]
     pub fn new() -> ImageBorderOptions {
         ImageBorderOptions::default()
+    }
+
+    pub fn deserialize(val: String) -> Result<ImageBorderOptions, JsValue> {
+        Ok(serde_json::from_str(&val).map_err(|err| JsValue::from_str(&err.to_string()))?)
+    }
+
+    pub fn serialize(&self) -> Result<String, JsValue> {
+        Ok(serde_json::to_string(&self).map_err(|err| JsValue::from_str(&err.to_string()))?)
     }
 }
 
@@ -158,6 +167,7 @@ impl ImageBorders {
         };
         if false && options.preview {
             // deprecated: changing the size of result does not speed things up much
+            // TODO: remove
             size = Size {
                 width: (size.width as f32 * 0.25) as u32,
                 height: (size.height as f32 * 0.25) as u32,
@@ -167,28 +177,24 @@ impl ImageBorders {
         let mut final_image = RgbaImage::new(size.width, size.height);
         let mut photo = self.img.buffer.clone();
         let output_is_portrait = size.width <= size.height;
-        let rem = size.width as f32 / 1000.0;
+        // let ref_size = options.reference_size.unwrap_or(size);
+        let rem = max(size.width, size.height) as f32 / 1000.0;
 
-        // fill white
-        let white_color = Rgba::from_channels(255, 255, 255, 255);
+        // fill background
+        let bg_color = if options.preview {
+            Rgba([200, 200, 200, 255])
+        } else {
+            Rgba([255, 255, 255, 255])
+        };
         FilmImage::fill_rect(
             &mut final_image,
-            white_color,
+            bg_color,
             Point { x: 0, y: 0 },
             Point {
                 x: size.width,
                 y: size.height,
             },
         );
-
-        // crop the image
-        if let Some(crop_options) = options.crop {
-            let crop_x = crop_options.top_left.x;
-            let crop_y = crop_options.top_left.y;
-            let crop_width = (crop_options.bottom_right.x as i64 - crop_x as i64).abs() as u32;
-            let crop_height = (crop_options.bottom_right.y as i64 - crop_y as i64).abs() as u32;
-            photo = crop(&mut photo, crop_x, crop_y, crop_width, crop_height).to_image()
-        };
 
         // rotate the image
         if let Some(rotate_angle) = options.rotate_angle {
@@ -201,6 +207,17 @@ impl ImageBorders {
         };
 
         let photo_is_portrait = photo.width() <= photo.height();
+
+        // crop the image
+        if let Some(crop_options) = options.crop {
+            let crop_tl_x = (crop_options.top_left.x as f32 * rem) as u32;
+            let crop_tl_y = (crop_options.top_left.y as f32 * rem) as u32;
+            let crop_br_x = (crop_options.bottom_right.x as f32 * rem) as u32;
+            let crop_br_y = (crop_options.bottom_right.y as f32 * rem) as u32;
+            let crop_width = (crop_br_x as i64 - crop_tl_x as i64).abs() as u32;
+            let crop_height = (crop_br_y as i64 - crop_tl_y as i64).abs() as u32;
+            photo = crop(&mut photo, crop_tl_x, crop_tl_y, crop_width, crop_height).to_image()
+        };
 
         // resize the image to fit the screen
         let (mut fit_width, mut fit_height) = utils::resize_dimensions(

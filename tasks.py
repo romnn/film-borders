@@ -14,6 +14,8 @@ Path().expanduser()
 WASM_MODULE = "wasm-mod"
 ROOT_DIR = Path(__file__).parent
 WWW_DIR = ROOT_DIR / "www"
+WWW_PUBLIC_DIR = WWW_DIR / "public"
+WWW_PUBLIC_WASM_DIR = WWW_PUBLIC_DIR / "wasm"
 SOURCE_DIR = ROOT_DIR / "src"
 
 
@@ -41,8 +43,13 @@ def format(c, check=False):
 @task
 def pack(c):
     """Compile, pack and upgrade the wasm module package"""
-    c.run("wasm-pack build {}".format(ROOT_DIR), pty=True)
+    c.run("wasm-pack build --release {}".format(ROOT_DIR), pty=True)
     c.run("yarn --cwd {} upgrade {}".format(WWW_DIR, WASM_MODULE), pty=True)
+    c.run("wasm-pack build --target no-modules --release {}".format(ROOT_DIR), pty=True)
+    c.run("mkdir -p {}".format(WWW_PUBLIC_WASM_DIR))
+    c.run("rm -rf {}".format(WWW_PUBLIC_WASM_DIR))
+    c.run("cp -R {} {}".format("pkg", WWW_PUBLIC_WASM_DIR))
+
 
 @task
 def lint(c):

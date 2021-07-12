@@ -1,0 +1,66 @@
+main
+  min-width: 1000px
+  max-width: 3000px
+  width: 80%
+  margin: 0 auto
+  position: relative
+  overflow: hidden
+  top: 20px
+  height: calc(100vh - 40px)
+
+.parameters
+  overflow: hidden
+  position: absolute
+  padding: 20px
+  width: 260px
+  right: 0
+  top: 0
+
+  fieldset
+    max-width: 40em
+    padding: 4px
+    margin: 2em auto
+    border: 0 none
+
+  input, output, textarea, select, button
+    box-sizing: border-box
+    padding: 2px
+    margin: 0
+    outline: 0 none
+    box-shadow: none
+
+  button
+    color: black
+    margin-bottom: 10px
+    border: 1px solid black
+    padding: 2px
+    background-color: lightblue
+    cursor: pointer
+
+  input, output, textarea, select, button
+    clear: both
+    float: right
+    width: 50%
+
+  label
+    margin-bottom: 10px
+    float: left
+    width: calc(50% - 10px)
+    text-align: right
+    padding-right: 10px
+
+.offscreen, .hidden
+  display: none
+
+#wasm-canvas-container
+  overflow: hidden
+  position: relative
+  top: 0
+  left: 0
+  width: calc(100% - 300px)
+  height: 100%
+
+  svg
+    position: absolute
+    top: calc(50% - 50px)
+    left: calc(50% - 50px)

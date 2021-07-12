@@ -20,19 +20,27 @@ pub struct FilmImage {
     pub file_path: Option<PathBuf>,
     pub size: Size,
 }
-fn get_image_data(
+
+fn image_from_image_data(img: ImageData) -> Result<DynamicImage, JsValue> {
+    let pixels = img.data().to_vec();
+    let img_buffer = ImageBuffer::from_vec(img.width(), img.height(), pixels)
+        .ok_or_else(|| JsValue::from_str("failed to create ImageBuffer"))?;
+    Ok(DynamicImage::ImageRgba8(img_buffer))
+}
+
+fn image_from_canvas(
     canvas: &HtmlCanvasElement,
     ctx: &CanvasRenderingContext2d,
 ) -> Result<DynamicImage, JsValue> {
     let width = canvas.width();
     let height = canvas.height();
-    let pixels = ctx
-        .get_image_data(0.0, 0.0, width as f64, height as f64)?
-        .data()
-        .to_vec();
-    let img_buffer = ImageBuffer::from_vec(width, height, pixels)
-        .ok_or_else(|| JsValue::from_str("failed to create ImageBuffer"))?;
-    Ok(DynamicImage::ImageRgba8(img_buffer))
+    let img = ctx.get_image_data(0.0, 0.0, width as f64, height as f64)?;
+    Ok(image_from_image_data(img)?)
+    // .data()
+    // .to_vec();
+    // let img_buffer = ImageBuffer::from_vec(width, height, pixels)
+    // .ok_or_else(|| JsValue::from_str("failed to create ImageBuffer"))?;
+    // Ok(DynamicImage::ImageRgba8(img_buffer))
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -46,7 +54,21 @@ impl FilmImage {
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
     ) -> Result<FilmImage, JsValue> {
-        let buffer = get_image_data(&canvas, &ctx)?.to_rgba8();
+        let buffer = image_from_canvas(&canvas, &ctx)?.to_rgba8();
+        let width = buffer.width();
+        let height = buffer.height();
+        Ok(FilmImage {
+            buffer: buffer,
+            file_path: None,
+            size: Size {
+                width: width,
+                height: height,
+            },
+        })
+    }
+
+    pub fn from_image_data(data: ImageData) -> Result<FilmImage, JsValue> {
+        let buffer = image_from_image_data(data)?.to_rgba8();
         let width = buffer.width();
         let height = buffer.height();
         Ok(FilmImage {
