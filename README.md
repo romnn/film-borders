@@ -7,7 +7,7 @@ You can use the [web application]() that uses WASM or the CLI tool for batch pro
 
 To install the CLI, run
 ```bash
-cargo install --git https://github.com/romnn/wasm-film-borders.git --bin cli
+cargo install --git https://github.com/romnn/wasm-film-borders.git --bin film-borders-cli
 ```
 
 #### Usage

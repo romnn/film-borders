@@ -8,7 +8,7 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [[bin]]
-name = "cli"
+name = "film-borders-cli"
 path = "src/cli.rs"
 
 [features]
