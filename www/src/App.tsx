@@ -119,14 +119,8 @@ export default class App extends React.Component<AppProps, AppState> {
   getOptions = (): import("wasm-mod").ImageBorderOptions => {
     let options = new this.wasm.ImageBorderOptions();
 
-    // reference size
-    let ref_size = new this.wasm.Size();
-    ref_size.width = this.state.outputWidth;
-    ref_size.height = this.state.outputHeight;
-    options.reference_size = ref_size;
-
     // output size
-    let output_size = new this.wasm.Size();
+    let output_size = new this.wasm.OutputSize();
     output_size.width = this.state.outputWidth;
     output_size.height = this.state.outputHeight;
     options.output_size = output_size;
@@ -171,12 +165,8 @@ export default class App extends React.Component<AppProps, AppState> {
           (canvasContainer?.clientWidth ?? 0) / this.state.outputWidth,
           (canvasContainer?.clientHeight ?? 0) / this.state.outputHeight
         );
-        // let newWidth = this.state.outputWidth * canvasScale;
-        // let newHeight = this.state.outputHeight * canvasScale;
-        // if (newWidth !== canvas.width || newHeight !== canvas.height) {
         canvas.width = this.state.outputWidth * canvasScale;
         canvas.height = this.state.outputHeight * canvasScale;
-        // }
 
         let renderID = uuidv4();
         console.time(renderID);
@@ -186,7 +176,7 @@ export default class App extends React.Component<AppProps, AppState> {
         );
         this.worker.postMessage({ sourceImage: imgData });
         let options = this.getOptions();
-        let size = new this.wasm.Size();
+        let size = new this.wasm.OutputSize();
         size.width = canvas.width;
         size.height = canvas.height;
         options.output_size = size;

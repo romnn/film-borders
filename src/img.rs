@@ -33,11 +33,6 @@ fn image_from_canvas(
     let height = canvas.height();
     let img = ctx.get_image_data(0.0, 0.0, width as f64, height as f64)?;
     Ok(image_from_image_data(img)?)
-    // .data()
-    // .to_vec();
-    // let img_buffer = ImageBuffer::from_vec(width, height, pixels)
-    // .ok_or_else(|| JsValue::from_str("failed to create ImageBuffer"))?;
-    // Ok(DynamicImage::ImageRgba8(img_buffer))
 }
 
 #[derive(Clone, Copy, Debug)]

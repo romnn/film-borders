@@ -73,15 +73,14 @@ fn main() {
         let start = Instant::now();
         match subcommand {
             FilmBorders::Apply(cfg) => {
-                println!("apply:  {:?}", cfg);
+                // println!("apply:  {:?}", cfg);
                 match img::FilmImage::from_file(PathBuf::from(&cfg.image_path)) {
                     Ok(image) => {
                         let mut b = borders::ImageBorders::new(image);
                         let border_options = borders::ImageBorderOptions {
-                            reference_size: None,
-                            output_size: Some(borders::Size {
-                                width: cfg.output_width.unwrap_or(1080),
-                                height: cfg.output_height.unwrap_or(1350),
+                            output_size: Some(borders::OutputSize {
+                                width: cfg.output_width,
+                                height: cfg.output_height,
                             }),
                             crop: Some(borders::Crop {
                                 top: cfg.crop_top,
@@ -96,7 +95,7 @@ fn main() {
                             rotate_angle: Some(cfg.rotation.unwrap_or(borders::Rotation::Rotate0)),
                             preview: cfg.preview,
                         };
-                        println!("options:  {:?}", border_options);
+                        // println!("options:  {:?}", border_options);
                         match b
                             .apply(border_options)
                             .and_then(|result| b.save(result, cfg.output_path))

@@ -1,18 +1,33 @@
 use crate::img::{Direction, FilmImage};
 use crate::utils;
-use image::error::{ImageError};
+use image::error::ImageError;
 use image::imageops::{crop, overlay, resize, rotate180, rotate270, rotate90, FilterType};
 use image::{ImageFormat, Pixel, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 static FILM_BORDER_BYTES: &[u8; 170143] = include_bytes!("border.png");
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
+pub struct OutputSize {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+#[wasm_bindgen]
+impl OutputSize {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        OutputSize::default()
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
@@ -24,7 +39,7 @@ pub struct Size {
 #[wasm_bindgen]
 impl Size {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Size {
+    pub fn new() -> Self {
         Size::default()
     }
 }
@@ -39,7 +54,7 @@ pub struct Point {
 #[wasm_bindgen]
 impl Point {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Point {
+    pub fn new() -> Self {
         Point::default()
     }
 }
@@ -56,7 +71,7 @@ pub struct Crop {
 #[wasm_bindgen]
 impl Crop {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Crop {
+    pub fn new() -> Self {
         Crop::default()
     }
 }
@@ -73,7 +88,7 @@ pub struct Sides {
 #[wasm_bindgen]
 impl Sides {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Sides {
+    pub fn new() -> Self {
         Sides::default()
     }
     pub fn uniform(side: u32) -> Sides {
@@ -101,7 +116,7 @@ pub struct ParseEnumError {
 }
 
 impl ParseEnumError {
-    pub fn new(msg: String) -> ParseEnumError {
+    pub fn new(msg: String) -> Self {
         ParseEnumError { msg }
     }
 }
@@ -130,8 +145,7 @@ impl std::str::FromStr for Rotation {
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
 pub struct ImageBorderOptions {
-    pub reference_size: Option<Size>,
-    pub output_size: Option<Size>,
+    pub output_size: Option<OutputSize>,
     pub scale_factor: Option<f32>,
     pub crop: Option<Crop>,
     pub border_width: Option<Sides>,
@@ -142,7 +156,7 @@ pub struct ImageBorderOptions {
 #[wasm_bindgen]
 impl ImageBorderOptions {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> ImageBorderOptions {
+    pub fn new() -> Self {
         ImageBorderOptions::default()
     }
 
@@ -206,7 +220,12 @@ impl ImageBorders {
             height: self.img.buffer.height(),
         };
         if let Some(output_size) = options.output_size {
-            size = output_size
+            if let Some(output_width) = output_size.width {
+                size.width = output_width;
+            };
+            if let Some(output_height) = output_size.height {
+                size.height = output_height;
+            };
         };
 
         let mut final_image = RgbaImage::new(size.width, size.height);
