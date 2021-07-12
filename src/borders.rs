@@ -1,22 +1,18 @@
 use crate::img::{Direction, FilmImage};
 use crate::utils;
-use image::error::{DecodingError, ImageError, ImageFormatHint, ImageResult};
+use image::error::{ImageError};
 use image::imageops::{crop, overlay, resize, rotate180, rotate270, rotate90, FilterType};
-use image::io::Reader as ImageReader;
-use image::{DynamicImage, ImageBuffer, ImageFormat, Pixel, Rgba, RgbaImage};
+use image::{ImageFormat, Pixel, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
-use std::env;
-use std::error::Error;
 use std::fmt;
-use std::io::Cursor;
 use std::io::{Error as IOError, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
-static film_border_bytes: &[u8; 170143] = include_bytes!("border.png");
+static FILM_BORDER_BYTES: &[u8; 170143] = include_bytes!("border.png");
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
@@ -169,6 +165,7 @@ impl ImageBorders {
         ImageBorders { img }
     }
 
+    #[allow(dead_code)]
     pub fn save_jpeg(
         &self,
         buffer: RgbaImage,
@@ -178,10 +175,12 @@ impl ImageBorders {
         self.img.save_jpeg_to_file(buffer, output_path, quality)
     }
 
+    #[allow(dead_code)]
     pub fn save(&self, buffer: RgbaImage, output_path: Option<String>) -> Result<(), ImageError> {
         self.img.save_to_file(buffer, output_path)
     }
 
+    #[allow(dead_code)]
     pub fn store(
         &self,
         img: &RgbaImage,
@@ -200,6 +199,7 @@ impl ImageBorders {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn apply(&mut self, options: ImageBorderOptions) -> Result<RgbaImage, ImageError> {
         let mut size = Size {
             width: self.img.buffer.width(),
@@ -304,7 +304,7 @@ impl ImageBorders {
         overlay(&mut final_image, &photo, overlay_x, overlay_y);
 
         // add the film borders
-        let mut fb = image::load_from_memory_with_format(film_border_bytes, ImageFormat::Png)?
+        let mut fb = image::load_from_memory_with_format(FILM_BORDER_BYTES, ImageFormat::Png)?
             .as_rgba8()
             .ok_or(ImageError::IoError(IOError::new(
                 ErrorKind::Other,
@@ -530,6 +530,7 @@ impl ImageBorders {
         Ok(final_image)
     }
 
+    #[allow(dead_code)]
     pub fn from_file(input_path: PathBuf) -> Result<ImageBorders, ImageError> {
         let img = FilmImage::from_file(input_path)?;
         Ok(ImageBorders { img })

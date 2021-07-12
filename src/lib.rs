@@ -3,7 +3,6 @@ mod img;
 mod utils;
 
 use image::RgbaImage;
-use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
@@ -19,13 +18,14 @@ macro_rules! console_log {
 }
 
 #[wasm_bindgen]
-struct WasmImageBorders {
+pub struct WasmImageBorders {
     borders: borders::ImageBorders,
     result: Option<RgbaImage>,
 }
 
 #[wasm_bindgen]
 impl WasmImageBorders {
+    #[allow(dead_code)]
     #[wasm_bindgen(constructor)]
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
@@ -39,16 +39,17 @@ impl WasmImageBorders {
         })
     }
 
+    #[allow(dead_code)]
     pub fn for_image_data(data: ImageData) -> Result<WasmImageBorders, JsValue> {
         utils::set_panic_hook();
         let img = img::FilmImage::from_image_data(data)?;
-        // let img = img::image_from_image_data(data)?;
         Ok(WasmImageBorders {
             borders: borders::ImageBorders::new(img),
             result: None,
         })
     }
 
+    #[allow(dead_code)]
     pub fn to_image_data(
         canvas: HtmlCanvasElement,
         ctx: CanvasRenderingContext2d,
@@ -63,6 +64,7 @@ impl WasmImageBorders {
         )?)
     }
 
+    #[allow(dead_code)]
     pub fn apply(&mut self, options: borders::ImageBorderOptions) -> Result<ImageData, JsValue> {
         console_log!("options: {:?}", options);
         let result = self
@@ -78,14 +80,14 @@ impl WasmImageBorders {
         )?)
     }
 
-    pub fn update(
-        &self,
-        canvas: HtmlCanvasElement,
-        ctx: CanvasRenderingContext2d,
-    ) -> Result<(), JsValue> {
-        if let Some(result) = &self.result {
-            self.borders.store(result, canvas, ctx)?
-        };
-        Ok(())
-    }
+    // pub fn update(
+    //     &self,
+    //     canvas: HtmlCanvasElement,
+    //     ctx: CanvasRenderingContext2d,
+    // ) -> Result<(), JsValue> {
+    //     if let Some(result) = &self.result {
+    //         self.borders.store(result, canvas, ctx)?
+    //     };
+    //     Ok(())
+    // }
 }

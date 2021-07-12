@@ -2,8 +2,8 @@ mod borders;
 mod img;
 mod utils;
 use clap::Clap;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::path::{PathBuf};
+use std::time::{Instant};
 
 #[derive(Clap, Debug, Clone)]
 struct ApplyOpts {
@@ -79,8 +79,6 @@ fn main() {
                 println!("apply:  {:?}", cfg);
                 match img::FilmImage::from_file(PathBuf::from(&cfg.image_path)) {
                     Ok(image) => {
-                        let width = image.buffer.width();
-                        let height = image.buffer.height();
                         let mut b = borders::ImageBorders::new(image);
                         let border_options = borders::ImageBorderOptions {
                             reference_size: None,

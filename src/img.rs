@@ -1,17 +1,14 @@
 use crate::borders::{Point, Size};
 use crate::utils;
 use image::codecs::jpeg::JpegEncoder;
-use image::error::{DecodingError, ImageError, ImageFormatHint, ImageResult};
-use image::imageops::{crop, overlay, resize, FilterType};
+use image::error::{ImageError};
 use image::io::Reader as ImageReader;
-use image::{DynamicImage, ImageBuffer, Pixel, Rgba, RgbaImage, SubImage};
-use serde::{Deserialize, Serialize};
-use std::cmp::{max, min, PartialOrd};
+use image::{DynamicImage, ImageBuffer, Pixel, Rgba, RgbaImage};
+use std::cmp::{max, min};
 use std::env;
-use std::error::Error;
 use std::fs::File;
 use std::io::{Error as IOError, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
@@ -50,6 +47,7 @@ pub enum Direction {
 }
 
 impl FilmImage {
+    #[allow(dead_code)]
     pub fn from_canvas(
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
@@ -67,6 +65,7 @@ impl FilmImage {
         })
     }
 
+    #[allow(dead_code)]
     pub fn from_image_data(data: ImageData) -> Result<FilmImage, JsValue> {
         let buffer = image_from_image_data(data)?.to_rgba8();
         let width = buffer.width();
@@ -122,6 +121,7 @@ impl FilmImage {
             .ok_or(ImageError::IoError(IOError::new(ErrorKind::Other, "nooo")))
     }
 
+    #[allow(dead_code)]
     pub fn save_jpeg_to_file(
         &self,
         buffer: RgbaImage,
@@ -132,10 +132,11 @@ impl FilmImage {
         println!("saving to {}...", output_path);
         let mut file = File::create(&output_path)?;
         let mut encoder = JpegEncoder::new_with_quality(&mut file, quality.unwrap_or(80));
-        encoder.encode_image(&DynamicImage::ImageRgba8(buffer.clone()));
+        encoder.encode_image(&DynamicImage::ImageRgba8(buffer.clone()))?;
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn save_to_file(
         &self,
         buffer: RgbaImage,
