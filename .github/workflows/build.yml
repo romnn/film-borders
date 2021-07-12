@@ -16,7 +16,8 @@ jobs:
       run: |
         pip install invoke
         npm install --global yarn
-        cargo install wasm-pack
+        curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        # cargo install wasm-pack
         invoke pack
     - name: Build page
       run: |
