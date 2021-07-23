@@ -1,18 +1,26 @@
 FROM rust:1.53 as wasmbuild
 
 WORKDIR /app
-ADD ./ /app
-
-ARG version=0.0.1
 LABEL MAINTAINER="roman <contact@romnn.com>"
 
 RUN apt-get update && apt-get install -y python3 python3-pip nodejs npm
 RUN cargo install wasm-pack
 RUN pip3 install invoke
 RUN npm install --global yarn
+
+ADD ./ /app
 RUN invoke pack
+
+ARG version=0.0.1
+ARG publicURL
+ENV PUBLIC_URL=$publicURL
+
 RUN echo "Using version ${version}"
-RUN cd /app/www && npm version --no-git-tag-version ${version} && yarn install && yarn build
+RUN echo "Using public URL ${PUBLIC_URL}"
+RUN cd /app/www \
+  && npm version --no-git-tag-version ${version} \
+  && yarn install \
+  && yarn build
 
 FROM nginx:latest
 EXPOSE 80
