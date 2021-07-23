@@ -1,5 +1,5 @@
 const href = location.href;
-const workerPath = location.pathname;
+const workerPath = "/worker/ImageBorder.worker.js";
 const baseURL = href.replace(workerPath, '');
 
 importScripts(`${baseURL}/wasm/wasm_film_borders.js`)
