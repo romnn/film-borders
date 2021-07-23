@@ -64,7 +64,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
 
-  publish-webapp-docker-container:
+  publish-public-webapp-docker-container:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -98,5 +98,45 @@ jobs:
           tags: |
             romnn/wasm-film-borders-webapp:latest
             romnn/wasm-film-borders-webapp:${{ steps.query.outputs.stable_docker_tag }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cachepublish-webapp-docker-container:
+
+  publish-private-webapp-docker-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: docker/setup-qemu-action@v1
+      - uses: docker/setup-buildx-action@v1
+      - id: query
+        uses: romnnn/query-git-action@master
+
+      - name: Cache docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Login to registry.romnn.com
+        uses: docker/login-action@v1
+        with:
+          registry: core.registry.romnn.com
+          username: ${{ secrets.CONTAINER_REG_USERNAME }}
+          password: ${{ secrets.CONTAINER_REG_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            version=${{ steps.query.outputs.stable_semver_version }}
+            publicURL="https://app.romnn.com/film-borders"
+          tags: |
+            core.registry.romnn.com/romnn/wasm-film-borders-webapp:latest
+            core.registry.romnn.com/romnn/wasm-film-borders-webapp:${{ steps.query.outputs.stable_docker_tag }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
