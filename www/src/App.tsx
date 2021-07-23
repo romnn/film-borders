@@ -86,14 +86,6 @@ export default class App extends React.Component<AppProps, AppState> {
       rotationAngleName: undefined,
       rotationAngle: undefined,
     };
-
-    // send wasm module to the worker
-    // fetch("/wasm/wasm_game_of_life_bg.wasm")
-    //   .then((res) => res.arrayBuffer())
-    //   .then((bytes) => {
-    //     console.log("sending wasm bytes of size", bytes.byteLength);
-    //     this.worker.postMessage({ type: "LOAD_WASM", data: bytes })
-    //   });
   }
 
   loadWasm = async () => {

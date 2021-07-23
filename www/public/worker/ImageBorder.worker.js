@@ -1,7 +1,7 @@
-importScripts('/wasm/wasm_game_of_life.js')
+importScripts('/wasm/wasm_film_borders.js')
 
 const init_wasm_in_worker = async () => {
-  wasm_bindgen('/wasm/wasm_game_of_life_bg.wasm').then(wasm => {
+  wasm_bindgen('/wasm/wasm_film_borders_bg.wasm').then(wasm => {
     const {WasmImageBorders, ImageBorderOptions} = wasm_bindgen;
     let sourceImage = null;
     self.postMessage({status : "ready"});
