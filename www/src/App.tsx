@@ -284,7 +284,9 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   componentDidMount = () => {
-    this.worker = new Worker("/worker/ImageBorder.worker.js");
+    this.worker = new Worker(
+      `${process.env.PUBLIC_URL}/worker/ImageBorder.worker.js`
+    );
     this.worker.onmessage = (event) => {
       // console.log("message from worker: ", event);
       if ("status" in event.data) {
@@ -401,10 +403,7 @@ export default class App extends React.Component<AppProps, AppState> {
               height={100}
               width={100}
             />
-            <canvas
-              id="wasm-canvas"
-              ref={this.canvas}
-            ></canvas>
+            <canvas id="wasm-canvas" ref={this.canvas}></canvas>
           </div>
           <form className="parameters" onSubmit={this.update}>
             <fieldset>
