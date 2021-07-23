@@ -134,7 +134,7 @@ jobs:
           push: true
           build-args: |
             version=${{ steps.query.outputs.stable_semver_version }}
-            publicURL="https://app.romnn.com/film-borders"
+            publicURL=https://app.romnn.com/film-borders
           tags: |
             core.registry.romnn.com/romnn/wasm-film-borders-webapp:latest
             core.registry.romnn.com/romnn/wasm-film-borders-webapp:${{ steps.query.outputs.stable_docker_tag }}
