@@ -99,7 +99,7 @@ jobs:
             romnn/wasm-film-borders-webapp:latest
             romnn/wasm-film-borders-webapp:${{ steps.query.outputs.stable_docker_tag }}
           cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cachepublish-webapp-docker-container:
+          cache-to: type=local,dest=/tmp/.buildx-cache
 
   publish-private-webapp-docker-container:
     runs-on: ubuntu-latest
@@ -140,3 +140,4 @@ jobs:
             core.registry.romnn.com/romnn/wasm-film-borders-webapp:${{ steps.query.outputs.stable_docker_tag }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
+
