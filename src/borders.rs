@@ -5,6 +5,7 @@ use image::imageops::{crop, overlay, resize, rotate180, rotate270, rotate90, Fil
 use image::{ImageFormat, Pixel, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
+use std::error;
 use std::fmt;
 use std::io::{Error as IOError, ErrorKind};
 use std::path::PathBuf;
@@ -126,6 +127,8 @@ impl fmt::Display for ParseEnumError {
         write!(f, "{}", self.msg)
     }
 }
+
+impl error::Error for ParseEnumError {}
 
 impl std::str::FromStr for Rotation {
     type Err = ParseEnumError;
