@@ -1,11 +1,11 @@
 mod borders;
 mod img;
 mod utils;
-use clap::Clap;
-use std::path::{PathBuf};
-use std::time::{Instant};
+use clap::Parser;
+use std::path::PathBuf;
+use std::time::Instant;
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 struct ApplyOpts {
     #[clap(short = 'i', long = "image")]
     image_path: String,
@@ -13,13 +13,13 @@ struct ApplyOpts {
     #[clap(short = 'o', long = "output")]
     output_path: Option<String>,
 
-    #[clap(short = 'w', long = "width")]
+    #[clap(long = "width")]
     output_width: Option<u32>,
 
-    #[clap(short = 'h', long = "height")]
+    #[clap(long = "height")]
     output_height: Option<u32>,
 
-    #[clap(short = 's', long = "scale")]
+    #[clap(long = "scale")]
     scale_factor: Option<f32>,
 
     #[clap(long = "crop_top")]
@@ -31,34 +31,31 @@ struct ApplyOpts {
     #[clap(long = "crop_left")]
     crop_left: Option<u32>,
 
-    #[clap(short = 'b', long = "border")]
+    #[clap(long = "border")]
     border_width: Option<u32>,
 
-    #[clap(short = 'r', long = "rotate")]
+    #[clap(long = "rotate")]
     rotation: Option<borders::Rotation>,
 
-    #[clap(short = 'p', long = "preview")]
+    #[clap(long = "preview")]
     preview: bool,
 }
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
 #[clap(
     name = "film-borders",
     version = "1.0",
     about = "add film borders to an image",
     author = "romnn <contact@romnn.com>",
-    setting = clap::AppSettings::ColoredHelp,
-    setting = clap::AppSettings::ArgRequiredElseHelp
+    arg_required_else_help = true
 )]
 enum FilmBorders {
     #[clap(name = "apply")]
     Apply(ApplyOpts),
 }
 
-#[derive(Clap, Debug, Clone)]
-#[clap(
-    about = "apply film borders to an image",
-)]
+#[derive(Parser, Debug, Clone)]
+#[clap(about = "apply film borders to an image")]
 pub struct Opts {
     #[clap(short = 'v', parse(from_occurrences))]
     verbosity: u8,
