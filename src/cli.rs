@@ -8,10 +8,10 @@ use std::time::Instant;
 #[derive(Parser, Debug, Clone)]
 struct ApplyOpts {
     #[clap(short = 'i', long = "image")]
-    image_path: String,
+    image_path: PathBuf,
 
     #[clap(short = 'o', long = "output")]
-    output_path: Option<String>,
+    output_path: Option<PathBuf>,
 
     #[clap(long = "width")]
     output_width: Option<u32>,
@@ -49,7 +49,7 @@ struct ApplyOpts {
     author = "romnn <contact@romnn.com>",
     arg_required_else_help = true
 )]
-enum FilmBorders {
+enum Command {
     #[clap(name = "apply")]
     Apply(ApplyOpts),
 }
@@ -61,7 +61,7 @@ pub struct Opts {
     verbosity: u8,
 
     #[clap(subcommand)]
-    commands: Option<FilmBorders>,
+    commands: Option<Command>,
 }
 
 fn main() {
@@ -69,9 +69,9 @@ fn main() {
     if let Some(subcommand) = opts.commands {
         let start = Instant::now();
         match subcommand {
-            FilmBorders::Apply(cfg) => {
+            Command::Apply(cfg) => {
                 // println!("apply:  {:?}", cfg);
-                match img::FilmImage::from_file(PathBuf::from(&cfg.image_path)) {
+                match img::Image::from_file(&cfg.image_path) {
                     Ok(image) => {
                         let mut b = borders::ImageBorders::new(image);
                         let border_options = borders::ImageBorderOptions {
@@ -93,10 +93,9 @@ fn main() {
                             preview: cfg.preview,
                         };
                         // println!("options:  {:?}", border_options);
-                        match b
-                            .apply(border_options)
-                            .and_then(|result| b.save(result, cfg.output_path))
-                        {
+                        match b.apply(border_options).and_then(|result| {
+                            b.save(result, cfg.output_path.map(|p| p.as_path().to_owned()))
+                        }) {
                             Ok(_) => println!("done after {:?}", start.elapsed()),
                             Err(err) => println!("{}", err),
                         };

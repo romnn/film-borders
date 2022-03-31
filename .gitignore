@@ -1,5 +1,8 @@
 /target
+.DS_Store
+output/*
 **/*.rs.bk
+**/*.svg
 Cargo.lock
 bin/
 pkg/

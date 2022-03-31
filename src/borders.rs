@@ -1,19 +1,33 @@
-use crate::img::{Direction, FilmImage};
+#![allow(clippy::unused_unit)]
+
+use crate::img;
 use crate::utils;
 use image::error::ImageError;
 use image::imageops::{crop, overlay, resize, rotate180, rotate270, rotate90, FilterType};
-use image::{ImageFormat, Pixel, Rgba, RgbaImage};
+use image::{ImageFormat, Rgba, RgbaImage};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::error;
 use std::fmt;
-use std::io::{Error as IOError, ErrorKind};
 use std::path::PathBuf;
+use std::time::Instant;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
-static FILM_BORDER_BYTES: &[u8; 170143] = include_bytes!("border.png");
+lazy_static! {
+    static ref BORDER: RgbaImage = {
+        let border = include_bytes!("border.png");
+        image::load_from_memory_with_format(border, ImageFormat::Png)
+            .expect("decode film border")
+            .to_rgba8()
+    };
+}
+
+static WHITE: Rgba<u8> = Rgba([255_u8, 255, 255, 255]);
+static GRAY: Rgba<u8> = Rgba([200, 200, 200, 255]);
+static FILTER_TYPE: FilterType = FilterType::Triangle;
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
@@ -134,7 +148,7 @@ impl std::str::FromStr for Rotation {
     type Err = ParseEnumError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let ss = &*s.to_lowercase().to_owned();
+        let ss = &*s.to_lowercase();
         match ss {
             "270" => Ok(Rotation::Rotate270),
             "180" => Ok(Rotation::Rotate180),
@@ -164,20 +178,20 @@ impl ImageBorderOptions {
     }
 
     pub fn deserialize(val: String) -> Result<ImageBorderOptions, JsValue> {
-        Ok(serde_json::from_str(&val).map_err(|err| JsValue::from_str(&err.to_string()))?)
+        serde_json::from_str(&val).map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
     pub fn serialize(&self) -> Result<String, JsValue> {
-        Ok(serde_json::to_string(&self).map_err(|err| JsValue::from_str(&err.to_string()))?)
+        serde_json::to_string(&self).map_err(|err| JsValue::from_str(&err.to_string()))
     }
 }
 
 pub struct ImageBorders {
-    img: FilmImage,
+    img: img::Image,
 }
 
 impl ImageBorders {
-    pub fn new(img: FilmImage) -> ImageBorders {
+    pub fn new(img: img::Image) -> ImageBorders {
         utils::set_panic_hook();
         ImageBorders { img }
     }
@@ -186,14 +200,13 @@ impl ImageBorders {
     pub fn save_jpeg(
         &self,
         buffer: RgbaImage,
-        output_path: Option<String>,
+        output_path: Option<PathBuf>,
         quality: Option<u8>,
     ) -> Result<(), ImageError> {
         self.img.save_jpeg_to_file(buffer, output_path, quality)
     }
 
-    #[allow(dead_code)]
-    pub fn save(&self, buffer: RgbaImage, output_path: Option<String>) -> Result<(), ImageError> {
+    pub fn save(&self, buffer: RgbaImage, output_path: Option<PathBuf>) -> Result<(), ImageError> {
         self.img.save_to_file(buffer, output_path)
     }
 
@@ -216,41 +229,28 @@ impl ImageBorders {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn apply(&mut self, options: ImageBorderOptions) -> Result<RgbaImage, ImageError> {
         let mut size = Size {
             width: self.img.buffer.width(),
             height: self.img.buffer.height(),
         };
-        if let Some(output_size) = options.output_size {
-            if let Some(output_width) = output_size.width {
-                size.width = output_width;
+        if let Some(OutputSize { width, height }) = options.output_size {
+            if let Some(width) = width {
+                size.width = width;
             };
-            if let Some(output_height) = output_size.height {
-                size.height = output_height;
+            if let Some(height) = height {
+                size.height = height;
             };
         };
 
         let mut final_image = RgbaImage::new(size.width, size.height);
+        for p in final_image.pixels_mut() {
+            *p = if options.preview { GRAY } else { WHITE };
+        }
+
         let mut photo = self.img.buffer.clone();
         let output_is_portrait = size.width <= size.height;
         let rem = max(size.width, size.height) as f32 / 1000.0;
-
-        // fill background
-        let bg_color = if options.preview {
-            Rgba([200, 200, 200, 255])
-        } else {
-            Rgba([255, 255, 255, 255])
-        };
-        FilmImage::fill_rect(
-            &mut final_image,
-            bg_color,
-            Point { x: 0, y: 0 },
-            Point {
-                x: size.width,
-                y: size.height,
-            },
-        );
 
         // rotate the image
         if let Some(rotate_angle) = options.rotate_angle {
@@ -285,7 +285,6 @@ impl ImageBorders {
             size.height,
             false,
         );
-        // println!("fitting to {} x {}", fit_width, fit_height);
 
         if let Some(scale_factor) = options.scale_factor {
             // scale the image by factor
@@ -294,15 +293,22 @@ impl ImageBorders {
             // println!("scaling to {} x {}", fit_width, fit_height);
         };
 
-        photo = resize(&photo, fit_width, fit_height, FilterType::Lanczos3);
+        let start = Instant::now();
+        photo = resize(&photo, fit_width, fit_height, FILTER_TYPE);
+        println!(
+            "fitting to {} x {} took {:?}",
+            fit_width,
+            fit_height,
+            start.elapsed()
+        );
 
-        let overlay_x = (size.width - photo.width()) / 2;
-        let overlay_y = (size.height - photo.height()) / 2;
+        let overlay_x = ((size.width - photo.width()) / 2) as i64;
+        let overlay_y = ((size.height - photo.height()) / 2) as i64;
         // println!("overlaying at {} {}", overlay_x, overlay_y);
 
         // create the black borders
         if let Some(border_width) = options.border_width {
-            let black_color = Rgba::from_channels(0, 0, 0, 255);
+            let black_color = Rgba([0, 0, 0, 255]);
             let top_left = Point {
                 x: max(
                     0,
@@ -313,26 +319,31 @@ impl ImageBorders {
             let btm_right = Point {
                 x: max(
                     0,
-                    (overlay_x + photo.width()) as i32 + (border_width.right as f32 * rem) as i32,
+                    (overlay_x + photo.width() as i64) as i32
+                        + (border_width.right as f32 * rem) as i32,
                 ) as u32,
                 y: max(
                     0,
-                    (overlay_y + photo.height()) as i32 + (border_width.bottom as f32 * rem) as i32,
+                    (overlay_y + photo.height() as i64) as i32
+                        + (border_width.bottom as f32 * rem) as i32,
                 ) as u32,
             };
-            FilmImage::fill_rect(&mut final_image, black_color, top_left, btm_right);
+            img::fill_rect(&mut final_image, &black_color, top_left, btm_right);
         };
 
         overlay(&mut final_image, &photo, overlay_x, overlay_y);
 
         // add the film borders
-        let mut fb = image::load_from_memory_with_format(FILM_BORDER_BYTES, ImageFormat::Png)?
-            .as_rgba8()
-            .ok_or(ImageError::IoError(IOError::new(
-                ErrorKind::Other,
-                "failed to read film border image data",
-            )))?
-            .clone();
+        // let mut fb = image::load_from_memory_with_format(FILM_BORDER_BYTES, ImageFormat::Png)?
+        //     .as_rgba8()
+        //     .ok_or_else(|| {
+        //         ImageError::IoError(IOError::new(
+        //             ErrorKind::Other,
+        //             "failed to read film border image data",
+        //         ))
+        //     })?
+        //     .clone();
+        let mut fb = BORDER.clone();
 
         if photo_is_portrait {
             fb = rotate90(&fb);
@@ -343,12 +354,20 @@ impl ImageBorders {
             fb_height = fit_height;
             fb_width = (fb.width() as f32 * (fit_height as f32 / fb.height() as f32)) as u32;
         };
-        fb = resize(&fb, fb_width, fb_height, FilterType::Lanczos3);
+        let start = Instant::now();
+        let filter_type = FilterType::Triangle;
+        fb = resize(&fb, fb_width, fb_height, filter_type);
+        println!(
+            "fitting border to {} x {} took {:?}",
+            fb_width,
+            fb_height,
+            start.elapsed()
+        );
 
         let fade_transition_direction = if photo_is_portrait {
-            Direction::Vertical
+            img::Direction::Vertical
         } else {
-            Direction::Horizontal
+            img::Direction::Horizontal
         };
         let fade_width = (0.05 * fit_height as f32) as u32;
         let fb_useable_frac = 0.75;
@@ -379,7 +398,7 @@ impl ImageBorders {
         } else {
             top_fb_crop.width
         };
-        FilmImage::fade_out(
+        img::fade_out(
             &mut top_fb,
             max(0, fade_dim - fade_width),
             fade_dim - 1,
@@ -426,16 +445,16 @@ impl ImageBorders {
             btm_fb_crop.height,
         )
         .to_image();
-        FilmImage::fade_out(&mut btm_fb, fade_width, 0, fade_transition_direction);
+        img::fade_out(&mut btm_fb, fade_width, 0, fade_transition_direction);
         overlay(
             &mut final_image,
             &btm_fb,
             if photo_is_portrait {
                 overlay_x
             } else {
-                overlay_x + (photo.width() - btm_fb_crop.width)
+                overlay_x + (photo.width() - btm_fb_crop.width) as i64
             },
-            overlay_y + (fit_height - btm_fb_crop.height),
+            overlay_y + (fit_height - btm_fb_crop.height) as i64,
         );
 
         // intermediate borders
@@ -474,6 +493,7 @@ impl ImageBorders {
 
         // println!("from {} to {} with step size {}", start, end, step_size);
         for i in (start..=end).step_by(step_size) {
+            println!("{}", i);
             let mut inter_fb = fb.clone();
             let (inter_fb_x, inter_fb_y, inter_fb_width, inter_fb_height) = if photo_is_portrait {
                 (
@@ -498,13 +518,13 @@ impl ImageBorders {
                 inter_fb_height,
             )
             .to_image();
-            FilmImage::fade_out(&mut inter_fb, fade_width, 0, fade_transition_direction);
+            img::fade_out(&mut inter_fb, fade_width, 0, fade_transition_direction);
             let fade_dim = if photo_is_portrait {
                 inter_fb_height
             } else {
                 inter_fb_width
             };
-            FilmImage::fade_out(
+            img::fade_out(
                 &mut inter_fb,
                 fade_dim - fade_width,
                 fade_dim - 1,
@@ -516,10 +536,10 @@ impl ImageBorders {
                 if photo_is_portrait {
                     overlay_x
                 } else {
-                    overlay_x - fade_width + i
+                    overlay_x - (fade_width + i) as i64
                 },
                 if photo_is_portrait {
-                    overlay_y - fade_width + i
+                    overlay_y - (fade_width + i) as i64
                 } else {
                     overlay_y
                 },
@@ -528,7 +548,7 @@ impl ImageBorders {
 
         // show the center of the final image
         if options.preview {
-            let highlight_color = Rgba::from_channels(255, 0, 0, 50);
+            let highlight_color = Rgba([255, 0, 0, 50]);
             let mut ctr_tl = Point {
                 x: 0,
                 y: (size.height - size.width) / 2,
@@ -547,14 +567,9 @@ impl ImageBorders {
                     y: size.height,
                 };
             }
-            FilmImage::fill_rect(&mut final_image, highlight_color, ctr_tl, ctr_br);
+            img::fill_rect(&mut final_image, &highlight_color, ctr_tl, ctr_br);
         };
-        Ok(final_image)
-    }
 
-    #[allow(dead_code)]
-    pub fn from_file(input_path: PathBuf) -> Result<ImageBorders, ImageError> {
-        let img = FilmImage::from_file(input_path)?;
-        Ok(ImageBorders { img })
+        Ok(final_image)
     }
 }
