@@ -27,7 +27,7 @@ lazy_static! {
 
 static WHITE: Rgba<u8> = Rgba([255_u8, 255, 255, 255]);
 static GRAY: Rgba<u8> = Rgba([200, 200, 200, 255]);
-static FILTER_TYPE: FilterType = FilterType::Triangle;
+static FILTER_TYPE: FilterType = FilterType::Lanczos3;
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
