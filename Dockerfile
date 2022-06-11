@@ -22,7 +22,7 @@ RUN cd /app/www \
   && yarn install \
   && yarn build
 
-FROM nginx:latest
+FROM nginx:alpine
 EXPOSE 80
 RUN mkdir /app
 COPY --from=wasmbuild /app/www/build /serve
