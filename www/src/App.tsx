@@ -60,7 +60,7 @@ export default class App extends React.Component<AppProps, AppState> {
   protected resultCanvas = React.createRef<HTMLCanvasElement>();
   protected canvas = React.createRef<HTMLCanvasElement>();
   protected canvasContainer = React.createRef<HTMLDivElement>();
-  protected wasm!: typeof import("wasm-mod");
+  protected wasm!: typeof import("filmborders");
   protected worker!: Worker;
   protected img!: HTMLImageElement;
 
@@ -90,10 +90,10 @@ export default class App extends React.Component<AppProps, AppState> {
 
   loadWasm = async () => {
     try {
-      this.wasm = await import("wasm-mod");
+      this.wasm = await import("filmborders");
       this.setState({ ready: true });
-    } catch (err) {
-      console.error(`unexpected error when loading WASM. (${err.message})`);
+    } catch (err: unknown) {
+      console.error(`unexpected error when loading WASM. (${err})`);
     }
   };
 
@@ -108,7 +108,7 @@ export default class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  getOptions = (): import("wasm-mod").ImageBorderOptions => {
+  getOptions = (): import("filmborders").ImageBorderOptions => {
     let options = new this.wasm.ImageBorderOptions();
 
     // output size

@@ -1,4 +1,4 @@
-FROM rust:1.53 as wasmbuild
+FROM rust:1.61 as wasmbuild
 
 WORKDIR /app
 LABEL MAINTAINER="roman <contact@romnn.com>"

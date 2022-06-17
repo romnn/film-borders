@@ -11,7 +11,7 @@ from pathlib import Path
 
 Path().expanduser()
 
-WASM_MODULE = "wasm-mod"
+WASM_MODULE = "filmborders"
 ROOT_DIR = Path(__file__).parent
 WWW_DIR = ROOT_DIR / "www"
 WWW_PUBLIC_DIR = WWW_DIR / "public"
@@ -39,7 +39,7 @@ def pack(c):
 @task
 def install_wasm_pack(c):
     """Download and install wasm-pack"""
-    c.run("cargo install wasm-pack", pty=True);
+    c.run("cargo install wasm-pack --force", pty=True);
     
 
 @task

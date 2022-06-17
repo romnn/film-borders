@@ -8,7 +8,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [profile.release]
-debug = true
+# debug = true
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
 
@@ -22,10 +22,10 @@ default = ["console_error_panic_hook"]
 [dependencies]
 wasm-bindgen = "0.2"
 image = "0.24"
-clap = { version = "3.1.0", features = ["derive"] }
+clap = { version = "3", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-lazy_static = "1.4.0"
+lazy_static = "1.4"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
