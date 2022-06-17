@@ -1,9 +1,9 @@
 ## Film Borders in WASM
 
-If you have a modern browser, you can use the live WASM web version [here](https://app.romnn.com/film-borders).
+If you have a modern browser, you can use the live WASM web version [here](https://film-borders.romnn.com).
 
 #### Installation
-You can use the [web application](https://app.romnn.com/film-borders) that uses WASM or the CLI tool for batch processing.
+You can use the [web application](https://film-borders.romnn.com) that uses WASM or the CLI tool for batch processing.
 
 To install the CLI, run
 ```bash
