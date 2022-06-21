@@ -1,4 +1,3 @@
-// #![allow(clippy::unused_unit)]
 pub mod borders;
 pub mod defaults;
 pub mod options;
@@ -121,7 +120,6 @@ impl ImageBorders {
             "fitting to {} x {} took {:?}",
             fit_width,
             fit_height,
-            // start.elapsed()
             Utc::now().time() - start,
         );
 

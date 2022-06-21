@@ -68,32 +68,17 @@ impl Image {
 
 #[wasm_bindgen]
 impl ImageBorders {
-    // #[wasm_bindgen(constructor)]
-
     #[allow(dead_code)]
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
         ctx: CanvasRenderingContext2d,
     ) -> Result<ImageBorders, JsValue> {
-        // utils::set_panic_hook();
-        // let img = Image::from_canvas(&canvas, &ctx)?;
         Ok(ImageBorders::new(Image::from_canvas(&canvas, &ctx)?))
-        // Ok(ImageBorders {
-        //     // borders: borders::ImageBorders::new(img),
-        //     img: Image::from_canvas(&canvas, &ctx)?,
-        //     result: None,
-        // })
     }
 
     #[allow(dead_code)]
     pub fn for_image_data(data: ImageData) -> Result<ImageBorders, JsValue> {
-        utils::set_panic_hook();
-        // let img = Image::from_image_data(data)?;
         Ok(ImageBorders::new(Image::from_image_data(data)?))
-        // Ok(WasmImageBorders {
-        //     borders: borders::ImageBorders::new(img),
-        //     result: None,
-        // })
     }
 
     #[allow(dead_code)]
@@ -126,24 +111,3 @@ impl ImageBorders {
         )
     }
 }
-
-// impl ImageBorders {
-//     #[allow(dead_code)]
-//     pub fn store(
-//         &self,
-//         img: &RgbaImage,
-//         canvas: HtmlCanvasElement,
-//         ctx: CanvasRenderingContext2d,
-//     ) -> Result<(), JsValue> {
-//         // Convert the raw pixels back to an ImageData object.
-//         let img_data = ImageData::new_with_u8_clamped_array_and_sh(
-//             Clamped(img.as_raw()),
-//             canvas.width(),
-//             canvas.height(),
-//         )?;
-
-//         // Place the new imagedata onto the canvas
-//         ctx.put_image_data(&img_data, 0.0, 0.0)?;
-//         Ok(())
-//     }
-// }
