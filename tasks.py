@@ -29,15 +29,23 @@ def format(c, check=False):
 @task
 def pack(c):
     """Compile, pack and upgrade the wasm module package"""
-    # c.run("wasm-pack build --release {}".format(ROOT_DIR), pty=True)
-    # c.run("wasm-pack build --target no-modules --release {}".format(ROOT_DIR), pty=True)
     # node module first
     c.run("rm -rf {}".format(WASM_NODE_MODULE))
-    # c.run("wasm-pack build --target web --release {}".format(ROOT_DIR), pty=True)
-    c.run("wasm-pack build --target web --release {} -- --features wasm ".format(ROOT_DIR), pty=True)
+    c.run(
+        "wasm-pack build --target web --release {} -- --features wasm ".format(
+            ROOT_DIR
+        ),
+        pty=True,
+    )
     c.run("yarn --cwd {} upgrade {}".format(WWW_DIR, WASM_MODULE), pty=True)
 
-    c.run("wasm-pack build --target no-modules --release {} -- --features wasm".format(ROOT_DIR), pty=True)
+    # public wasm second
+    c.run(
+        "wasm-pack build --target no-modules --release {} -- --features wasm".format(
+            ROOT_DIR
+        ),
+        pty=True,
+    )
     c.run("mkdir -p {}".format(WWW_PUBLIC_WASM_DIR))
     c.run("rm -rf {}".format(WWW_PUBLIC_WASM_DIR))
     c.run("cp -R {} {}".format("pkg", WWW_PUBLIC_WASM_DIR))
@@ -46,8 +54,8 @@ def pack(c):
 @task
 def install_wasm_pack(c):
     """Download and install wasm-pack"""
-    c.run("cargo install wasm-pack --force", pty=True);
-    
+    c.run("cargo install wasm-pack --force", pty=True)
+
 
 @task
 def lint(c):
