@@ -6,10 +6,8 @@ import init, {
   Crop,
   BorderOptions,
   OutputSize,
-  Point,
   Rotation,
   Sides,
-  Size,
   ImageBorders,
 } from "filmborders";
 // import { Crop, ImageBorderOptions, OutputSize, Point, Rotation, Sides, Size, WasmImageBorders } from "filmborders/filmborders.js";

@@ -12,8 +12,6 @@ opt-level = "s"
 lto = true
 
 [lib]
-name = "filmborders"
-path = "src/lib.rs"
 crate-type = ["cdylib", "lib"]
 
 [[bin]]
