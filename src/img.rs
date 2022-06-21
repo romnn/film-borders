@@ -1,16 +1,14 @@
-use crate::borders::{Point, Size};
+use crate::types::{Point, Size};
 use crate::utils;
 use image::codecs::jpeg::JpegEncoder;
 use image::error::ImageError;
 use image::io::Reader as ImageReader;
-use image::{DynamicImage, ImageBuffer, Pixel, Rgba, RgbaImage};
+use image::{DynamicImage, Pixel, Rgba, RgbaImage};
 use std::cmp::{max, min};
 use std::env;
 use std::fs::File;
 use std::io::{Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
-use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 #[inline]
 pub fn fill_rect(buffer: &mut RgbaImage, color: &Rgba<u8>, top_left: Point, bottom_right: Point) {
@@ -57,25 +55,6 @@ pub struct Image {
     pub size: Size,
 }
 
-#[inline]
-fn image_from_image_data(img: ImageData) -> Result<DynamicImage, JsValue> {
-    let pixels = img.data().to_vec();
-    let img_buffer = ImageBuffer::from_vec(img.width(), img.height(), pixels)
-        .ok_or_else(|| JsValue::from_str("failed to create ImageBuffer"))?;
-    Ok(DynamicImage::ImageRgba8(img_buffer))
-}
-
-#[inline]
-fn image_from_canvas(
-    canvas: &HtmlCanvasElement,
-    ctx: &CanvasRenderingContext2d,
-) -> Result<DynamicImage, JsValue> {
-    let width = canvas.width();
-    let height = canvas.height();
-    let img = ctx.get_image_data(0.0, 0.0, width as f64, height as f64)?;
-    image_from_image_data(img)
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
     Horizontal,
@@ -83,33 +62,6 @@ pub enum Direction {
 }
 
 impl Image {
-    #[allow(dead_code)]
-    pub fn from_canvas(
-        canvas: &HtmlCanvasElement,
-        ctx: &CanvasRenderingContext2d,
-    ) -> Result<Image, JsValue> {
-        let buffer = image_from_canvas(canvas, ctx)?.to_rgba8();
-        let width = buffer.width();
-        let height = buffer.height();
-        Ok(Image {
-            buffer,
-            file_path: None,
-            size: Size { width, height },
-        })
-    }
-
-    #[allow(dead_code)]
-    pub fn from_image_data(data: ImageData) -> Result<Self, JsValue> {
-        let buffer = image_from_image_data(data)?.to_rgba8();
-        let width = buffer.width();
-        let height = buffer.height();
-        Ok(Self {
-            buffer,
-            file_path: None,
-            size: Size { width, height },
-        })
-    }
-
     pub fn from_file(image_path: &Path) -> Result<Self, ImageError> {
         let buffer = ImageReader::open(image_path)?.decode()?.to_rgba8();
         let width = buffer.width();

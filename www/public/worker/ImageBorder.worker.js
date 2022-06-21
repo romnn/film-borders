@@ -2,11 +2,11 @@ const href = location.href;
 const workerPath = "/worker/ImageBorder.worker.js";
 const baseURL = href.replace(workerPath, '');
 
-importScripts(`${baseURL}/wasm/wasm_film_borders.js`)
+importScripts(`${baseURL}/wasm/filmborders.js`)
 
 const init_wasm_in_worker = async () => {
-  wasm_bindgen(`${baseURL}/wasm/wasm_film_borders_bg.wasm`).then(wasm => {
-    const {WasmImageBorders, ImageBorderOptions} = wasm_bindgen;
+  wasm_bindgen(`${baseURL}/wasm/filmborders_bg.wasm`).then(wasm => {
+    const {ImageBorders, BorderOptions} = wasm_bindgen;
     let sourceImage = null;
     self.postMessage({status : "ready"});
     self.onmessage = async (event) => {
@@ -20,9 +20,9 @@ const init_wasm_in_worker = async () => {
         let save = event.data.save;
         console.log(renderID, "applying", JSON.parse(event.data.applyOptions),
                     "to", sourceImage);
-        let wasmImg = WasmImageBorders.for_image_data(sourceImage);
-        let options = ImageBorderOptions.deserialize(event.data.applyOptions);
-        let result = wasmImg.apply(options);
+        let wasmImg = ImageBorders.for_image_data(sourceImage);
+        let options = BorderOptions.deserialize(event.data.applyOptions);
+        let result = wasmImg.apply_wasm(options);
         self.postMessage({result, renderID, save});
       };
     };

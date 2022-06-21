@@ -1,9 +1,10 @@
-mod borders;
-mod img;
-mod utils;
+use filmborders::ImageBorders;
+use filmborders::Image;
+use filmborders::options;
+use filmborders::types;
+use chrono::Utc;
 use clap::Parser;
 use std::path::PathBuf;
-use std::time::Instant;
 
 #[derive(Parser, Debug, Clone)]
 struct ApplyOpts {
@@ -35,7 +36,7 @@ struct ApplyOpts {
     border_width: Option<u32>,
 
     #[clap(long = "rotate")]
-    rotation: Option<borders::Rotation>,
+    rotation: Option<types::Rotation>,
 
     #[clap(long = "preview")]
     preview: bool,
@@ -67,36 +68,36 @@ pub struct Opts {
 fn main() {
     let opts: Opts = Opts::parse();
     if let Some(subcommand) = opts.commands {
-        let start = Instant::now();
+        let start = Utc::now().time();
         match subcommand {
             Command::Apply(cfg) => {
                 // println!("apply:  {:?}", cfg);
-                match img::Image::from_file(&cfg.image_path) {
+                match Image::from_file(&cfg.image_path) {
                     Ok(image) => {
-                        let mut b = borders::ImageBorders::new(image);
-                        let border_options = borders::ImageBorderOptions {
-                            output_size: Some(borders::OutputSize {
+                        let mut b = ImageBorders::new(image);
+                        let border_options = options::BorderOptions {
+                            output_size: Some(types::OutputSize {
                                 width: cfg.output_width,
                                 height: cfg.output_height,
                             }),
-                            crop: Some(borders::Crop {
+                            crop: Some(types::Crop {
                                 top: cfg.crop_top,
                                 right: cfg.crop_right,
                                 bottom: cfg.crop_bottom,
                                 left: cfg.crop_left,
                             }),
                             scale_factor: Some(cfg.scale_factor.unwrap_or(0.95)),
-                            border_width: Some(borders::Sides::uniform(
+                            border_width: Some(types::Sides::uniform(
                                 cfg.border_width.unwrap_or(10),
                             )),
-                            rotate_angle: Some(cfg.rotation.unwrap_or(borders::Rotation::Rotate0)),
+                            rotate_angle: Some(cfg.rotation.unwrap_or(types::Rotation::Rotate0)),
                             preview: cfg.preview,
                         };
                         // println!("options:  {:?}", border_options);
                         match b.apply(border_options).and_then(|result| {
                             b.save(result, cfg.output_path.map(|p| p.as_path().to_owned()))
                         }) {
-                            Ok(_) => println!("done after {:?}", start.elapsed()),
+                            Ok(_) => println!("done after {:?}", Utc::now().time() - start),
                             Err(err) => println!("{}", err),
                         };
                     }

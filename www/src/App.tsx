@@ -1,6 +1,18 @@
 import React from "react";
 import axios from "axios";
-import Loader from "react-loader-spinner";
+import { Oval } from "react-loader-spinner";
+import { Buffer } from "buffer";
+import init, {
+  Crop,
+  BorderOptions,
+  OutputSize,
+  Point,
+  Rotation,
+  Sides,
+  Size,
+  ImageBorders,
+} from "filmborders";
+// import { Crop, ImageBorderOptions, OutputSize, Point, Rotation, Sides, Size, WasmImageBorders } from "filmborders/filmborders.js";
 import "./App.sass";
 import "react-loader-spinner/dist/loader/css/react-spinner-loader.css";
 // eslint-disable-next-line import/no-webpack-loader-syntax
@@ -60,7 +72,8 @@ export default class App extends React.Component<AppProps, AppState> {
   protected resultCanvas = React.createRef<HTMLCanvasElement>();
   protected canvas = React.createRef<HTMLCanvasElement>();
   protected canvasContainer = React.createRef<HTMLDivElement>();
-  protected wasm!: typeof import("filmborders");
+  // protected wasm!: typeof import("filmborders");
+  protected wasm!: typeof import("filmborders/filmborders.js");
   protected worker!: Worker;
   protected img!: HTMLImageElement;
 
@@ -90,7 +103,17 @@ export default class App extends React.Component<AppProps, AppState> {
 
   loadWasm = async () => {
     try {
-      this.wasm = await import("filmborders");
+      // @ts-ignore: Unreachable code error
+      // this.wasm = await import("filmborders");
+
+      console.log("loading");
+      init();
+      // this.wasm = wasm;
+      // this.wasm = await import("filmborders/filmborders.js");
+      // this.wasm = // await import("filmborders/filmborders.js");
+      // console.log(this.wasm);
+      // console.log(this.wasm.Rotation);
+      console.log("loaded");
       this.setState({ ready: true });
     } catch (err: unknown) {
       console.error(`unexpected error when loading WASM. (${err})`);
@@ -108,11 +131,11 @@ export default class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  getOptions = (): import("filmborders").ImageBorderOptions => {
-    let options = new this.wasm.ImageBorderOptions();
+  getOptions = (): BorderOptions => {
+    let options = new BorderOptions();
 
     // output size
-    let output_size = new this.wasm.OutputSize();
+    let output_size = new OutputSize();
     output_size.width = this.state.outputWidth;
     output_size.height = this.state.outputHeight;
     options.output_size = output_size;
@@ -121,7 +144,7 @@ export default class App extends React.Component<AppProps, AppState> {
     options.scale_factor = this.state.scaleFactor ?? 1.0;
 
     // crop
-    let crop = new this.wasm.Crop();
+    let crop = new Crop();
     crop.top = this.state.cropTop;
     crop.right = this.state.cropRight;
     crop.bottom = this.state.cropBottom;
@@ -129,7 +152,7 @@ export default class App extends React.Component<AppProps, AppState> {
     options.crop = crop;
 
     // border width
-    let borderWidth = new this.wasm.Sides();
+    let borderWidth = new Sides();
     borderWidth.top = this.state.borderWidthTop ?? 0;
     borderWidth.right = this.state.borderWidthRight ?? 0;
     borderWidth.bottom = this.state.borderWidthBottom ?? 0;
@@ -162,13 +185,13 @@ export default class App extends React.Component<AppProps, AppState> {
 
         let renderID = uuidv4();
         console.time(renderID);
-        let imgData = this.wasm.WasmImageBorders.to_image_data(
+        let imgData = ImageBorders.to_image_data(
           previewSrcCanvas,
           previewSrcCtx
         );
         this.worker.postMessage({ sourceImage: imgData });
         let options = this.getOptions();
-        let size = new this.wasm.OutputSize();
+        let size = new OutputSize();
         size.width = canvas.width;
         size.height = canvas.height;
         options.output_size = size;
@@ -194,7 +217,7 @@ export default class App extends React.Component<AppProps, AppState> {
     resultCanvas.height = this.state.outputHeight;
     let renderID = uuidv4();
     console.time(renderID);
-    let imgData = this.wasm.WasmImageBorders.to_image_data(
+    let imgData = ImageBorders.to_image_data(
       originalSrcCanvas,
       originalSrcCtx
     );
@@ -308,6 +331,7 @@ export default class App extends React.Component<AppProps, AppState> {
       }
     };
 
+    console.log("loading call");
     this.loadWasm().then(() => {
       this.getB64Image(
         "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brad_Pitt_2019_by_Glenn_Francis.jpg/1200px-Brad_Pitt_2019_by_Glenn_Francis.jpg"
@@ -340,10 +364,10 @@ export default class App extends React.Component<AppProps, AppState> {
 
   updateRotationAngle = (e: React.ChangeEvent<HTMLSelectElement>) => {
     // @ts-ignore
-    this.setState({ rotationAngle: this.wasm.Rotation[e.target.value] });
+    this.setState({ rotationAngle: Rotation[e.target.value] });
     this.setState({
       // @ts-ignore
-      rotationAngleName: this.wasm.Rotation[this.wasm.Rotation[e.target.value]],
+      rotationAngleName: Rotation[Rotation[e.target.value]],
     });
   };
 
@@ -392,13 +416,12 @@ export default class App extends React.Component<AppProps, AppState> {
           <canvas className="offscreen" ref={this.previewSrcCanvas}></canvas>
           <canvas className="offscreen" ref={this.originalSrcCanvas}></canvas>
           <div id="wasm-canvas-container" ref={this.canvasContainer}>
-            <Loader
+            <Oval
               visible={
                 this.state.rendering ||
                 !this.state.ready ||
                 !this.state.workerReady
               }
-              type="Oval"
               color="#00BFFF"
               height={100}
               width={100}
@@ -430,15 +453,13 @@ export default class App extends React.Component<AppProps, AppState> {
                   value={this.state.rotationAngleName}
                   onChange={this.updateRotationAngle}
                 >
-                  {this.state.ready
-                    ? Object.values(this.wasm.Rotation)
-                        .filter((r) => typeof r == "string")
-                        .map((option) => (
-                          <option value={option} key={option}>
-                            {option}
-                          </option>
-                        ))
-                    : null}
+                  {Object.values(Rotation)
+                    .filter((r) => typeof r == "string")
+                    .map((option) => (
+                      <option value={option} key={option}>
+                        {option}
+                      </option>
+                    ))}
                 </select>
                 <label htmlFor="rotationAngle">Rotation</label>
 
