@@ -132,7 +132,6 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          # publicURL=https://app.romnn.com/film-borders
           build-args: |
             version=${{ steps.query.outputs.stable_semver_version }}
           tags: |
