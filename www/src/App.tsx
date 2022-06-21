@@ -10,11 +10,8 @@ import init, {
   Sides,
   ImageBorders,
 } from "filmborders";
-// import { Crop, ImageBorderOptions, OutputSize, Point, Rotation, Sides, Size, WasmImageBorders } from "filmborders/filmborders.js";
 import "./App.sass";
 import "react-loader-spinner/dist/loader/css/react-spinner-loader.css";
-// eslint-disable-next-line import/no-webpack-loader-syntax
-// import ImageBorderWorker from "worker-loader!./worker/ImageBorder.worker.js";
 
 type AppState = {
   ready: boolean;
