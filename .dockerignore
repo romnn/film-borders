@@ -1,17 +1,3 @@
-# .DS_Store
-# .bumpversion.cfg
 /www/public/wasm
-# /pkg
-# /target
-# /.github
-# /.git
-# /output
-# /tests
-# /samples
-# /README.md
-# /LICENSE
-# /*.svg
-www/node_modules
-www/build
-# Dockerfile
-# Dockerfile.cli
+/www/node_modules
+/www/build

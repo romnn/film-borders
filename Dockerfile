@@ -16,7 +16,6 @@ ADD ./src /build/src
 ADD ./Cargo.* /build/
 ADD ./tasks.py /build/
 ADD ./www /build/www
-RUN ls -lia
 RUN invoke pack
 
 RUN echo "Using version ${version}"
