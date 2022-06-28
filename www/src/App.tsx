@@ -14,7 +14,7 @@ import "./App.sass";
 import "react-loader-spinner/dist/loader/css/react-spinner-loader.css";
 
 type AppState = {
-  ready: boolean;
+  wasmLoaded: boolean;
   workerReady: boolean;
   rendering: boolean;
   filename?: string;
@@ -68,14 +68,14 @@ export default class App extends React.Component<AppProps, AppState> {
   protected canvas = React.createRef<HTMLCanvasElement>();
   protected canvasContainer = React.createRef<HTMLDivElement>();
   // protected wasm!: typeof import("filmborders");
-  protected wasm!: typeof import("filmborders/filmborders.js");
+  protected wasm!: typeof import("filmborders");
   protected worker!: Worker;
   protected img!: HTMLImageElement;
 
   constructor(props: AppProps) {
     super(props);
     this.state = {
-      ready: false,
+      wasmLoaded: false,
       workerReady: false,
       rendering: true,
       filename: undefined,
@@ -96,20 +96,11 @@ export default class App extends React.Component<AppProps, AppState> {
     };
   }
 
-  loadWasm = async () => {
+  loadWasm = async (): Promise<void> => {
+    if (this.state.wasmLoaded) return;
     try {
-      // @ts-ignore: Unreachable code error
-      // this.wasm = await import("filmborders");
-
-      console.log("loading");
-      init();
-      // this.wasm = wasm;
-      // this.wasm = await import("filmborders/filmborders.js");
-      // this.wasm = // await import("filmborders/filmborders.js");
-      // console.log(this.wasm);
-      // console.log(this.wasm.Rotation);
-      console.log("loaded");
-      this.setState({ ready: true });
+      await init();
+      this.setState({ wasmLoaded: true });
     } catch (err: unknown) {
       console.error(`unexpected error when loading WASM. (${err})`);
     }
@@ -212,10 +203,7 @@ export default class App extends React.Component<AppProps, AppState> {
     resultCanvas.height = this.state.outputHeight;
     let renderID = uuidv4();
     console.time(renderID);
-    let imgData = ImageBorders.to_image_data(
-      originalSrcCanvas,
-      originalSrcCtx
-    );
+    let imgData = ImageBorders.to_image_data(originalSrcCanvas, originalSrcCtx);
     this.worker.postMessage({ sourceImage: imgData });
     let options = this.getOptions();
     options.preview = false;
@@ -301,7 +289,7 @@ export default class App extends React.Component<AppProps, AppState> {
     canvas.height = this.state.outputHeight * canvasScale;
   };
 
-  componentDidMount = () => {
+  componentDidMount = async () => {
     this.worker = new Worker(
       `${process.env.PUBLIC_URL}/worker/ImageBorder.worker.js`
     );
@@ -326,12 +314,13 @@ export default class App extends React.Component<AppProps, AppState> {
       }
     };
 
-    console.log("loading call");
-    this.loadWasm().then(() => {
-      this.getB64Image(
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brad_Pitt_2019_by_Glenn_Francis.jpg/1200px-Brad_Pitt_2019_by_Glenn_Francis.jpg"
-      ).then((sampleImage) => this.loadImage(sampleImage));
-    });
+    await this.loadWasm();
+    let sampleImage = await this.getB64Image(
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brad_Pitt_2019_by_Glenn_Francis.jpg/1200px-Brad_Pitt_2019_by_Glenn_Francis.jpg"
+    );
+    await this.loadImage(sampleImage);
+    // .then((sampleImage) => this.loadImage(sampleImage));
+    // });
 
     window.addEventListener("resize", this.handleResize);
   };
@@ -414,7 +403,7 @@ export default class App extends React.Component<AppProps, AppState> {
             <Oval
               visible={
                 this.state.rendering ||
-                !this.state.ready ||
+                !this.state.wasmLoaded ||
                 !this.state.workerReady
               }
               color="#00BFFF"

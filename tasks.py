@@ -37,10 +37,7 @@ def pack(c):
         ),
         pty=True,
     )
-    try:
-        c.run("yarn --cwd {} upgrade {}".format(WWW_DIR, WASM_MODULE), pty=True)
-    except Exception:
-        pass
+    c.run("yarn --cwd {} upgrade {}".format(WWW_DIR, WASM_MODULE), pty=True)
 
     # public wasm second
     c.run(
