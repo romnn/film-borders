@@ -16,8 +16,11 @@ categories = [
   "web-programming"
 ]
 keywords = [
-  "image", "35mm", "film", "photography", "analog", "borders",
-  "wasm", "webassembly", "webapp", "hipster",
+  "image",
+  "35mm",
+  "film",
+  "photography",
+  "borders"
 ]
 exclude = [
   "samples/*",
