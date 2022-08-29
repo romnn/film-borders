@@ -1,6 +1,6 @@
 /target
 .DS_Store
-output/*
+testing/*
 **/*.rs.bk
 **/*.svg
 bin/

@@ -102,7 +102,7 @@ impl ImageBorders {
         let result = self
             .apply(options)
             .map_err(|err| JsValue::from_str(&err.to_string()))?;
-        self.result = Some(result.clone());
+        // self.result = Some(result.clone());
         // convert the raw pixels back to an ImageData object
         ImageData::new_with_u8_clamped_array_and_sh(
             Clamped(result.as_raw()),

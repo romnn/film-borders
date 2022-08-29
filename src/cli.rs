@@ -1,18 +1,16 @@
-use filmborders::ImageBorders;
-use filmborders::Image;
-use filmborders::options;
-use filmborders::types;
 use chrono::Utc;
 use clap::Parser;
+use filmborders::{BorderOptions, Crop, Image, ImageBorders, OutputSize, Rotation, Sides};
+use std::fs;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone)]
 struct ApplyOpts {
     #[clap(short = 'i', long = "image")]
-    image_path: PathBuf,
+    image: PathBuf,
 
     #[clap(short = 'o', long = "output")]
-    output_path: Option<PathBuf>,
+    output: Option<PathBuf>,
 
     #[clap(long = "width")]
     output_width: Option<u32>,
@@ -23,29 +21,32 @@ struct ApplyOpts {
     #[clap(long = "scale")]
     scale_factor: Option<f32>,
 
-    #[clap(long = "crop_top")]
+    #[clap(long = "crop-top")]
     crop_top: Option<u32>,
-    #[clap(long = "crop_right")]
+    #[clap(long = "crop-right")]
     crop_right: Option<u32>,
-    #[clap(long = "crop_bottom")]
+    #[clap(long = "crop-bottom")]
     crop_bottom: Option<u32>,
-    #[clap(long = "crop_left")]
+    #[clap(long = "crop-left")]
     crop_left: Option<u32>,
 
-    #[clap(long = "border")]
+    #[clap(long = "border-width")]
     border_width: Option<u32>,
 
     #[clap(long = "rotate")]
-    rotation: Option<types::Rotation>,
+    rotation: Option<Rotation>,
 
-    #[clap(long = "preview")]
+    #[clap(long = "preview", help = "overlay instagram preview visiable area", action = clap::ArgAction::SetTrue)]
     preview: bool,
+
+    #[clap(long = "quality", help = "output image quality (1-100)")]
+    quality: Option<u8>,
 }
 
 #[derive(Parser, Debug, Clone)]
 #[clap(
     name = "film-borders",
-    version = "1.0",
+    version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"),
     about = "add film borders to an image",
     author = "romnn <contact@romnn.com>",
     arg_required_else_help = true
@@ -72,32 +73,32 @@ fn main() {
         match subcommand {
             Command::Apply(cfg) => {
                 // println!("apply:  {:?}", cfg);
-                match Image::from_file(&cfg.image_path) {
-                    Ok(image) => {
-                        let mut b = ImageBorders::new(image);
-                        let border_options = options::BorderOptions {
-                            output_size: Some(types::OutputSize {
+                match ImageBorders::open(&cfg.image) {
+                    Ok(mut borders) => {
+                        let options = BorderOptions {
+                            output_size: Some(OutputSize {
                                 width: cfg.output_width,
                                 height: cfg.output_height,
                             }),
-                            crop: Some(types::Crop {
+                            crop: Some(Crop {
                                 top: cfg.crop_top,
                                 right: cfg.crop_right,
                                 bottom: cfg.crop_bottom,
                                 left: cfg.crop_left,
                             }),
                             scale_factor: Some(cfg.scale_factor.unwrap_or(0.95)),
-                            border_width: Some(types::Sides::uniform(
+                            border_width: Some(Sides::uniform(
                                 cfg.border_width.unwrap_or(10),
                             )),
-                            rotate_angle: Some(cfg.rotation.unwrap_or(types::Rotation::Rotate0)),
+                            rotate_angle: Some(cfg.rotation.unwrap_or(Rotation::Rotate0)),
                             preview: cfg.preview,
                         };
-                        // println!("options:  {:?}", border_options);
-                        match b.apply(border_options).and_then(|result| {
-                            b.save(result, cfg.output_path.map(|p| p.as_path().to_owned()))
-                        }) {
-                            Ok(_) => println!("done after {:?}", Utc::now().time() - start),
+                        // println!("options:  {:?}", options);
+                        match borders
+                            .apply(options)
+                            .and_then(|result| result.save(cfg.output, cfg.quality))
+                        {
+                            Ok(_) => println!("completed in {:?}", Utc::now().time() - start),
                             Err(err) => println!("{}", err),
                         };
                     }

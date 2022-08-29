@@ -7,7 +7,6 @@ You can use the [web application](https://film-borders.romnn.com) that uses WASM
 
 To install the CLI, run
 ```bash
-cargo install --git https://github.com/romnn/film-borders.git --bin film-borders
 cargo install filmborders --bin film-borders
 ```
 
@@ -32,3 +31,8 @@ For a list of options, see
 ```bash
 film-borders apply --help
 ```
+
+#### TODO
+- allow custom border images (cli, lib and web)
+- make nice ui components
+- add some more tests

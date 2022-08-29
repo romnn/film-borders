@@ -1,33 +1,44 @@
 use crate::types::{Point, Size};
 use crate::utils;
-use image::codecs::jpeg::JpegEncoder;
-use image::error::ImageError;
-use image::io::Reader as ImageReader;
-use image::{DynamicImage, Pixel, Rgba, RgbaImage};
+use crate::Error;
+use image::{
+    codecs, imageops, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageError,
+    ImageFormat, ImageOutputFormat, Pixel, Rgba, RgbaImage,
+};
+
 use std::cmp::{max, min};
 use std::env;
-use std::fs::File;
+use std::fs;
+use std::io::{BufReader, Seek};
 use std::io::{Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
 
+const DEFAULT_JPEG_QUALITY: u8 = 70; // 1-100
+
 #[inline]
-pub fn fill_rect(buffer: &mut RgbaImage, color: &Rgba<u8>, top_left: Point, bottom_right: Point) {
-    let x1 = utils::clamp(min(top_left.x, bottom_right.x), 0, buffer.width());
-    let x2 = utils::clamp(max(top_left.x, bottom_right.x), 0, buffer.width());
-    let y1 = utils::clamp(min(top_left.y, bottom_right.y), 0, buffer.height());
-    let y2 = utils::clamp(max(top_left.y, bottom_right.y), 0, buffer.height());
+pub fn fill_rect(image: &mut RgbaImage, color: &Rgba<u8>, top_left: Point, bottom_right: Point) {
+    let x1 = utils::clamp(min(top_left.x, bottom_right.x), 0, image.width());
+    let x2 = utils::clamp(max(top_left.x, bottom_right.x), 0, image.width());
+    let y1 = utils::clamp(min(top_left.y, bottom_right.y), 0, image.height());
+    let y2 = utils::clamp(max(top_left.y, bottom_right.y), 0, image.height());
     for x in x1..x2 {
         for y in y1..y2 {
-            buffer.get_pixel_mut(x, y).blend(color);
+            image.get_pixel_mut(x, y).blend(color);
         }
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Direction {
+    Horizontal,
+    Vertical,
+}
+
 #[inline]
-pub fn fade_out(buffer: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
+pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
     let other = match direction {
-        Direction::Horizontal => buffer.height(),
-        Direction::Vertical => buffer.width(),
+        Direction::Horizontal => image.height(),
+        Direction::Vertical => image.width(),
     };
     let diff = (end as f32 - start as f32).abs();
     for i in min(start, end)..=max(start, end) {
@@ -43,80 +54,145 @@ pub fn fade_out(buffer: &mut RgbaImage, start: u32, end: u32, direction: Directi
                 Direction::Horizontal => (i, j),
                 Direction::Vertical => (j, i),
             };
-            let channels = buffer.get_pixel_mut(x, y).channels_mut();
+            let channels = image.get_pixel_mut(x, y).channels_mut();
             channels[3] = min(channels[3], alpha);
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Image {
-    pub buffer: RgbaImage,
-    pub file_path: Option<PathBuf>,
-    pub size: Size,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Direction {
-    Horizontal,
-    Vertical,
+    inner: RgbaImage,
+    pub path: Option<PathBuf>,
+    size: Size,
 }
 
 impl Image {
-    pub fn from_file(image_path: &Path) -> Result<Self, ImageError> {
-        let buffer = ImageReader::open(image_path)?.decode()?.to_rgba8();
-        let width = buffer.width();
-        let height = buffer.height();
+    pub fn data(&self) -> RgbaImage {
+        self.inner.clone()
+    }
+
+    pub fn size(&self) -> Size {
+        self.size
+    }
+
+    pub fn from_image(image: DynamicImage) -> Self {
+        let inner = image.to_rgba8();
+        let size = Size {
+            width: inner.width(),
+            height: inner.height(),
+        };
+        Self {
+            inner,
+            size,
+            path: None,
+        }
+    }
+
+    pub fn new<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
+        let reader = ImageReader::new(reader).with_guessed_format()?;
+        let inner = reader.decode()?.to_rgba8();
+        let size = Size {
+            width: inner.width(),
+            height: inner.height(),
+        };
         Ok(Self {
-            buffer,
-            file_path: Some(image_path.to_path_buf()),
-            size: Size { width, height },
+            inner,
+            path: None,
+            size,
         })
     }
 
-    fn get_output_path(&self, output_path: Option<PathBuf>) -> Result<PathBuf, ImageError> {
-        let base_dir = (self
-            .file_path
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let file = fs::OpenOptions::new().read(true).open(&path)?;
+        let mut img = Self::new(BufReader::new(&file))?;
+        img.path = Some(path.as_ref().to_path_buf());
+        Ok(img)
+    }
+
+    pub fn save<P: AsRef<Path>>(&self, path: Option<P>, quality: Option<u8>) -> Result<(), Error> {
+        let default_output = self.output_path(None);
+        let path = path
             .as_ref()
-            .and_then(|p| p.parent())
-            .map(|p| p.to_path_buf()))
-        .or_else(|| env::current_dir().ok());
-        let default_output = base_dir.and_then(|b| {
-            self.file_path
-                .as_ref()
-                .and_then(|name| name.file_stem())
-                .and_then(|name| name.to_str())
-                .map(|stem| b.join(format!("{}_with_border.png", stem)))
-        });
+            .map(|p| p.as_ref())
+            .or(default_output.as_ref().map(|p| p.as_path()))
+            .ok_or(Error::MissingOutputFile)?;
 
-        output_path
-            .or(default_output)
-            .ok_or_else(|| ImageError::IoError(IOError::new(ErrorKind::Other, "nooo")))
+        let format = ImageFormat::from_path(&path)?;
+        let mut file = fs::OpenOptions::new()
+            .read(false)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)?;
+        self.encode_to(&mut file, format, quality)
     }
 
-    #[allow(dead_code)]
-    pub fn save_jpeg_to_file(
+    pub fn encode_to<W: std::io::Write + Seek>(
         &self,
-        buffer: RgbaImage,
-        output_path: Option<PathBuf>,
+        w: &mut W,
+        format: ImageFormat,
         quality: Option<u8>,
-    ) -> Result<(), ImageError> {
-        let output_path = self.get_output_path(output_path)?;
-        println!("saving to {}...", output_path.display());
-        let mut file = File::create(&output_path)?;
-        let mut encoder = JpegEncoder::new_with_quality(&mut file, quality.unwrap_or(80));
-        encoder.encode_image(&DynamicImage::ImageRgba8(buffer))?;
+    ) -> Result<(), Error> {
+        let data = self.inner.as_raw().as_ref();
+        let color = ColorType::Rgba8;
+        let width = self.inner.width();
+        let height = self.inner.height();
+        match format.into() {
+            ImageOutputFormat::Png => codecs::png::PngEncoder::new(w)
+                .write_image(data, width, height, color)
+                .map_err(Error::from),
+            ImageOutputFormat::Jpeg(_) => {
+                let quality = quality.unwrap_or(DEFAULT_JPEG_QUALITY);
+                codecs::jpeg::JpegEncoder::new_with_quality(w, quality)
+                    .write_image(data, width, height, color)
+                    .map_err(Error::from)
+            }
+            ImageOutputFormat::Gif => codecs::gif::GifEncoder::new(w)
+                .encode(data, width, height, color)
+                .map_err(Error::from),
+            ImageOutputFormat::Ico => codecs::ico::IcoEncoder::new(w)
+                .write_image(data, width, height, color)
+                .map_err(Error::from),
+            ImageOutputFormat::Bmp => codecs::bmp::BmpEncoder::new(w)
+                .write_image(data, width, height, color)
+                .map_err(Error::from),
+            ImageOutputFormat::Tiff => codecs::tiff::TiffEncoder::new(w)
+                .write_image(data, width, height, color)
+                .map_err(Error::from),
+            ImageOutputFormat::Unsupported(msg) => {
+                Err(Error::from(image::error::ImageError::Unsupported(
+                    image::error::UnsupportedError::from_format_and_kind(
+                        image::error::ImageFormatHint::Unknown,
+                        image::error::UnsupportedErrorKind::Format(
+                            image::error::ImageFormatHint::Name(msg),
+                        ),
+                    ),
+                )))
+            }
+            _ => Err(Error::from(image::error::ImageError::Unsupported(
+                image::error::UnsupportedError::from_format_and_kind(
+                    image::error::ImageFormatHint::Unknown,
+                    image::error::UnsupportedErrorKind::Format(
+                        image::error::ImageFormatHint::Name("missing format".to_string()),
+                    ),
+                ),
+            ))),
+        }?;
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn save_to_file(
-        &self,
-        buffer: RgbaImage,
-        output_path: Option<PathBuf>,
-    ) -> Result<(), ImageError> {
-        let output_path = self.get_output_path(output_path)?;
-        println!("saving to {}...", output_path.display());
-        DynamicImage::ImageRgba8(buffer).save(&output_path)?;
-        Ok(())
+    fn output_path(&self, format: Option<ImageFormat>) -> Option<PathBuf> {
+        let source_format = self
+            .path
+            .as_ref()
+            .and_then(|p| ImageFormat::from_path(p).ok());
+        let format = format.or(source_format).unwrap_or(ImageFormat::Jpeg);
+        let ext = format.extensions_str().iter().next().unwrap_or(&"jpg");
+        self.path.as_ref().and_then(|p| {
+            p.file_stem()
+                .map(|stem| format!("{}_with_border.{}", &stem.to_string_lossy(), &ext))
+                .map(|filename| p.with_file_name(filename))
+        })
     }
 }

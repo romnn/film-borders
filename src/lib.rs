@@ -1,55 +1,73 @@
 pub mod borders;
 pub mod defaults;
-pub mod options;
 pub mod img;
+pub mod options;
 pub mod types;
 pub mod utils;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+pub use image::ImageFormat;
 pub use img::Image;
+pub use options::*;
+pub use types::*;
 
-use crate::types::{Point, Size, OutputSize, Rotation};
 use chrono::Utc;
-use options::BorderOptions;
-use image::imageops;
-use std::path::PathBuf;
-use image::{RgbaImage, Rgba, ImageError};
+use image::{
+    codecs, imageops, io::Reader as ImageReader, DynamicImage, ImageEncoder, ImageError,
+    ImageOutputFormat, Rgba, RgbaImage,
+};
 use std::cmp::{max, min};
+use std::io::Seek;
+use std::path::{Path, PathBuf};
 use wasm_bindgen::prelude::*;
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("missing output path")]
+    MissingOutputFile,
+
+    #[error("image error: `{0}`")]
+    Image(#[from] image::error::ImageError),
+
+    #[error("io error: `{0}`")]
+    Io(#[from] std::io::Error),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Direction {
+    Horizontal,
+    Vertical,
+}
 
 #[wasm_bindgen]
 pub struct ImageBorders {
+    // buffer: RgbaImage,
+    // file_path: Option<PathBuf>,
+    // size: Size,
     img: img::Image,
-    #[allow(dead_code)]
-    result: Option<RgbaImage>,
+    // #[allow(dead_code)]
+    // result: Option<RgbaImage>,
 }
 
 impl ImageBorders {
     pub fn new(img: img::Image) -> ImageBorders {
         utils::set_panic_hook();
-        ImageBorders { img, result: None }
+        ImageBorders { img } // , result: None }
     }
 
-    #[allow(dead_code)]
-    pub fn save_jpeg(
-        &self,
-        buffer: RgbaImage,
-        output_path: Option<PathBuf>,
-        quality: Option<u8>,
-    ) -> Result<(), ImageError> {
-        self.img.save_jpeg_to_file(buffer, output_path, quality)
+    pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
+        let img = Image::new(reader)?;
+        Ok(Self::new(img))
     }
 
-    pub fn save(&self, buffer: RgbaImage, output_path: Option<PathBuf>) -> Result<(), ImageError> {
-        self.img.save_to_file(buffer, output_path)
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let img = Image::open(path)?;
+        Ok(Self::new(img))
     }
 
-    pub fn apply(&mut self, options: BorderOptions) -> Result<RgbaImage, ImageError> {
-        let mut size = Size {
-            width: self.img.buffer.width(),
-            height: self.img.buffer.height(),
-        };
+    pub fn apply(&mut self, options: BorderOptions) -> Result<img::Image, Error> {
+        let mut size = self.img.size();
         if let Some(OutputSize { width, height }) = options.output_size {
             if let Some(width) = width {
                 size.width = width;
@@ -68,7 +86,7 @@ impl ImageBorders {
             };
         }
 
-        let mut photo = self.img.buffer.clone();
+        let mut photo = self.img.data();
         let output_is_portrait = size.width <= size.height;
         let rem = max(size.width, size.height) as f32 / 1000.0;
 
@@ -392,6 +410,139 @@ impl ImageBorders {
             img::fill_rect(&mut final_image, &highlight_color, ctr_tl, ctr_br);
         };
 
-        Ok(final_image)
+        let mut img = img::Image::from_image(DynamicImage::ImageRgba8(final_image));
+        img.path = self.img.path.clone();
+        Ok(img)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        BorderOptions, Crop, Image, ImageBorders, ImageFormat, OutputSize, Rotation, Sides,
+    };
+    use anyhow::Result;
+    use std::io::Cursor;
+    use std::path::PathBuf;
+    use tempdir::TempDir;
+
+    fn custom_border() -> BorderOptions {
+        BorderOptions {
+        output_size: Some(OutputSize {
+            width: Some(1000),
+            height: Some(1000),
+        }),
+        ..Default::default()
+        }
+    }
+
+    lazy_static::lazy_static! {
+        pub static ref OPTIONS: BorderOptions = BorderOptions {
+            output_size: Some(OutputSize {
+                width: Some(1000),
+                height: Some(1000),
+            }),
+            crop: Some(Crop {
+                top: Some(10),
+                right: Some(10),
+                bottom: Some(10),
+                left: Some(10),
+            }),
+            scale_factor: Some(0.95),
+            border_width: Some(Sides::uniform(10)),
+            rotate_angle: Some(Rotation::Rotate90),
+            preview: true,
+        };
+    }
+
+    macro_rules! format_tests {
+        ($($name:ident: $values:expr,)*) => {
+            $(
+                #[test]
+                fn $name() -> Result<()> {
+                    let (infile, outfile, options) = $values;
+                    let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
+                    let input = repo.join(&infile);
+                    let output = repo.join(&outfile);
+                    println!("{:?}", output);
+                    assert!(input.is_file());
+                    let mut borders = ImageBorders::open(&input)?;
+                    let result = borders.apply(options)?;
+                    result.save(Some(&output), None)?;
+                    assert!(output.is_file());
+                    Ok(())
+                }
+            )*
+        }
+    }
+
+    format_tests! {
+        test_open_and_save_jpg_to_jpg: (
+           "samples/lowres.jpg", "testing/lowres_jpg.jpg", *OPTIONS),
+        test_open_and_save_jpg_to_png: (
+           "samples/lowres.jpg", "testing/lowres_jpg.png", *OPTIONS),
+        test_open_and_save_jpg_to_tiff: (
+           "samples/lowres.jpg", "testing/lowres_jpg.tiff", *OPTIONS),
+
+        test_open_and_save_png_to_jpg: (
+           "samples/lowres.png", "testing/lowres_png.jpg", *OPTIONS),
+        test_open_and_save_png_to_png: (
+           "samples/lowres.png", "testing/lowres_png.png", *OPTIONS),
+        test_open_and_save_png_to_tiff: (
+           "samples/lowres.png", "testing/lowres_png.tiff", *OPTIONS),
+
+        test_open_and_save_tiff_to_jpg: (
+           "samples/lowres.tiff", "testing/lowres_png.jpg", *OPTIONS),
+        test_open_and_save_tiff_to_png: (
+           "samples/lowres.tiff", "testing/lowres_png.png", *OPTIONS),
+        test_open_and_save_tiff_to_tiff: (
+           "samples/lowres.tiff", "testing/lowres_png.tiff", *OPTIONS),
+
+        test_default_options: (
+           "samples/lowres.jpg", "testing/lowres_default.jpg", BorderOptions::default()),
+
+        test_custom_border1: (
+           "samples/lowres.jpg", "testing/lowres_custom_border.jpg", custom_border()),
+    }
+
+    #[test]
+    fn test_read_write_in_memory() -> Result<()> {
+        let bytes = include_bytes!("../samples/lowres.jpg");
+        let input = Cursor::new(&bytes);
+        let mut borders = ImageBorders::from_reader(input)?;
+        let options = BorderOptions {
+            // border: 
+            ..*OPTIONS
+        };
+        let result = borders.apply(options)?;
+        let mut output = Cursor::new(Vec::new());
+        result.encode_to(&mut output, ImageFormat::Png, None);
+        assert!(output.position() > 100);
+        Ok(())
+    }
+
+    // #[test]
+    // fn test_custom_border() -> Result<()> {
+    //     let bytes = include_bytes!("../samples/lowres.jpg");
+    //     let input = Cursor::new(&bytes);
+    //     let mut borders = ImageBorders::from_reader(input)?;
+    //     let result = borders.apply(*OPTIONS)?;
+    //     let mut output = Cursor::new(Vec::new());
+    //     result.encode_to(&mut output, ImageFormat::Png, None);
+    //     assert!(output.position() > 100);
+    //     Ok(())
+    // }
+
+    // assert!(false);
+    // let tmp_dir = TempDir::new("sample").unwrap();
+    // assert!(false);
+    // let tmp_dir = TempDir::new("sample").unwrap();
+    // let output = tmp_dir.path().join("test_output.png");
+
+    // let total_bytes = include_bytes!("../../experimental/audio-samples/muse_uprising.mp3");
+    //     let total = Cursor::new(total_bytes.as_ref());
+    // assert_eq!(
+    //     CompressContentType::exclude(vec![]).should_compress(Some(content_type("image/png"))),
+    //     true
+    // );
 }
