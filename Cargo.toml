@@ -5,8 +5,27 @@ authors = ["romnn <contact@romnn.com>"]
 edition = "2021"
 description = "add hipster film borders to your images :)"
 license = "MIT"
+license-file = "LICENSE"
+readme = "README.md"
 homepage = "https://film-borders.romnn.com"
 repository = "https://github.com/romnn/film-borders"
+categories = [
+  "multimedia::images",
+  "command-line-utilities",
+  "wasm",
+  "web-programming"
+]
+keywords = [
+  "image", "35mm", "film", "photography", "analog", "borders",
+  "wasm", "webassembly", "webapp", "hipster",
+]
+exclude = [
+  "samples/*",
+  "www/*",
+  "nginx.conf",
+  "tasks.py",
+  "Dockerfile*"
+]
 
 [profile.release]
 # debug = true
