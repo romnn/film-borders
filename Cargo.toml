@@ -3,6 +3,10 @@ name = "filmborders"
 version = "0.0.20"
 authors = ["romnn <contact@romnn.com>"]
 edition = "2021"
+description = "add hipster film borders to your images :)"
+license = "MIT"
+homepage = "film-borders.romnn.com"
+repository = "https://github.com/romnn/film-borders"
 
 [profile.release]
 # debug = true
@@ -23,6 +27,10 @@ wasm = [
   "console_error_panic_hook",
   "chrono/wasmbind"
 ]
+
+[target.x86_64-unknown-linux-gnu]
+linker = "/usr/bin/clang"
+rustflags = ["-Clink-arg=-fuse-ld=lld", "-Clink-arg=-Wl,--no-rosegment"]
 
 [dependencies]
 wasm-bindgen = { version = "0.2", optional = false }

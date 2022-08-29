@@ -7,7 +7,8 @@ You can use the [web application](https://film-borders.romnn.com) that uses WASM
 
 To install the CLI, run
 ```bash
-cargo install --git https://github.com/romnn/wasm-film-borders.git --bin film-borders
+cargo install --git https://github.com/romnn/film-borders.git --bin film-borders
+cargo install filmborders --bin film-borders
 ```
 
 For local testing, you can also install the current version locally:
@@ -17,6 +18,8 @@ cargo install --bin film-borders --path .
 
 #### Benchmarking
 ```bash
+sudo apt install linux-tools-common linux-tools-generic linux-`tools-name -r`
+cargo install flamegraph
 sudo cargo flamegraph -o my_flamegraph.svg -- apply --image ./samples/sample1.jpg --output ./output/sample1.png --border 0 --scale 1.00
 ```
 
