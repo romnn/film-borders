@@ -1,6 +1,6 @@
 [package]
 name = "filmborders"
-version = "0.0.19"
+version = "0.0.20"
 authors = ["romnn <contact@romnn.com>"]
 edition = "2021"
 
