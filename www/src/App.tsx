@@ -12,12 +12,14 @@ import init, {
 } from "filmborders";
 import "./App.sass";
 import "react-loader-spinner/dist/loader/css/react-spinner-loader.css";
+import hash from "object-hash";
 
 type AppState = {
   wasmLoaded: boolean;
   workerReady: boolean;
   rendering: boolean;
   filename?: string;
+  canvasScale: number;
   outputSizeName: string;
   outputWidth: number;
   outputHeight: number;
@@ -36,16 +38,22 @@ type AppState = {
 
 const PREVIEW_MAX_RES = 250;
 const DEFAULT_BORDER_WIDTH = 10;
-const OUTPUT_SIZES = {
-  Portrait: {
+const OUTPUT_SIZES_KEYS: string[] = [
+  "Insta Portrait",
+  "Insta Landscape",
+  "Insta Square",
+  "Custom",
+];
+const OUTPUT_SIZES: { [key: string]: { width: number; height: number } } = {
+  "Insta Portrait": {
     width: 1080,
     height: 1350,
   },
-  Landscape: {
+  "Insta Landscape": {
     width: 1080,
     height: 608,
   },
-  Square: {
+  "Insta Square": {
     width: 1080,
     height: 1080,
   },
@@ -67,21 +75,26 @@ export default class App extends React.Component<AppProps, AppState> {
   protected resultCanvas = React.createRef<HTMLCanvasElement>();
   protected canvas = React.createRef<HTMLCanvasElement>();
   protected canvasContainer = React.createRef<HTMLDivElement>();
-  // protected wasm!: typeof import("filmborders");
   protected wasm!: typeof import("filmborders");
   protected worker!: Worker;
   protected img!: HTMLImageElement;
+  protected resizeTimer?: ReturnType<typeof setTimeout>;
+  protected updateTimer?: ReturnType<typeof setTimeout>;
+  protected lastRenderConfigHash?: string;
 
   constructor(props: AppProps) {
     super(props);
+    const outputSizeName = "Insta Portrait";
+    const size = OUTPUT_SIZES[outputSizeName];
     this.state = {
       wasmLoaded: false,
       workerReady: false,
-      rendering: true,
+      rendering: false,
       filename: undefined,
-      outputSizeName: "Portrait",
-      outputWidth: OUTPUT_SIZES["Portrait"].width,
-      outputHeight: OUTPUT_SIZES["Portrait"].height,
+      canvasScale: 0.0,
+      outputSizeName,
+      outputWidth: size.width,
+      outputHeight: size.height,
       scaleFactor: 0.95,
       cropTop: 0,
       cropRight: 0,
@@ -150,9 +163,39 @@ export default class App extends React.Component<AppProps, AppState> {
     return options;
   };
 
-  update = (e?: React.FormEvent<HTMLFormElement>) => {
+  update = (e?: React.FormEvent<HTMLFormElement>, force = false) => {
     e?.preventDefault();
+
+    let config = {
+      canvasScale: this.state.canvasScale,
+      outputSizeName: this.state.outputSizeName,
+      outputWidth: this.state.outputWidth,
+      outputHeight: this.state.outputHeight,
+      scaleFactor: this.state.scaleFactor,
+      cropTop: this.state.cropTop,
+      cropRight: this.state.cropRight,
+      cropBottom: this.state.cropBottom,
+      cropLeft: this.state.cropLeft,
+      borderWidthTop: this.state.borderWidthTop,
+      borderWidthRight: this.state.borderWidthTop,
+      borderWidthBottom: this.state.borderWidthBottom,
+      borderWidthLeft: this.state.borderWidthLeft,
+      rotationAngleName: this.state.rotationAngleName,
+      rotationAngle: this.state.rotationAngle,
+    };
+
+    let configHash = hash(config, { algorithm: "md5", encoding: "base64" });
+
+    if (this.state.rendering) {
+      if (force || configHash !== this.lastRenderConfigHash) {
+        this.scheduleUpdate(300);
+      }
+      return;
+    }
+    this.resize();
+
     this.setState({ rendering: true }, () => {
+      this.lastRenderConfigHash = configHash;
       new Promise<void>((resolve, reject) => {
         const canvas = this.canvas.current;
         const previewSrcCanvas = this.previewSrcCanvas.current;
@@ -160,14 +203,6 @@ export default class App extends React.Component<AppProps, AppState> {
         const ctx = canvas.getContext("2d");
         const previewSrcCtx = previewSrcCanvas.getContext("2d");
         if (!ctx || !previewSrcCtx) return reject();
-
-        let canvasContainer = this.canvasContainer.current;
-        let canvasScale = Math.min(
-          (canvasContainer?.clientWidth ?? 0) / this.state.outputWidth,
-          (canvasContainer?.clientHeight ?? 0) / this.state.outputHeight
-        );
-        canvas.width = this.state.outputWidth * canvasScale;
-        canvas.height = this.state.outputHeight * canvasScale;
 
         let renderID = uuidv4();
         console.time(renderID);
@@ -267,7 +302,8 @@ export default class App extends React.Component<AppProps, AppState> {
           previewSrcCanvas.height
         );
       this.loadOriginal();
-      this.update(undefined);
+      this.resize();
+      this.update(undefined, true);
     };
     this.img.src = src;
   };
@@ -276,17 +312,41 @@ export default class App extends React.Component<AppProps, AppState> {
     canvas?.getContext("2d")?.putImageData(img, 0, 0);
   };
 
-  handleResize = () => {
+  resize = () => {
     let canvasContainer = this.canvasContainer.current;
-    let canvas = this.canvas.current;
-    if (!canvasContainer || !canvas) return;
-    let canvasScale = Math.min(
-      canvasContainer.clientWidth / this.state.outputWidth,
-      canvasContainer.clientHeight / this.state.outputHeight
-    );
-    // changing the size of the canvas causes it to go white but thats fine
-    canvas.width = this.state.outputWidth * canvasScale;
-    canvas.height = this.state.outputHeight * canvasScale;
+    console.assert(canvasContainer);
+    if (!canvasContainer) return;
+    let canvasScale =
+      Math.min(
+        canvasContainer.clientWidth / this.state.outputWidth,
+        canvasContainer.clientHeight / this.state.outputHeight
+      ) * 0.95;
+    this.setState({ canvasScale }, () => {
+      let canvas = this.canvas.current;
+      console.assert(canvas);
+      if (!canvas) return;
+      let newWidth = Math.floor(this.state.outputWidth * canvasScale);
+      let newHeight = Math.floor(this.state.outputHeight * canvasScale);
+      // resizing causes the canvas to go blank
+      if (canvas.width !== newWidth || canvas.height !== newHeight) {
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+      }
+    });
+  };
+
+  scheduleUpdate = (timeout = 100) => {
+    clearTimeout(this.updateTimer);
+    this.updateTimer = setTimeout(this.update, timeout);
+  };
+
+  scheduleResize = () => {
+    clearTimeout(this.resizeTimer);
+    this.resizeTimer = setTimeout(() => {
+      console.log("resize");
+      this.resize();
+      this.update(undefined, false);
+    }, 300);
   };
 
   componentDidMount = async () => {
@@ -319,14 +379,12 @@ export default class App extends React.Component<AppProps, AppState> {
       "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brad_Pitt_2019_by_Glenn_Francis.jpg/1200px-Brad_Pitt_2019_by_Glenn_Francis.jpg"
     );
     await this.loadImage(sampleImage);
-    // .then((sampleImage) => this.loadImage(sampleImage));
-    // });
 
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener("resize", this.scheduleResize, false);
   };
 
   componentWillUnmount() {
-    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("resize", this.scheduleResize, false);
   }
 
   stripExtension = (filename: string): string => {
@@ -347,182 +405,233 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   updateRotationAngle = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    // @ts-ignore
-    this.setState({ rotationAngle: Rotation[e.target.value] });
-    this.setState({
-      // @ts-ignore
-      rotationAngleName: Rotation[Rotation[e.target.value]],
-    });
+    this.setState(
+      {
+        // @ts-ignore
+        rotationAngle: Rotation[e.target.value],
+        // @ts-ignore
+        rotationAngleName: Rotation[Rotation[e.target.value]],
+      },
+      () => this.scheduleUpdate()
+    );
   };
 
   updateOutputSize = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    this.setState({
-      outputSizeName: e.target.value,
-      outputWidth:
-        OUTPUT_SIZES[e.target.value as keyof typeof OUTPUT_SIZES].width,
-      outputHeight:
-        OUTPUT_SIZES[e.target.value as keyof typeof OUTPUT_SIZES].height,
-    });
+    let key = e.target.value as keyof typeof OUTPUT_SIZES;
+    if (key in OUTPUT_SIZES) {
+      this.setState(
+        {
+          outputSizeName: e.target.value,
+          outputWidth: OUTPUT_SIZES[key].width,
+          outputHeight: OUTPUT_SIZES[key].height,
+        },
+        () => this.scheduleUpdate()
+      );
+    } else {
+      this.setState(
+        {
+          outputSizeName: e.target.value,
+        },
+        () => this.scheduleUpdate()
+      );
+    }
+  };
+
+  updateOutputWidth = (e: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ outputWidth: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
+  };
+
+  updateOutputHeight = (e: React.ChangeEvent<HTMLInputElement>) => {
+    this.setState({ outputHeight: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
   };
 
   updateScaleFactor = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ scaleFactor: parseFloat(e.target.value) });
+    this.setState({ scaleFactor: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
   };
 
   updateBorderWidth = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({
-      borderWidthTop: parseFloat(e.target.value),
-      borderWidthRight: parseFloat(e.target.value),
-      borderWidthBottom: parseFloat(e.target.value),
-      borderWidthLeft: parseFloat(e.target.value),
-    });
+    this.setState(
+      {
+        borderWidthTop: parseFloat(e.target.value),
+        borderWidthRight: parseFloat(e.target.value),
+        borderWidthBottom: parseFloat(e.target.value),
+        borderWidthLeft: parseFloat(e.target.value),
+      },
+      () => this.scheduleUpdate()
+    );
   };
 
   updateCropTop = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ cropTop: parseFloat(e.target.value) });
+    this.setState({ cropTop: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
   };
   updateCropRight = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ cropRight: parseFloat(e.target.value) });
+    this.setState({ cropRight: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
   };
   updateCropBottom = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ cropBottom: parseFloat(e.target.value) });
+    this.setState({ cropBottom: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
   };
   updateCropLeft = (e: React.ChangeEvent<HTMLInputElement>) => {
-    this.setState({ cropLeft: parseFloat(e.target.value) });
+    this.setState({ cropLeft: parseFloat(e.target.value) }, () =>
+      this.scheduleUpdate()
+    );
   };
 
   render = () => {
     return (
       <div id="app">
-        <header></header>
-        <main>
-          <canvas className="offscreen" ref={this.resultCanvas}></canvas>
-          <canvas className="offscreen" ref={this.previewSrcCanvas}></canvas>
-          <canvas className="offscreen" ref={this.originalSrcCanvas}></canvas>
-          <div id="wasm-canvas-container" ref={this.canvasContainer}>
-            <Oval
-              visible={
-                this.state.rendering ||
-                !this.state.wasmLoaded ||
-                !this.state.workerReady
-              }
-              color="#00BFFF"
-              height={100}
-              width={100}
-            />
-            <canvas id="wasm-canvas" ref={this.canvas}></canvas>
-          </div>
-          <form className="parameters" onSubmit={this.update}>
-            <fieldset>
-              <legend>Film Borders!</legend>
+        <canvas className="offscreen" ref={this.resultCanvas}></canvas>
+        <canvas className="offscreen" ref={this.previewSrcCanvas}></canvas>
+        <canvas className="offscreen" ref={this.originalSrcCanvas}></canvas>
 
-              <div className="formgrid">
-                <select
-                  id="outputSize"
-                  disabled={this.state.rendering}
-                  value={this.state.outputSizeName}
-                  onChange={this.updateOutputSize}
-                >
-                  {Object.keys(OUTPUT_SIZES).map((option) => (
+        <div id="wasm-canvas-container" ref={this.canvasContainer}>
+          <Oval
+            wrapperClass={
+              "spinner " +
+              (true || this.state.rendering ||
+              !this.state.wasmLoaded ||
+              !this.state.workerReady
+                ? "visible"
+                : "")
+            }
+            color="#80cbc4"
+            secondaryColor="#e1f5fe"
+          />
+          <canvas id="wasm-canvas" ref={this.canvas}></canvas>
+        </div>
+
+        <form className="parameters" onSubmit={this.update}>
+          <fieldset>
+            <div className="formgrid">
+              {/*disabled={this.state.rendering}*/}
+              <select
+                id="outputSize"
+                value={this.state.outputSizeName}
+                onChange={this.updateOutputSize}
+              >
+                {OUTPUT_SIZES_KEYS.map((size) => (
+                  <option value={size} key={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="outputSize">Size</label>
+
+              <input
+                id="outputWidth"
+                type="number"
+                step="1"
+                disabled={this.state.outputSizeName !== "Custom"}
+                value={this.state.outputWidth}
+                onChange={this.updateOutputWidth}
+              />
+              <label htmlFor="outputWidth">Width</label>
+
+              <input
+                id="outputHeight"
+                type="number"
+                step="1"
+                disabled={this.state.outputSizeName !== "Custom"}
+                value={this.state.outputHeight}
+                onChange={this.updateOutputHeight}
+              />
+              <label htmlFor="outputHeight">Height</label>
+
+              <select
+                id="rotationAngle"
+                value={this.state.rotationAngleName}
+                onChange={this.updateRotationAngle}
+              >
+                {Object.values(Rotation)
+                  .filter((r) => typeof r == "string")
+                  .map((option) => (
                     <option value={option} key={option}>
                       {option}
                     </option>
                   ))}
-                </select>
-                <label htmlFor="outputSize">Size</label>
+              </select>
+              <label htmlFor="rotationAngle">Rotation</label>
 
-                <select
-                  id="rotationAngle"
-                  disabled={this.state.rendering}
-                  value={this.state.rotationAngleName}
-                  onChange={this.updateRotationAngle}
-                >
-                  {Object.values(Rotation)
-                    .filter((r) => typeof r == "string")
-                    .map((option) => (
-                      <option value={option} key={option}>
-                        {option}
-                      </option>
-                    ))}
-                </select>
-                <label htmlFor="rotationAngle">Rotation</label>
+              <input
+                id="scaleFactor"
+                type="number"
+                step="0.01"
+                value={this.state.scaleFactor}
+                onChange={this.updateScaleFactor}
+              />
+              <label htmlFor="scaleFactor">Scale factor</label>
 
-                <input
-                  id="scaleFactor"
-                  type="number"
-                  step="0.01"
-                  disabled={this.state.rendering}
-                  value={this.state.scaleFactor}
-                  onChange={this.updateScaleFactor}
-                />
-                <label htmlFor="scaleFactor">Scale factor</label>
+              <input
+                type="number"
+                id="borderWidth"
+                value={this.state.borderWidthTop}
+                onChange={this.updateBorderWidth}
+              />
+              <label htmlFor="borderWidth">Border width</label>
 
-                <input
-                  type="number"
-                  id="borderWidth"
-                  disabled={this.state.rendering}
-                  value={this.state.borderWidthTop}
-                  onChange={this.updateBorderWidth}
-                />
-                <label htmlFor="borderWidth">Border width</label>
+              <input
+                type="number"
+                id="cropTop"
+                value={this.state.cropTop}
+                onChange={this.updateCropTop}
+              />
+              <label htmlFor="cropTop">Crop top</label>
 
-                <input
-                  type="number"
-                  id="cropTop"
-                  disabled={this.state.rendering}
-                  value={this.state.cropTop}
-                  onChange={this.updateCropTop}
-                />
-                <label htmlFor="cropTop">Crop top</label>
+              <input
+                type="number"
+                id="cropRight"
+                value={this.state.cropRight}
+                onChange={this.updateCropRight}
+              />
+              <label htmlFor="cropRight">Crop right</label>
 
-                <input
-                  type="number"
-                  id="cropRight"
-                  disabled={this.state.rendering}
-                  value={this.state.cropRight}
-                  onChange={this.updateCropRight}
-                />
-                <label htmlFor="cropRight">Crop right</label>
+              <input
+                type="number"
+                id="cropBottom"
+                value={this.state.cropBottom}
+                onChange={this.updateCropBottom}
+              />
+              <label htmlFor="cropBottom">Crop bottom</label>
 
-                <input
-                  type="number"
-                  id="cropBottom"
-                  disabled={this.state.rendering}
-                  value={this.state.cropBottom}
-                  onChange={this.updateCropBottom}
-                />
-                <label htmlFor="cropBottom">Crop bottom</label>
+              <input
+                type="number"
+                id="cropLeft"
+                value={this.state.cropLeft}
+                onChange={this.updateCropLeft}
+              />
+              <label htmlFor="cropLeft">Crop left</label>
 
-                <input
-                  type="number"
-                  id="cropLeft"
-                  disabled={this.state.rendering}
-                  value={this.state.cropLeft}
-                  onChange={this.updateCropLeft}
-                />
-                <label htmlFor="cropLeft">Crop left</label>
-
-                <button disabled={this.state.rendering} type="submit">
-                  Update
-                </button>
-                <button
-                  disabled={this.state.rendering}
-                  onClick={this.exportHighRes}
-                >
-                  Export
-                </button>
-                <input
-                  type="file"
-                  disabled={this.state.rendering}
-                  onChange={(e) => this.openImage(e.target.files)}
-                  name="fileinput"
-                  id="fileinput"
-                  accept="image/*"
-                />
-              </div>
-            </fieldset>
-          </form>
-        </main>
+              <button disabled={this.state.rendering} type="submit">
+                Update
+              </button>
+              <button
+                disabled={this.state.rendering}
+                onClick={this.exportHighRes}
+              >
+                Export
+              </button>
+              <input
+                type="file"
+                disabled={this.state.rendering}
+                onChange={(e) => this.openImage(e.target.files)}
+                name="fileinput"
+                id="fileinput"
+                accept="image/*"
+              />
+            </div>
+          </fieldset>
+        </form>
       </div>
     );
   };

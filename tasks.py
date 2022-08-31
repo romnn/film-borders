@@ -1,6 +1,6 @@
 """
-Tasks for maintaining the project.
-Execute 'invoke --list' for guidance on using Invoke
+tasks for maintaining the project.
+run 'invoke --list' for guidance on using invoke
 """
 import shutil
 import pprint
@@ -30,10 +30,23 @@ def format(c, check=False):
 def pack(c):
     """Compile, pack and upgrade the wasm module package"""
     # node module first
+    cargo_args = [
+        "--",
+        "--features",
+        "wasm",
+    ]
     c.run("rm -rf {}".format(WASM_NODE_MODULE))
     c.run(
-        "wasm-pack build --target web --release {} -- --features wasm ".format(
-            ROOT_DIR
+        " ".join(
+            [
+                "wasm-pack",
+                "build",
+                "--target",
+                "web",
+                "--release",
+                str(ROOT_DIR),
+            ]
+            + cargo_args
         ),
         pty=True,
     )
@@ -41,11 +54,20 @@ def pack(c):
 
     # public wasm second
     c.run(
-        "wasm-pack build --target no-modules --release {} -- --features wasm".format(
-            ROOT_DIR
+        " ".join(
+            [
+                "wasm-pack",
+                "build",
+                "--target",
+                "no-modules",
+                "--release",
+                str(ROOT_DIR),
+            ]
+            + cargo_args
         ),
         pty=True,
     )
+
     c.run("mkdir -p {}".format(WWW_PUBLIC_WASM_DIR))
     c.run("rm -rf {}".format(WWW_PUBLIC_WASM_DIR))
     c.run("cp -R {} {}".format("pkg", WWW_PUBLIC_WASM_DIR))

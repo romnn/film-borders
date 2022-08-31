@@ -5,10 +5,30 @@ on: [ push, pull_request ]
 jobs:
   build:
     runs-on: ubuntu-latest
+    name: build (features ${{ matrix.features }})
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", "borders", "wasm"]
     steps:
     - uses: actions/checkout@v2
-    - name: Setup python
-      uses: actions/setup-python@v2
+    - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+    - name: Compile binaries
+      run: |
+        cargo build --profile lib --features "${{ matrix.features }}" --all-targets
+
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+    - uses: actions/setup-python@v2
     - uses: actions/setup-node@v2
       with:
         node-version: '14'

@@ -1,7 +1,6 @@
 use chrono::Utc;
 use clap::Parser;
-use filmborders::{BorderOptions, Crop, Image, ImageBorders, OutputSize, Rotation, Sides};
-use std::fs;
+use filmborders::{BorderOptions, Crop, ImageBorders, OutputSize, Rotation, Sides};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone)]
@@ -72,7 +71,7 @@ fn main() {
         let start = Utc::now().time();
         match subcommand {
             Command::Apply(cfg) => {
-                // println!("apply:  {:?}", cfg);
+                filmborders::debug!(&cfg);
                 match ImageBorders::open(&cfg.image) {
                     Ok(mut borders) => {
                         let options = BorderOptions {
@@ -87,22 +86,20 @@ fn main() {
                                 left: cfg.crop_left,
                             }),
                             scale_factor: Some(cfg.scale_factor.unwrap_or(0.95)),
-                            border_width: Some(Sides::uniform(
-                                cfg.border_width.unwrap_or(10),
-                            )),
+                            border_width: Some(Sides::uniform(cfg.border_width.unwrap_or(10))),
                             rotate_angle: Some(cfg.rotation.unwrap_or(Rotation::Rotate0)),
                             preview: cfg.preview,
                         };
-                        // println!("options:  {:?}", options);
+                        filmborders::debug!(&options);
                         match borders
                             .apply(options)
                             .and_then(|result| result.save(cfg.output, cfg.quality))
                         {
                             Ok(_) => println!("completed in {:?}", Utc::now().time() - start),
-                            Err(err) => println!("{}", err),
+                            Err(err) => eprintln!("{}", err),
                         };
                     }
-                    Err(err) => println!("{}", err),
+                    Err(err) => eprintln!("{}", err),
                 }
             }
         }

@@ -1,19 +1,16 @@
+use crate::defaults;
 use crate::types::{Point, Size};
 use crate::utils;
 use crate::Error;
 use image::{
-    codecs, imageops, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageError,
-    ImageFormat, ImageOutputFormat, Pixel, Rgba, RgbaImage,
+    codecs, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageFormat,
+    ImageOutputFormat, Pixel, Rgba, RgbaImage,
 };
 
 use std::cmp::{max, min};
-use std::env;
 use std::fs;
 use std::io::{BufReader, Seek};
-use std::io::{Error as IOError, ErrorKind};
 use std::path::{Path, PathBuf};
-
-const DEFAULT_JPEG_QUALITY: u8 = 70; // 1-100
 
 #[inline]
 pub fn fill_rect(image: &mut RgbaImage, color: &Rgba<u8>, top_left: Point, bottom_right: Point) {
@@ -48,7 +45,6 @@ pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Directio
             frac = 1.0 - frac;
         }
         let alpha = (255.0 * frac) as u8;
-        // println!("alpha = {} = {} / {}", alpha, ir, range);
         for j in 0..other {
             let (x, y) = match direction {
                 Direction::Horizontal => (i, j),
@@ -62,14 +58,18 @@ pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Directio
 
 #[derive(Debug)]
 pub struct Image {
-    inner: RgbaImage,
-    pub path: Option<PathBuf>,
-    size: Size,
+    pub(crate) inner: RgbaImage,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) size: Size,
 }
 
 impl Image {
     pub fn data(&self) -> RgbaImage {
         self.inner.clone()
+    }
+
+    pub fn as_raw(&self) -> &[u8] {
+        self.inner.as_raw()
     }
 
     pub fn size(&self) -> Size {
@@ -111,7 +111,7 @@ impl Image {
     }
 
     pub fn save<P: AsRef<Path>>(&self, path: Option<P>, quality: Option<u8>) -> Result<(), Error> {
-        let default_output = self.output_path(None);
+        let (default_output, _) = self.output_path(None);
         let path = path
             .as_ref()
             .map(|p| p.as_ref())
@@ -143,7 +143,7 @@ impl Image {
                 .write_image(data, width, height, color)
                 .map_err(Error::from),
             ImageOutputFormat::Jpeg(_) => {
-                let quality = quality.unwrap_or(DEFAULT_JPEG_QUALITY);
+                let quality = quality.unwrap_or(defaults::DEFAULT_JPEG_QUALITY);
                 codecs::jpeg::JpegEncoder::new_with_quality(w, quality)
                     .write_image(data, width, height, color)
                     .map_err(Error::from)
@@ -182,17 +182,97 @@ impl Image {
         Ok(())
     }
 
-    fn output_path(&self, format: Option<ImageFormat>) -> Option<PathBuf> {
+    fn output_path(&self, format: Option<ImageFormat>) -> (Option<PathBuf>, Option<ImageFormat>) {
         let source_format = self
             .path
             .as_ref()
             .and_then(|p| ImageFormat::from_path(p).ok());
-        let format = format.or(source_format).unwrap_or(ImageFormat::Jpeg);
-        let ext = format.extensions_str().iter().next().unwrap_or(&"jpg");
-        self.path.as_ref().and_then(|p| {
+        let format = format.or(source_format); // .unwrap_or(ImageFormat::Jpeg);
+        let ext = format
+            .unwrap_or(ImageFormat::Jpeg)
+            .extensions_str()
+            .iter()
+            .next()
+            .unwrap_or(&"jpg");
+        let path = self.path.as_ref().and_then(|p| {
             p.file_stem()
                 .map(|stem| format!("{}_with_border.{}", &stem.to_string_lossy(), &ext))
                 .map(|filename| p.with_file_name(filename))
-        })
+        });
+        (path, format)
+        // .map(|p| (p, format))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Image;
+    use crate::{ImageFormat, Size};
+    use image::RgbaImage;
+
+    macro_rules! output_path_tests {
+        ($($name:ident: $values:expr,)*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let (path, format, want_path, want_format): (
+                        Option<&str>,
+                        Option<ImageFormat>,
+                        Option<&str>,
+                        Option<ImageFormat>
+                    ) = $values;
+                    let img = Image {
+                        inner: RgbaImage::new(32, 32),
+                        path: path.map(Into::into),
+                        size: Size::default(),
+                    };
+                    let (have_path, have_format) = img.output_path(format);
+                    assert_eq!(have_path, want_path.map(Into::into));
+                    assert_eq!(have_format, want_format);
+                    if let Some(p) = have_path {
+                        assert_eq!(
+                            ImageFormat::from_path(p).ok(),
+                            want_format
+                        );
+                    };
+                }
+            )*
+        }
+    }
+
+    output_path_tests! {
+        test_no_path_no_format: (None, None, None, None),
+        test_jpg_path_no_format: (
+           Some("samples/lowres.jpg"), None,
+           Some("samples/lowres_with_border.jpg"), Some(ImageFormat::Jpeg)
+        ),
+        test_png_path_no_format: (
+           Some("samples/lowres.png"), None,
+           Some("samples/lowres_with_border.png"), Some(ImageFormat::Png)
+        ),
+        test_no_path_jpg_format: (
+           None, Some(ImageFormat::Jpeg),
+           None, Some(ImageFormat::Jpeg)
+        ),
+        test_no_path_png_format: (
+           None, Some(ImageFormat::Png),
+           None, Some(ImageFormat::Png)
+        ),
+        test_jpg_path_jpg_format: (
+           Some("samples/lowres.jpg"), Some(ImageFormat::Jpeg),
+           Some("samples/lowres_with_border.jpg"), Some(ImageFormat::Jpeg)
+        ),
+        test_jpg_path_png_format: (
+           Some("samples/lowres.jpg"), Some(ImageFormat::Png),
+           Some("samples/lowres_with_border.png"), Some(ImageFormat::Png)
+        ),
+        test_png_path_jpg_format: (
+           Some("samples/lowres.png"), Some(ImageFormat::Jpeg),
+           Some("samples/lowres_with_border.jpg"), Some(ImageFormat::Jpeg)
+        ),
+        test_png_path_png_format: (
+           Some("samples/lowres.png"), Some(ImageFormat::Png),
+           Some("samples/lowres_with_border.png"), Some(ImageFormat::Png)
+        ),
     }
 }

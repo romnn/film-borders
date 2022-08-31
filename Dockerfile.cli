@@ -6,7 +6,7 @@ ADD ./ /app
 ARG version=0.0.1
 LABEL MAINTAINER="roman <contact@romnn.com>"
 
-RUN cargo build --release --all-targets
+RUN cargo build --profile lib --all-targets
 
 FROM gcr.io/distroless/cc
 COPY --from=build /app/target/release/film-borders /

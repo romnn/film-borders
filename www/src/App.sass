@@ -1,66 +1,94 @@
-main
-  min-width: 1000px
-  max-width: 3000px
-  width: 80%
-  margin: 0 auto
-  position: relative
-  overflow: hidden
-  top: 20px
-  height: calc(100vh - 40px)
+body
+  background-color: peachpuff
+  background-color: #e1f5fe
+  
+#app
+  display: flex
+  // flex-flow: row nowrap
+  flex-flow: column wrap
+  // background-color: green
+  min-height: 0
+  min-width: 0
+
+  @media (min-width: 600px)
+    flex-flow: row nowrap
+    height: 100%
+  // padding: 10px
+//   background-color: red
+//   display: inline-block
+  // min-width: 1000px
+  // max-width: 3000px
+  // width: 80%
+  // margin: 0 auto
+  // position: relative
+  // overflow: hidden
+  // top: 20px
+  // height: calc(100vh - 40px)
 
 .parameters
-  overflow: hidden
-  position: absolute
+  display: flex
+  justify-content: center
+  align-items: center
+  align-content: center
+  background-color: #80cbc4
+  // background-color: red
+  // overflow: hidden
+  // position: absolute
   padding: 20px
-  width: 260px
-  right: 0
-  top: 0
+  // width: 260px
+  // right: 0
+  // top: 0
+
+  @media (min-width: 600px)
+    height: 100%
+    overflow-y: scroll
 
   fieldset
-    max-width: 40em
-    padding: 4px
-    margin: 2em auto
-    border: 0 none
+    display: flex
 
-  input, output, textarea, select, button
-    box-sizing: border-box
-    padding: 2px
-    margin: 0
-    outline: 0 none
-    box-shadow: none
-
-  button
-    color: black
-    margin-bottom: 10px
-    border: 1px solid black
-    padding: 2px
-    background-color: lightblue
-    cursor: pointer
-
-  input, output, textarea, select, button
-    clear: both
-    float: right
-    width: 50%
-
-  label
-    margin-bottom: 10px
-    float: left
-    width: calc(50% - 10px)
-    text-align: right
-    padding-right: 10px
-
+ 
 .offscreen, .hidden
   display: none
 
 #wasm-canvas-container
+  display: flex
+  // flex: 0 0
+  align-items: center
+  justify-content: center
+  // background-color: yellow
   overflow: hidden
   position: relative
-  top: 0
-  left: 0
-  width: calc(100% - 300px)
-  height: 100%
+  // height: 60%
+  height: 60vh
+  width: 100vw
+  min-height: 0
+  min-width: 0
 
-  svg
+  @media (min-width: 600px)
+    justify-content: center
+    align-items: center
+    align-content: center
+    flex: 1
+    height: 100%
+    // overflow-y: scroll
+
+  // overflow: hidden
+  // top: 0
+  // left: 0
+  // width: calc(100% - 300px)
+  // height: 100%
+
+  .spinner
     position: absolute
-    top: calc(50% - 50px)
-    left: calc(50% - 50px)
+    display: inline-block
+    // top: calc(50% - 0.5rem)
+    // left: calc(50% - 0.5rem)
+
+    svg
+      height: 2rem
+      width: 2rem
+      display: none
+
+    &.visible
+      svg
+        display: block

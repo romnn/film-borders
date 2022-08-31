@@ -30,11 +30,20 @@ exclude = [
 ]
 
 [profile.release]
-# debug = true
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"
+# optimize for small code size
+# opt-level = "z" # or "s"
+opt-level = 3 # or "s"
 # enable link time optimization
 lto = true
+# strip debug info
+strip = "debuginfo"
+
+[profile.lib]
+inherits = "release"
+strip = false
+opt-level = 3
+lto = true
+
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -44,7 +53,10 @@ name = "film-borders"
 path = "src/cli.rs"
 
 [features]
+default = []
+borders = []
 wasm = [
+  "borders",
   "console_error_panic_hook",
   "chrono/wasmbind"
 ]

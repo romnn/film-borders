@@ -1,4 +1,6 @@
+#[cfg(feature = "borders")]
 pub mod borders;
+pub mod debug;
 pub mod defaults;
 pub mod img;
 pub mod options;
@@ -12,14 +14,11 @@ pub use img::Image;
 pub use options::*;
 pub use types::*;
 
+#[cfg(debug_assertions)]
 use chrono::Utc;
-use image::{
-    codecs, imageops, io::Reader as ImageReader, DynamicImage, ImageEncoder, ImageError,
-    ImageOutputFormat, Rgba, RgbaImage,
-};
+use image::{imageops, DynamicImage, Rgba, RgbaImage};
 use std::cmp::{max, min};
-use std::io::Seek;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -42,18 +41,13 @@ pub enum Direction {
 
 #[wasm_bindgen]
 pub struct ImageBorders {
-    // buffer: RgbaImage,
-    // file_path: Option<PathBuf>,
-    // size: Size,
     img: img::Image,
-    // #[allow(dead_code)]
-    // result: Option<RgbaImage>,
 }
 
 impl ImageBorders {
     pub fn new(img: img::Image) -> ImageBorders {
         utils::set_panic_hook();
-        ImageBorders { img } // , result: None }
+        ImageBorders { img }
     }
 
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
@@ -129,12 +123,13 @@ impl ImageBorders {
             // scale the image by factor
             fit_width = (fit_width as f32 * utils::clamp(scale_factor, 0f32, 1f32)) as u32;
             fit_height = (fit_height as f32 * utils::clamp(scale_factor, 0f32, 1f32)) as u32;
-            // println!("scaling to {} x {}", fit_width, fit_height);
+            crate::debug!("scaling to {} x {}", fit_width, fit_height);
         };
 
+        #[cfg(debug_assertions)]
         let start = Utc::now().time();
         photo = imageops::resize(&photo, fit_width, fit_height, defaults::FILTER_TYPE);
-        println!(
+        crate::debug!(
             "fitting to {} x {} took {:?}",
             fit_width,
             fit_height,
@@ -143,7 +138,7 @@ impl ImageBorders {
 
         let overlay_x = ((size.width - photo.width()) / 2) as i64;
         let overlay_y = ((size.height - photo.height()) / 2) as i64;
-        // println!("overlaying at {} {}", overlay_x, overlay_y);
+        crate::debug!("overlaying at {} {}", overlay_x, overlay_y);
 
         // create the black borders
         if let Some(border_width) = options.border_width {
@@ -193,10 +188,11 @@ impl ImageBorders {
             fb_height = fit_height;
             fb_width = (fb.width() as f32 * (fit_height as f32 / fb.height() as f32)) as u32;
         };
+        #[cfg(debug_assertions)]
         let start = Utc::now().time();
         let filter_type = imageops::FilterType::Triangle;
         fb = imageops::resize(&fb, fb_width, fb_height, filter_type);
-        println!(
+        crate::debug!(
             "fitting border to {} x {} took {:?}",
             fb_width,
             fb_height,
@@ -331,9 +327,8 @@ impl ImageBorders {
             )
         };
 
-        // println!("from {} to {} with step size {}", start, end, step_size);
+        crate::debug!("from {} to {} with step size {}", start, end, step_size);
         for i in (start..=end).step_by(step_size) {
-            println!("{}", i);
             let mut inter_fb = fb.clone();
             let (inter_fb_x, inter_fb_y, inter_fb_width, inter_fb_height) = if photo_is_portrait {
                 (
@@ -419,20 +414,20 @@ impl ImageBorders {
 #[cfg(test)]
 mod tests {
     use super::{
-        BorderOptions, Crop, Image, ImageBorders, ImageFormat, OutputSize, Rotation, Sides,
+        BorderOptions, Crop, ImageBorders, ImageFormat, OutputSize, Rotation, Sides,
     };
     use anyhow::Result;
     use std::io::Cursor;
     use std::path::PathBuf;
-    use tempdir::TempDir;
+    // use tempdir::TempDir;
 
     fn custom_border() -> BorderOptions {
         BorderOptions {
-        output_size: Some(OutputSize {
-            width: Some(1000),
-            height: Some(1000),
-        }),
-        ..Default::default()
+            output_size: Some(OutputSize {
+                width: Some(1000),
+                height: Some(1000),
+            }),
+            ..Default::default()
         }
     }
 
@@ -464,7 +459,6 @@ mod tests {
                     let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
                     let input = repo.join(&infile);
                     let output = repo.join(&outfile);
-                    println!("{:?}", output);
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
                     let result = borders.apply(options)?;
@@ -511,12 +505,12 @@ mod tests {
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
         let options = BorderOptions {
-            // border: 
+            // border:
             ..*OPTIONS
         };
         let result = borders.apply(options)?;
         let mut output = Cursor::new(Vec::new());
-        result.encode_to(&mut output, ImageFormat::Png, None);
+        result.encode_to(&mut output, ImageFormat::Png, None)?;
         assert!(output.position() > 100);
         Ok(())
     }

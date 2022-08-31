@@ -36,3 +36,4 @@ film-borders apply --help
 - allow custom border images (cli, lib and web)
 - make nice ui components
 - add some more tests
+- custom background color
