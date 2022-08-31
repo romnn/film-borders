@@ -3,13 +3,14 @@ use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct BorderOptions {
     pub output_size: Option<types::OutputSize>,
     pub scale_factor: Option<f32>,
     pub crop: Option<types::Crop>,
     pub border_width: Option<types::Sides>,
     pub rotate_angle: Option<types::Rotation>,
+    pub background_color: Option<types::Color>,
     pub preview: bool,
 }
 

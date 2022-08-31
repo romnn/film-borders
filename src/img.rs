@@ -143,7 +143,7 @@ impl Image {
                 .write_image(data, width, height, color)
                 .map_err(Error::from),
             ImageOutputFormat::Jpeg(_) => {
-                let quality = quality.unwrap_or(defaults::DEFAULT_JPEG_QUALITY);
+                let quality = quality.unwrap_or(defaults::JPEG_QUALITY);
                 codecs::jpeg::JpegEncoder::new_with_quality(w, quality)
                     .write_image(data, width, height, color)
                     .map_err(Error::from)

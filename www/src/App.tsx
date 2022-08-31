@@ -499,7 +499,7 @@ export default class App extends React.Component<AppProps, AppState> {
           <Oval
             wrapperClass={
               "spinner " +
-              (true || this.state.rendering ||
+              (this.state.rendering ||
               !this.state.wasmLoaded ||
               !this.state.workerReady
                 ? "visible"

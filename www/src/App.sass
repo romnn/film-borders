@@ -1,64 +1,43 @@
 body
-  background-color: peachpuff
   background-color: #e1f5fe
   
 #app
   display: flex
-  // flex-flow: row nowrap
   flex-flow: column wrap
-  // background-color: green
   min-height: 0
   min-width: 0
 
   @media (min-width: 600px)
     flex-flow: row nowrap
     height: 100%
-  // padding: 10px
-//   background-color: red
-//   display: inline-block
-  // min-width: 1000px
-  // max-width: 3000px
-  // width: 80%
-  // margin: 0 auto
-  // position: relative
-  // overflow: hidden
-  // top: 20px
-  // height: calc(100vh - 40px)
+    overflow: hidden
 
 .parameters
-  display: flex
-  justify-content: center
-  align-items: center
-  align-content: center
+  display: inline-flex
   background-color: #80cbc4
-  // background-color: red
-  // overflow: hidden
-  // position: absolute
-  padding: 20px
-  // width: 260px
-  // right: 0
-  // top: 0
+  align-items: flex-start
+  width: 100%
+
+  @media (min-height: 600px)
+    align-items: center
 
   @media (min-width: 600px)
-    height: 100%
     overflow-y: scroll
+    height: 100%
+    width: unset
 
   fieldset
-    display: flex
-
+    padding: 20px
  
 .offscreen, .hidden
   display: none
 
 #wasm-canvas-container
   display: flex
-  // flex: 0 0
   align-items: center
   justify-content: center
-  // background-color: yellow
   overflow: hidden
   position: relative
-  // height: 60%
   height: 60vh
   width: 100vw
   min-height: 0
@@ -70,19 +49,11 @@ body
     align-content: center
     flex: 1
     height: 100%
-    // overflow-y: scroll
-
-  // overflow: hidden
-  // top: 0
-  // left: 0
-  // width: calc(100% - 300px)
-  // height: 100%
+    width: unset
 
   .spinner
     position: absolute
     display: inline-block
-    // top: calc(50% - 0.5rem)
-    // left: calc(50% - 0.5rem)
 
     svg
       height: 2rem

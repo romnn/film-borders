@@ -1,7 +1,7 @@
-#[cfg(feature = "borders")]
 pub mod borders;
 pub mod debug;
 pub mod defaults;
+pub mod error;
 pub mod img;
 pub mod options;
 pub mod types;
@@ -9,6 +9,8 @@ pub mod utils;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+pub use borders::*;
+pub use error::Error;
 pub use image::ImageFormat;
 pub use img::Image;
 pub use options::*;
@@ -19,19 +21,6 @@ use chrono::Utc;
 use image::{imageops, DynamicImage, Rgba, RgbaImage};
 use std::cmp::{max, min};
 use std::path::Path;
-use wasm_bindgen::prelude::*;
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("missing output path")]
-    MissingOutputFile,
-
-    #[error("image error: `{0}`")]
-    Image(#[from] image::error::ImageError),
-
-    #[error("io error: `{0}`")]
-    Io(#[from] std::io::Error),
-}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
@@ -39,7 +28,7 @@ pub enum Direction {
     Vertical,
 }
 
-#[wasm_bindgen]
+#[derive(Debug)]
 pub struct ImageBorders {
     img: img::Image,
 }
@@ -60,7 +49,11 @@ impl ImageBorders {
         Ok(Self::new(img))
     }
 
-    pub fn apply(&mut self, options: BorderOptions) -> Result<img::Image, Error> {
+    pub fn add_border(
+        &mut self,
+        border: Border,
+        options: &BorderOptions,
+    ) -> Result<img::Image, Error> {
         let mut size = self.img.size();
         if let Some(OutputSize { width, height }) = options.output_size {
             if let Some(width) = width {
@@ -70,14 +63,18 @@ impl ImageBorders {
                 size.height = height;
             };
         };
+        let background_color = options
+            .background_color
+            .unwrap_or(if options.preview {
+                Color::gray()
+            } else {
+                Color::white()
+            })
+            .to_rgba();
 
         let mut final_image = RgbaImage::new(size.width, size.height);
         for p in final_image.pixels_mut() {
-            *p = if options.preview {
-                defaults::GRAY
-            } else {
-                defaults::WHITE
-            };
+            *p = background_color;
         }
 
         let mut photo = self.img.data();
@@ -167,17 +164,7 @@ impl ImageBorders {
 
         imageops::overlay(&mut final_image, &photo, overlay_x, overlay_y);
 
-        // add the film borders
-        // let mut fb = image::load_from_memory_with_format(FILM_BORDER_BYTES, ImageFormat::Png)?
-        //     .as_rgba8()
-        //     .ok_or_else(|| {
-        //         ImageError::IoError(IOError::new(
-        //             ErrorKind::Other,
-        //             "failed to read film border image data",
-        //         ))
-        //     })?
-        //     .clone();
-        let mut fb = borders::BORDER1.clone();
+        let mut fb = border.into_image()?.data();
 
         if photo_is_portrait {
             fb = imageops::rotate90(&fb);
@@ -413,23 +400,24 @@ impl ImageBorders {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BorderOptions, Crop, ImageBorders, ImageFormat, OutputSize, Rotation, Sides,
-    };
+    #[cfg(feature = "borders")]
+    use super::ImageFormat;
+    use super::{Border, BorderOptions, Builtin, Crop, ImageBorders, OutputSize, Rotation, Sides};
     use anyhow::Result;
+    #[cfg(feature = "borders")]
     use std::io::Cursor;
     use std::path::PathBuf;
     // use tempdir::TempDir;
 
-    fn custom_border() -> BorderOptions {
-        BorderOptions {
-            output_size: Some(OutputSize {
-                width: Some(1000),
-                height: Some(1000),
-            }),
-            ..Default::default()
-        }
-    }
+    // fn custom_border() -> BorderOptions {
+    //     BorderOptions {
+    //         output_size: Some(OutputSize {
+    //             width: Some(1000),
+    //             height: Some(1000),
+    //         }),
+    //         ..Default::default()
+    //     }
+    // }
 
     lazy_static::lazy_static! {
         pub static ref OPTIONS: BorderOptions = BorderOptions {
@@ -446,13 +434,14 @@ mod tests {
             scale_factor: Some(0.95),
             border_width: Some(Sides::uniform(10)),
             rotate_angle: Some(Rotation::Rotate90),
-            preview: true,
+            ..Default::default()
         };
     }
 
     macro_rules! format_tests {
         ($($name:ident: $values:expr,)*) => {
             $(
+                #[cfg(feature = "borders")]
                 #[test]
                 fn $name() -> Result<()> {
                     let (infile, outfile, options) = $values;
@@ -461,7 +450,8 @@ mod tests {
                     let output = repo.join(&outfile);
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
-                    let result = borders.apply(options)?;
+                    let border = Border::Builtin(Builtin::Border120_1);
+                    let result = borders.add_border(border, options)?;
                     result.save(Some(&output), None)?;
                     assert!(output.is_file());
                     Ok(())
@@ -472,60 +462,59 @@ mod tests {
 
     format_tests! {
         test_open_and_save_jpg_to_jpg: (
-           "samples/lowres.jpg", "testing/lowres_jpg.jpg", *OPTIONS),
+           "samples/lowres.jpg", "testing/lowres_jpg.jpg", &OPTIONS),
         test_open_and_save_jpg_to_png: (
-           "samples/lowres.jpg", "testing/lowres_jpg.png", *OPTIONS),
+           "samples/lowres.jpg", "testing/lowres_jpg.png", &OPTIONS),
         test_open_and_save_jpg_to_tiff: (
-           "samples/lowres.jpg", "testing/lowres_jpg.tiff", *OPTIONS),
+           "samples/lowres.jpg", "testing/lowres_jpg.tiff", &OPTIONS),
 
         test_open_and_save_png_to_jpg: (
-           "samples/lowres.png", "testing/lowres_png.jpg", *OPTIONS),
+           "samples/lowres.png", "testing/lowres_png.jpg", &OPTIONS),
         test_open_and_save_png_to_png: (
-           "samples/lowres.png", "testing/lowres_png.png", *OPTIONS),
+           "samples/lowres.png", "testing/lowres_png.png", &OPTIONS),
         test_open_and_save_png_to_tiff: (
-           "samples/lowres.png", "testing/lowres_png.tiff", *OPTIONS),
+           "samples/lowres.png", "testing/lowres_png.tiff", &OPTIONS),
 
         test_open_and_save_tiff_to_jpg: (
-           "samples/lowres.tiff", "testing/lowres_png.jpg", *OPTIONS),
+           "samples/lowres.tiff", "testing/lowres_png.jpg", &OPTIONS),
         test_open_and_save_tiff_to_png: (
-           "samples/lowres.tiff", "testing/lowres_png.png", *OPTIONS),
+           "samples/lowres.tiff", "testing/lowres_png.png", &OPTIONS),
         test_open_and_save_tiff_to_tiff: (
-           "samples/lowres.tiff", "testing/lowres_png.tiff", *OPTIONS),
+           "samples/lowres.tiff", "testing/lowres_png.tiff", &OPTIONS),
 
         test_default_options: (
-           "samples/lowres.jpg", "testing/lowres_default.jpg", BorderOptions::default()),
-
-        test_custom_border1: (
-           "samples/lowres.jpg", "testing/lowres_custom_border.jpg", custom_border()),
+           "samples/lowres.jpg", "testing/lowres_default.jpg", &BorderOptions::default()),
     }
 
+    #[cfg(feature = "borders")]
     #[test]
     fn test_read_write_in_memory() -> Result<()> {
         let bytes = include_bytes!("../samples/lowres.jpg");
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
-        let options = BorderOptions {
-            // border:
-            ..*OPTIONS
-        };
-        let result = borders.apply(options)?;
+        let border = Border::Builtin(Builtin::Border120_1);
+        let result = borders.add_border(border, &OPTIONS)?;
         let mut output = Cursor::new(Vec::new());
         result.encode_to(&mut output, ImageFormat::Png, None)?;
         assert!(output.position() > 100);
         Ok(())
     }
 
-    // #[test]
-    // fn test_custom_border() -> Result<()> {
-    //     let bytes = include_bytes!("../samples/lowres.jpg");
-    //     let input = Cursor::new(&bytes);
-    //     let mut borders = ImageBorders::from_reader(input)?;
-    //     let result = borders.apply(*OPTIONS)?;
-    //     let mut output = Cursor::new(Vec::new());
-    //     result.encode_to(&mut output, ImageFormat::Png, None);
-    //     assert!(output.position() > 100);
-    //     Ok(())
-    // }
+    #[test]
+    fn test_custom_border() -> Result<()> {
+        let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
+        let input = repo.join("samples/lowres.jpg");
+        let border_file = repo.join("samples/border1.png");
+        let output = repo.join("testing/lowres_custom_border.jpg");
+        assert!(input.is_file());
+        assert!(border_file.is_file());
+        let border = Border::open(&border_file)?;
+        let mut borders = ImageBorders::open(&input)?;
+        let result = borders.add_border(border, &OPTIONS)?;
+        result.save(Some(&output), None)?;
+        assert!(output.is_file());
+        Ok(())
+    }
 
     // assert!(false);
     // let tmp_dir = TempDir::new("sample").unwrap();

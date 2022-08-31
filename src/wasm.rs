@@ -1,8 +1,4 @@
-use crate::img::Image;
-use crate::options;
-use crate::types;
-use crate::utils;
-use crate::ImageBorders;
+use crate::{borders, img, options, types, utils, ImageBorders};
 use image::{DynamicImage, ImageBuffer};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
@@ -37,53 +33,77 @@ fn image_from_canvas(
     image_from_image_data(img)
 }
 
-impl Image {
-    #[allow(dead_code)]
+#[derive(Debug)]
+#[wasm_bindgen]
+pub struct WasmImage {
+    inner: img::Image,
+}
+
+#[wasm_bindgen]
+impl WasmImage {
+    // #[allow(dead_code)]
     pub fn from_canvas(
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
-    ) -> Result<Image, JsValue> {
+    ) -> Result<WasmImage, JsValue> {
         let inner = image_from_canvas(canvas, ctx)?.to_rgba8();
         let size = types::Size {
             width: inner.width(),
             height: inner.height(),
         };
-        Ok(Image {
-            inner,
-            path: None,
-            size,
+        Ok(WasmImage {
+            inner: img::Image {
+                inner,
+                path: None,
+                size,
+            },
         })
     }
 
-    #[allow(dead_code)]
-    pub fn from_image_data(data: ImageData) -> Result<Self, JsValue> {
+    // #[allow(dead_code)]
+    pub fn from_image_data(data: ImageData) -> Result<WasmImage, JsValue> {
         let inner = image_from_image_data(data)?.to_rgba8();
         let size = types::Size {
             width: inner.width(),
             height: inner.height(),
         };
-        Ok(Self {
-            inner,
-            path: None,
-            size,
+        Ok(WasmImage {
+            inner: img::Image {
+                inner,
+                path: None,
+                size,
+            },
         })
     }
 }
 
-#[allow(dead_code)]
 #[wasm_bindgen]
-impl ImageBorders {
+#[derive(Debug)]
+pub struct WasmImageBorders {
+    inner: ImageBorders,
+}
+
+// #[allow(dead_code)]
+#[wasm_bindgen]
+impl WasmImageBorders {
     // #[allow(dead_code)]
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
         ctx: CanvasRenderingContext2d,
-    ) -> Result<ImageBorders, JsValue> {
-        Ok(ImageBorders::new(Image::from_canvas(&canvas, &ctx)?))
+    ) -> Result<WasmImageBorders, JsValue> {
+        let img = WasmImage::from_canvas(&canvas, &ctx)?.inner;
+        Ok(WasmImageBorders {
+            inner: ImageBorders::new(img),
+        })
+        // Ok(ImageBorders::new(img::Image::from_canvas(&canvas, &ctx)?))
     }
 
     // #[allow(dead_code)]
-    pub fn for_image_data(data: ImageData) -> Result<ImageBorders, JsValue> {
-        Ok(ImageBorders::new(Image::from_image_data(data)?))
+    pub fn for_image_data(data: ImageData) -> Result<WasmImageBorders, JsValue> {
+        let img = WasmImage::from_image_data(data)?.inner;
+        Ok(WasmImageBorders {
+            inner: ImageBorders::new(img),
+        })
     }
 
     pub fn to_image_data(
@@ -91,21 +111,32 @@ impl ImageBorders {
         ctx: CanvasRenderingContext2d,
     ) -> Result<ImageData, JsValue> {
         utils::set_panic_hook();
-        let img = Image::from_canvas(&canvas, &ctx)?;
+        let img = WasmImage::from_canvas(&canvas, &ctx)?.inner;
         let size = img.size();
         // convert the raw pixels back to an ImageData object
-        ImageData::new_with_u8_clamped_array_and_sh(
-            Clamped(img.as_raw()),
-            size.width,
-            size.height,
-        )
+        ImageData::new_with_u8_clamped_array_and_sh(Clamped(img.as_raw()), size.width, size.height)
     }
 
     // #[allow(dead_code)]
-    pub fn apply_wasm(&mut self, options: options::BorderOptions) -> Result<ImageData, JsValue> {
+    pub fn add_border(
+        &mut self,
+        border: Option<ImageData>,
+        options: &options::BorderOptions,
+    ) -> Result<ImageData, JsValue> {
         console_log!("options: {:?}", options);
+        let border = match border {
+            None => Ok(borders::Border::default()),
+            Some(data) => {
+                // border.map() border::Border::
+                WasmImage::from_image_data(data).map(|img| borders::Border::from_image(img.inner))
+            }
+        }?;
+        // let border = border.map_err(|err| {
+        //     JsValue::from_str(&format!("failed to load border: {}", &err.to_string()))
+        // })?;
         let result = self
-            .apply(options)
+            .inner
+            .add_border(border, &options)
             .map_err(|err| JsValue::from_str(&err.to_string()))?;
         let size = result.size();
         // convert the raw pixels back to an ImageData object
