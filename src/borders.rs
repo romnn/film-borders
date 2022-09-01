@@ -1,35 +1,36 @@
-#[cfg(feature = "borders")]
 use super::error;
+use super::types;
 use super::{img, Error};
-#[cfg(feature = "borders")]
 use std::io;
-use std::path::Path;
-#[cfg(feature = "borders")]
 use wasm_bindgen::prelude::*;
 
-#[cfg(feature = "borders")]
 #[wasm_bindgen]
-#[derive(Debug)]
-pub enum Builtin {
+#[derive(Debug, Copy, Clone)]
+pub enum BuiltinBorder {
     Border120_1,
 }
 
-#[cfg(feature = "borders")]
-impl std::str::FromStr for Builtin {
+impl Default for BuiltinBorder {
+    #[inline]
+    fn default() -> Self {
+        BuiltinBorder::Border120_1
+    }
+}
+
+impl std::str::FromStr for BuiltinBorder {
     type Err = error::ParseEnumError;
 
-    fn from_str(s: &str) -> Result<Builtin, Self::Err> {
+    fn from_str(s: &str) -> Result<BuiltinBorder, Self::Err> {
         let s = s.to_ascii_lowercase();
         match s.as_str() {
-            "120mm" => Ok(Builtin::Border120_1),
-            "120mm1" => Ok(Builtin::Border120_1),
+            "120mm" => Ok(BuiltinBorder::Border120_1),
+            "120mm1" => Ok(BuiltinBorder::Border120_1),
             _ => Err(error::ParseEnumError::Unknown(s.to_string())),
         }
     }
 }
 
-#[cfg(feature = "borders")]
-impl Builtin {
+impl BuiltinBorder {
     #[inline]
     pub fn into_image(self) -> Result<img::Image, Error> {
         match self {
@@ -41,43 +42,9 @@ impl Builtin {
     }
 }
 
-#[derive(Debug)]
-pub enum Border {
-    #[cfg(feature = "borders")]
-    Builtin(Builtin),
-    Custom(img::Image),
-}
-
-#[cfg(feature = "borders")]
-impl Default for Border {
+impl Default for types::Border {
     #[inline]
     fn default() -> Self {
-        Self::Builtin(Builtin::Border120_1)
-    }
-}
-
-impl Border {
-    #[inline]
-    pub fn new<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
-        Ok(Self::Custom(img::Image::new(reader)?))
-    }
-
-    #[inline]
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        Ok(Self::Custom(img::Image::open(path)?))
-    }
-
-    #[inline]
-    pub fn from_image(img: img::Image) -> Self {
-        Self::Custom(img)
-    }
-
-    #[inline]
-    pub fn into_image(self) -> Result<img::Image, Error> {
-        match self {
-            #[cfg(feature = "borders")]
-            Self::Builtin(builtin) => builtin.into_image(),
-            Self::Custom(img) => Ok(img),
-        }
+        types::Border::Builtin(BuiltinBorder::default())
     }
 }

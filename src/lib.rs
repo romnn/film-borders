@@ -1,3 +1,4 @@
+#[cfg(feature = "borders")]
 pub mod borders;
 pub mod debug;
 pub mod defaults;
@@ -9,7 +10,6 @@ pub mod utils;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
-pub use borders::*;
 pub use error::Error;
 pub use image::ImageFormat;
 pub use img::Image;
@@ -21,12 +21,6 @@ use chrono::Utc;
 use image::{imageops, DynamicImage, Rgba, RgbaImage};
 use std::cmp::{max, min};
 use std::path::Path;
-
-#[derive(Clone, Copy, Debug)]
-pub enum Direction {
-    Horizontal,
-    Vertical,
-}
 
 #[derive(Debug)]
 pub struct ImageBorders {
@@ -49,11 +43,7 @@ impl ImageBorders {
         Ok(Self::new(img))
     }
 
-    pub fn add_border(
-        &mut self,
-        border: Border,
-        options: &BorderOptions,
-    ) -> Result<img::Image, Error> {
+    pub fn add_border(&mut self, border: Border, options: &Options) -> Result<img::Image, Error> {
         let mut size = self.img.size();
         if let Some(OutputSize { width, height }) = options.output_size {
             if let Some(width) = width {
@@ -313,6 +303,7 @@ impl ImageBorders {
                 inter_fb_crop.width as usize,
             )
         };
+        let step_size = step_size.max(1usize);
 
         crate::debug!("from {} to {} with step size {}", start, end, step_size);
         for i in (start..=end).step_by(step_size) {
@@ -401,16 +392,18 @@ impl ImageBorders {
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "borders")]
+    use super::borders::BuiltinBorder;
+    #[cfg(feature = "borders")]
     use super::ImageFormat;
-    use super::{Border, BorderOptions, Builtin, Crop, ImageBorders, OutputSize, Rotation, Sides};
+    use super::{Border, Crop, ImageBorders, Options, OutputSize, Rotation, Sides};
     use anyhow::Result;
     #[cfg(feature = "borders")]
     use std::io::Cursor;
     use std::path::PathBuf;
     // use tempdir::TempDir;
 
-    // fn custom_border() -> BorderOptions {
-    //     BorderOptions {
+    // fn custom_border() -> Options {
+    //     Options {
     //         output_size: Some(OutputSize {
     //             width: Some(1000),
     //             height: Some(1000),
@@ -420,7 +413,7 @@ mod tests {
     // }
 
     lazy_static::lazy_static! {
-        pub static ref OPTIONS: BorderOptions = BorderOptions {
+        pub static ref OPTIONS: Options = Options {
             output_size: Some(OutputSize {
                 width: Some(1000),
                 height: Some(1000),
@@ -450,7 +443,7 @@ mod tests {
                     let output = repo.join(&outfile);
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
-                    let border = Border::Builtin(Builtin::Border120_1);
+                    let border = Border::Builtin(BuiltinBorder::Border120_1);
                     let result = borders.add_border(border, options)?;
                     result.save(Some(&output), None)?;
                     assert!(output.is_file());
@@ -483,7 +476,7 @@ mod tests {
            "samples/lowres.tiff", "testing/lowres_png.tiff", &OPTIONS),
 
         test_default_options: (
-           "samples/lowres.jpg", "testing/lowres_default.jpg", &BorderOptions::default()),
+           "samples/lowres.jpg", "testing/lowres_default.jpg", &Options::default()),
     }
 
     #[cfg(feature = "borders")]
@@ -492,7 +485,7 @@ mod tests {
         let bytes = include_bytes!("../samples/lowres.jpg");
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
-        let border = Border::Builtin(Builtin::Border120_1);
+        let border = Border::Builtin(BuiltinBorder::Border120_1);
         let result = borders.add_border(border, &OPTIONS)?;
         let mut output = Cursor::new(Vec::new());
         result.encode_to(&mut output, ImageFormat::Png, None)?;

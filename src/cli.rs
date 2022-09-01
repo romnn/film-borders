@@ -3,8 +3,8 @@ use anyhow;
 use chrono::Utc;
 use clap::Parser;
 #[cfg(feature = "borders")]
-use filmborders::Builtin;
-use filmborders::{Border, BorderOptions, Color, Crop, ImageBorders, OutputSize, Rotation, Sides};
+use filmborders::borders;
+use filmborders::{Border, Color, Crop, ImageBorders, Options, OutputSize, Rotation, Sides};
 use std::path::PathBuf;
 #[cfg(feature = "borders")]
 use std::str::FromStr;
@@ -100,7 +100,7 @@ fn main() {
                         #[cfg(feature = "borders")]
                         let border = match cfg.border {
                             None => Ok(Border::default()),
-                            Some(border) => Builtin::from_str(&border)
+                            Some(border) => borders::BuiltinBorder::from_str(&border)
                                 .map(Border::Builtin)
                                 .or_else(|_| Border::open(PathBuf::from(border))),
                         };
@@ -121,7 +121,7 @@ fn main() {
                             }
                         };
 
-                        let options = BorderOptions {
+                        let options = Options {
                             output_size: Some(OutputSize {
                                 width: cfg.output_width,
                                 height: cfg.output_height,

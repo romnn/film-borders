@@ -33,15 +33,43 @@ fn image_from_canvas(
     image_from_image_data(img)
 }
 
-#[derive(Debug)]
 #[wasm_bindgen]
+#[derive(Debug, Default)]
+pub struct Border {
+    #[cfg(feature = "borders")]
+    builtin: Option<borders::BuiltinBorder>,
+    custom: Option<ImageData>,
+}
+
+#[wasm_bindgen]
+impl Border {
+    #[wasm_bindgen(constructor)]
+    pub fn new(custom: Option<ImageData>, builtin: Option<borders::BuiltinBorder>) -> Border {
+        Border { custom, builtin }
+    }
+
+    pub fn from_image_data(data: ImageData) -> Border {
+        Border {
+            custom: Some(data),
+            ..Default::default()
+        }
+    }
+    pub fn builtin(builtin: borders::BuiltinBorder) -> Border {
+        Border {
+            builtin: Some(builtin),
+            ..Default::default()
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Debug)]
 pub struct WasmImage {
     inner: img::Image,
 }
 
 #[wasm_bindgen]
 impl WasmImage {
-    // #[allow(dead_code)]
     pub fn from_canvas(
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
@@ -60,7 +88,6 @@ impl WasmImage {
         })
     }
 
-    // #[allow(dead_code)]
     pub fn from_image_data(data: ImageData) -> Result<WasmImage, JsValue> {
         let inner = image_from_image_data(data)?.to_rgba8();
         let size = types::Size {
@@ -83,10 +110,8 @@ pub struct WasmImageBorders {
     inner: ImageBorders,
 }
 
-// #[allow(dead_code)]
 #[wasm_bindgen]
 impl WasmImageBorders {
-    // #[allow(dead_code)]
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
         ctx: CanvasRenderingContext2d,
@@ -95,11 +120,9 @@ impl WasmImageBorders {
         Ok(WasmImageBorders {
             inner: ImageBorders::new(img),
         })
-        // Ok(ImageBorders::new(img::Image::from_canvas(&canvas, &ctx)?))
     }
 
-    // #[allow(dead_code)]
-    pub fn for_image_data(data: ImageData) -> Result<WasmImageBorders, JsValue> {
+    pub fn from_image_data(data: ImageData) -> Result<WasmImageBorders, JsValue> {
         let img = WasmImage::from_image_data(data)?.inner;
         Ok(WasmImageBorders {
             inner: ImageBorders::new(img),
@@ -117,23 +140,25 @@ impl WasmImageBorders {
         ImageData::new_with_u8_clamped_array_and_sh(Clamped(img.as_raw()), size.width, size.height)
     }
 
-    // #[allow(dead_code)]
     pub fn add_border(
         &mut self,
-        border: Option<ImageData>,
-        options: &options::BorderOptions,
+        border: Border,
+        options: &options::Options,
     ) -> Result<ImageData, JsValue> {
-        console_log!("options: {:?}", options);
-        let border = match border {
-            None => Ok(borders::Border::default()),
+        console_log!("border: {:?}", &border);
+        console_log!("options: {:?}", &options);
+        let border = match border.custom {
+            None => border
+                .builtin
+                .map(types::Border::Builtin)
+                .unwrap_or(types::Border::default()),
             Some(data) => {
-                // border.map() border::Border::
-                WasmImage::from_image_data(data).map(|img| borders::Border::from_image(img.inner))
+                let image = WasmImage::from_image_data(data)?;
+                types::Border::from_image(image.inner)
             }
-        }?;
-        // let border = border.map_err(|err| {
-        //     JsValue::from_str(&format!("failed to load border: {}", &err.to_string()))
-        // })?;
+        };
+        console_log!("selected border: {:?}", &border);
+
         let result = self
             .inner
             .add_border(border, &options)

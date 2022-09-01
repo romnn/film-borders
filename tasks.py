@@ -3,10 +3,9 @@ tasks for maintaining the project.
 run 'invoke --list' for guidance on using invoke
 """
 import shutil
-import pprint
+import favico
 
 from invoke import task
-import webbrowser
 from pathlib import Path
 
 Path().expanduser()
@@ -24,6 +23,16 @@ SOURCE_DIR = ROOT_DIR / "src"
 def format(c, check=False):
     """Format code"""
     pass
+
+
+@task
+def favicon(c, image):
+    favico.generate_from_image(
+        image,
+        WWW_PUBLIC_DIR,
+        base="%PUBLIC_URL%/",
+        normalize_urls=False,
+    )
 
 
 @task
@@ -80,20 +89,20 @@ def install_wasm_pack(c):
 
 
 @task
-def lint(c):
-    """Lint code"""
-    pass
+def clean_wasm(c):
+    """Clean up generated wasm files"""
+    shutil.rmtree(ROOT_DIR / "pkg/", ignore_errors=True)
+    shutil.rmtree(WWW_PUBLIC_WASM_DIR, ignore_errors=True)
 
 
 @task
 def clean_build(c):
     """Clean up files from package building"""
-    c.run("rm -fr www/build/")
-    c.run("rm -fr target/")
-    c.run("rm -fr pkg/")
+    shutil.rmtree(ROOT_DIR / "www/build/", ignore_errors=True)
+    shutil.rmtree(ROOT_DIR / "target/", ignore_errors=True)
 
 
-@task(pre=[clean_build])
+@task(pre=[clean_build, clean_wasm])
 def clean(c):
     """Runs all clean sub-tasks"""
     pass

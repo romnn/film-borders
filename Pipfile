@@ -6,6 +6,11 @@ name = "pypi"
 [packages]
 
 [dev-packages]
+favico = "*"
+invoke = "*"
+bump2version = "*"
+flake8 = "*"
+black = "*"
 
 [requires]
 python_version = "3.8"

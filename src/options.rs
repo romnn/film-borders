@@ -1,10 +1,10 @@
 use crate::types;
-use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct BorderOptions {
+pub struct Options {
     pub output_size: Option<types::OutputSize>,
     pub scale_factor: Option<f32>,
     pub crop: Option<types::Crop>,
@@ -15,14 +15,14 @@ pub struct BorderOptions {
 }
 
 #[wasm_bindgen]
-impl BorderOptions {
+impl Options {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        BorderOptions::default()
+        Options::default()
     }
 
     #[allow(dead_code)]
-    pub fn deserialize(val: String) -> Result<BorderOptions, JsValue> {
+    pub fn deserialize(val: String) -> Result<Options, JsValue> {
         serde_json::from_str(&val).map_err(|err| JsValue::from_str(&err.to_string()))
     }
 

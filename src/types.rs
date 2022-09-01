@@ -1,7 +1,50 @@
+#[cfg(feature = "borders")]
+use super::borders;
 use super::error;
+use super::{img, Error};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use wasm_bindgen::prelude::*;
+
+#[derive(Clone, Copy, Debug)]
+pub enum Direction {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Debug)]
+pub enum Border {
+    #[cfg(feature = "borders")]
+    Builtin(borders::BuiltinBorder),
+    Custom(img::Image),
+}
+
+impl Border {
+    #[inline]
+    pub fn new<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
+        Ok(Self::Custom(img::Image::new(reader)?))
+    }
+
+    #[inline]
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        Ok(Self::Custom(img::Image::open(path)?))
+    }
+
+    #[inline]
+    pub fn from_image(img: img::Image) -> Self {
+        Self::Custom(img)
+    }
+
+    #[inline]
+    pub fn into_image(self) -> Result<img::Image, Error> {
+        match self {
+            #[cfg(feature = "borders")]
+            Self::Builtin(builtin) => builtin.into_image(),
+            Self::Custom(img) => Ok(img),
+        }
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
@@ -16,12 +59,6 @@ impl OutputSize {
     pub fn new() -> Self {
         OutputSize::default()
     }
-}
-
-#[wasm_bindgen]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
-pub struct Color {
-    rgba: [u8; 4],
 }
 
 macro_rules! from_hex {
@@ -50,13 +87,15 @@ fn hex_to_rgba(hex: &str) -> Result<Color, error::ColorError> {
 }
 
 #[wasm_bindgen]
-impl Color {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self::default()
-    }
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
+pub struct Color {
+    rgba: [u8; 4],
+}
 
+#[wasm_bindgen]
+impl Color {
     #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(constructor)]
     pub fn hex(hex: &str) -> Result<Color, JsValue> {
         hex_to_rgba(hex).map_err(|err| JsValue::from_str(&err.to_string()))
     }
