@@ -17,10 +17,13 @@ jobs:
           toolchain: stable
           override: true
       - name: Compile binaries
-        run: |
-          cargo build --profile lib --features "${{ matrix.features }}" --all-targets
+        run: >-
+          cargo build
+          --profile lib
+          --features "${{ matrix.features }}"
+          --all-targets
 
-  build-wasm:
+  pack-wasm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -31,13 +34,14 @@ jobs:
       - uses: actions/setup-python@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: "14"
+          node-version: "18"
       - name: Pack wasm
         run: |
-          pip install invoke
+          pip install pipenv
+          pipenv install --dev
           npm install --global yarn
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          invoke pack
+          pipenv run invoke pack
       - name: Build page
         run: |
           cd www

@@ -33,8 +33,11 @@ jobs:
           override: true
 
       - name: Compile binaries
-        run: |
-          cargo build --features "borders" --profile lib --all-targets
+        run: >-
+          cargo build
+          --features "borders"
+          --profile lib
+          --all-targets
 
       - name: Upload release binaries
         uses: svenstaro/upload-release-action@v2

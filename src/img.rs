@@ -119,6 +119,10 @@ impl Image {
             .ok_or(Error::MissingOutputFile)?;
 
         let format = ImageFormat::from_path(&path)?;
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         let mut file = fs::OpenOptions::new()
             .read(false)
             .write(true)

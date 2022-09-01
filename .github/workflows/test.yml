@@ -17,5 +17,8 @@ jobs:
           toolchain: stable
           override: true
       - name: Test
-        run: |
-          cargo test --profile lib --features "${{ matrix.features }}" --all-targets
+        run: >-
+          cargo test
+          --profile lib
+          --features "${{ matrix.features }}"
+          --all-targets

@@ -1,8 +1,8 @@
 /target
 .DS_Store
-testing/*
 **/*.rs.bk
 **/*.svg
+testing/
 bin/
 pkg/
 wasm-pack.log
