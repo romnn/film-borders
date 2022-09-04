@@ -1,66 +1,39 @@
 use crate::defaults;
-use crate::types::{Point, Size};
-use crate::utils;
+use crate::imageops;
+use crate::types;
+use crate::utils::{Ceil, Floor, Round, RoundingMode};
 use crate::Error;
 use image::{
     codecs, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageFormat,
-    ImageOutputFormat, Pixel, Rgba, RgbaImage,
+    ImageOutputFormat, RgbaImage,
 };
 
-use std::cmp::{max, min};
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
-#[inline]
-pub fn fill_rect(image: &mut RgbaImage, color: &Rgba<u8>, top_left: Point, bottom_right: Point) {
-    let x1 = utils::clamp(min(top_left.x, bottom_right.x), 0, image.width());
-    let x2 = utils::clamp(max(top_left.x, bottom_right.x), 0, image.width());
-    let y1 = utils::clamp(min(top_left.y, bottom_right.y), 0, image.height());
-    let y2 = utils::clamp(max(top_left.y, bottom_right.y), 0, image.height());
-    for x in x1..x2 {
-        for y in y1..y2 {
-            image.get_pixel_mut(x, y).blend(color);
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Direction {
     Horizontal,
     Vertical,
 }
 
-#[inline]
-pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
-    let other = match direction {
-        Direction::Horizontal => image.height(),
-        Direction::Vertical => image.width(),
-    };
-    let diff = (end as f32 - start as f32).abs();
-    for i in min(start, end)..=max(start, end) {
-        let ir = i - min(start, end);
-        let mut frac = ir as f32 / diff;
-        if start < end {
-            frac = 1.0 - frac;
-        }
-        let alpha = (255.0 * frac) as u8;
-        for j in 0..other {
-            let (x, y) = match direction {
-                Direction::Horizontal => (i, j),
-                Direction::Vertical => (j, i),
-            };
-            let channels = image.get_pixel_mut(x, y).channels_mut();
-            channels[3] = min(channels[3], alpha);
-        }
-    }
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum Orientation {
+    Portrait,
+    Landscape,
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Image {
     pub(crate) inner: RgbaImage,
     pub(crate) path: Option<PathBuf>,
-    pub(crate) size: Size,
+}
+
+impl AsRef<image::RgbaImage> for Image {
+    fn as_ref(&self) -> &image::RgbaImage {
+        &self.inner
+    }
 }
 
 impl Image {
@@ -72,42 +45,127 @@ impl Image {
         self.inner.as_raw()
     }
 
-    pub fn size(&self) -> Size {
-        self.size
+    pub fn size(&self) -> types::Size {
+        types::Size::from(&self.inner)
+    }
+
+    pub fn new(width: u32, height: u32) -> Self {
+        let inner = RgbaImage::new(width, height);
+        Self { inner, path: None }
+    }
+
+    pub fn with_size<S: Into<types::Size>>(size: S) -> Self {
+        let size = size.into();
+        Self::new(size.width, size.height)
     }
 
     pub fn from_image(image: DynamicImage) -> Self {
         let inner = image.to_rgba8();
-        let size = Size {
-            width: inner.width(),
-            height: inner.height(),
-        };
-        Self {
-            inner,
-            size,
-            path: None,
-        }
+        Self { inner, path: None }
     }
 
-    pub fn new<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
+    pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
         let reader = ImageReader::new(reader).with_guessed_format()?;
         let inner = reader.decode()?.to_rgba8();
-        let size = Size {
-            width: inner.width(),
-            height: inner.height(),
-        };
-        Ok(Self {
-            inner,
-            path: None,
-            size,
-        })
+        Ok(Self { inner, path: None })
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = fs::OpenOptions::new().read(true).open(&path)?;
-        let mut img = Self::new(BufReader::new(&file))?;
+        let mut img = Self::from_reader(BufReader::new(&file))?;
         img.path = Some(path.as_ref().to_path_buf());
         Ok(img)
+    }
+
+    pub fn is_portrait(&self) -> bool {
+        self.orientation() == Orientation::Portrait
+    }
+
+    pub fn orientation(&self) -> Orientation {
+        if self.inner.width() <= self.inner.height() {
+            Orientation::Portrait
+        } else {
+            Orientation::Landscape
+        }
+    }
+
+    pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C) {
+        let color = color.into();
+        for p in self.inner.pixels_mut() {
+            *p = color;
+        }
+    }
+
+    pub fn resize_to_fit<S>(
+        &mut self,
+        container: S,
+        resize_mode: types::ResizeMode,
+        crop_mode: types::CropMode,
+        // padding: P,
+    ) where
+        S: Into<types::Size>,
+        // P: Into<types::Sides>,
+    {
+        let container: types::Size = container.into();
+        // let padding: types::Sides = padding.into();
+        crate::debug!(&container);
+        // crate::debug!(&padding);
+
+        // let padded_container = container + padding;
+        let size = self.size().scale_to(container, resize_mode);
+        // let scale_factor = 
+
+        crate::debug!(&size);
+
+        #[cfg(debug_assertions)]
+        let start = chrono::Utc::now().time();
+
+        self.inner = imageops::resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
+        crate::debug!(&self.size());
+
+        let crop = size.crop_to_fit(container, crop_mode);
+        crate::debug!(&crop);
+        self.crop(crop);
+        crate::debug!(&self.size());
+
+        crate::debug!(
+            "fitting to {} x {} took {:?} msec",
+            container.width,
+            container.height,
+            (chrono::Utc::now().time() - start).num_milliseconds(),
+        );
+    }
+
+    pub fn overlay<O, P>(&mut self, overlay: &O, offset: P)
+    where
+        O: image::GenericImageView<Pixel = image::Rgba<u8>>,
+        P: Into<types::Point>,
+    {
+        let offset: types::Point = offset.into();
+        imageops::overlay(&mut self.inner, overlay, offset.x, offset.y);
+    }
+
+    pub fn crop(&mut self, crop: types::Sides) {
+        let cropped_size = self.size() - crop;
+        self.inner = imageops::crop(
+            &mut self.inner,
+            crop.left,
+            crop.top,
+            cropped_size.width,
+            cropped_size.height,
+        )
+        .to_image();
+    }
+
+    pub fn rotate(&mut self, angle: types::Rotation) {
+        if let Some(rotated) = match angle {
+            types::Rotation::Rotate0 => None,
+            types::Rotation::Rotate90 => Some(imageops::rotate90(&self.inner)),
+            types::Rotation::Rotate180 => Some(imageops::rotate180(&self.inner)),
+            types::Rotation::Rotate270 => Some(imageops::rotate270(&self.inner)),
+        } {
+            self.inner = rotated;
+        }
     }
 
     pub fn save<P: AsRef<Path>>(&self, path: Option<P>, quality: Option<u8>) -> Result<(), Error> {
@@ -191,7 +249,7 @@ impl Image {
             .path
             .as_ref()
             .and_then(|p| ImageFormat::from_path(p).ok());
-        let format = format.or(source_format); // .unwrap_or(ImageFormat::Jpeg);
+        let format = format.or(source_format);
         let ext = format
             .unwrap_or(ImageFormat::Jpeg)
             .extensions_str()
@@ -204,14 +262,13 @@ impl Image {
                 .map(|filename| p.with_file_name(filename))
         });
         (path, format)
-        // .map(|p| (p, format))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Image;
-    use crate::{ImageFormat, Size};
+    use crate::ImageFormat;
     use image::RgbaImage;
 
     macro_rules! output_path_tests {
@@ -228,7 +285,6 @@ mod tests {
                     let img = Image {
                         inner: RgbaImage::new(32, 32),
                         path: path.map(Into::into),
-                        size: Size::default(),
                     };
                     let (have_path, have_format) = img.output_path(format);
                     assert_eq!(have_path, want_path.map(Into::into));

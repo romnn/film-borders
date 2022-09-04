@@ -32,19 +32,20 @@ impl std::str::FromStr for BuiltinBorder {
 
 impl BuiltinBorder {
     #[inline]
-    pub fn into_image(self) -> Result<img::Image, Error> {
+    pub fn into_border(self) -> Result<types::Border, Error> {
         match self {
             Self::Border120_1 => {
                 let data = include_bytes!("border.png");
-                img::Image::new(io::Cursor::new(&data))
+                let img = img::Image::from_reader(io::Cursor::new(&data))?;
+                types::Border::from_image(img, None)
             }
         }
     }
 }
 
-impl Default for types::Border {
+impl Default for types::BorderSource {
     #[inline]
     fn default() -> Self {
-        types::Border::Builtin(BuiltinBorder::default())
+        types::BorderSource::Builtin(BuiltinBorder::default())
     }
 }

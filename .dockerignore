@@ -1,3 +1,10 @@
+.DS_Store
 /www/public/wasm
 /www/node_modules
 /www/build
+/testing
+/samples
+/target
+/bin
+/pkg
+wasm-pack.log

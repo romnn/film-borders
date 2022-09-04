@@ -813,7 +813,7 @@ export default class App extends React.Component<AppProps, AppState> {
             <div className="about">
               <p>WASM based film border overlays.</p>
               <p>
-                by <a href="https://romnn.com">@romnn</a>
+                by <a href="https://romnn.com">romnn</a>
               </p>
               <p>
                 code on{" "}

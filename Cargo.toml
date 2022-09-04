@@ -76,9 +76,11 @@ thiserror = "1"
 lazy_static = "1"
 chrono = "0.4"
 regex = "1"
-# rayon = "1.5"
 cfg-if = "0.1"
 anyhow = "1"
+num = "0.4"
+cgmath = "0.18"
+approx = "0.5"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

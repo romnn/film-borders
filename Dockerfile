@@ -9,10 +9,12 @@ RUN apt-get update && apt-get install -y python3 python3-pip nodejs
 
 RUN cargo install wasm-pack
 RUN pip install pipenv
-RUN pipenv install --dev
 RUN npm install --global yarn
 
 WORKDIR /build
+ADD ./Pipfile* /build/
+RUN pipenv install --dev
+
 ADD ./src /build/src
 ADD ./Cargo.* /build/
 ADD ./tasks.py /build/

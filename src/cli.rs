@@ -1,10 +1,8 @@
-#[cfg(not(feature = "borders"))]
-use anyhow;
 use chrono::Utc;
 use clap::Parser;
 #[cfg(feature = "borders")]
 use filmborders::borders;
-use filmborders::{Border, Color, Crop, ImageBorders, Options, OutputSize, Rotation, Sides};
+use filmborders::{img, types, Error, ImageBorders, Options};
 use std::path::PathBuf;
 #[cfg(feature = "borders")]
 use std::str::FromStr;
@@ -12,7 +10,7 @@ use std::str::FromStr;
 #[derive(Parser, Debug, Clone)]
 struct ApplyOpts {
     #[clap(short = 'i', long = "image")]
-    image: PathBuf,
+    images: Vec<PathBuf>,
 
     #[clap(short = 'o', long = "output")]
     output: Option<PathBuf>,
@@ -26,26 +24,41 @@ struct ApplyOpts {
     #[clap(long = "height")]
     output_height: Option<u32>,
 
-    #[clap(long = "scale")]
-    scale_factor: Option<f32>,
+    #[clap(long = "max-width")]
+    max_output_width: Option<u32>,
+
+    #[clap(long = "max-height")]
+    max_output_height: Option<u32>,
+    
+    #[clap(long = "margin", aliases = &["margin-factor"])]
+    margin: Option<f32>,
+
+    // #[clap(long = "scale", aliases = &["scale-factor"])]
+    // scale_factor: Option<f32>,
 
     #[clap(long = "crop-top")]
-    crop_top: Option<u32>,
+    crop_top: Option<f32>,
     #[clap(long = "crop-right")]
-    crop_right: Option<u32>,
+    crop_right: Option<f32>,
     #[clap(long = "crop-bottom")]
-    crop_bottom: Option<u32>,
+    crop_bottom: Option<f32>,
     #[clap(long = "crop-left")]
-    crop_left: Option<u32>,
+    crop_left: Option<f32>,
 
-    #[clap(long = "border-width")]
-    border_width: Option<u32>,
+    #[clap(long = "frame-width")]
+    frame_width: Option<f32>,
+
+    #[clap(long = "mode", help = "scaling mode")]
+    mode: Option<types::Mode>,
 
     #[clap(long = "rotate")]
-    rotation: Option<Rotation>,
+    rotation: Option<types::Rotation>,
 
-    #[clap(long = "color", aliases = &["background-color"], help = "background color in HEX format")]
-    background_color: Option<String>,
+    #[clap(long = "background-color", help = "background color in HEX format")]
+    background_color: Option<types::Color>,
+
+    #[clap(long = "frame-color", help = "frame color in HEX format")]
+    frame_color: Option<types::Color>,
 
     #[clap(long = "preview", help = "overlay instagram preview visiable area", action = clap::ArgAction::SetTrue)]
     preview: bool,
@@ -84,34 +97,32 @@ fn main() {
         match subcommand {
             Command::Apply(cfg) => {
                 filmborders::debug!(&cfg);
-                match ImageBorders::open(&cfg.image) {
-                    Ok(mut borders) => {
-                        let background_color = match cfg.background_color {
-                            Some(hex) => match Color::hex(&hex) {
-                                Ok(color) => color,
-                                Err(err) => {
-                                    eprintln!("{}", err);
-                                    return;
-                                }
-                            },
-                            None => Color::white(),
-                        };
 
+                let images = cfg
+                    .images
+                    .iter()
+                    .map(img::Image::open)
+                    .collect::<Result<Vec<img::Image>, Error>>();
+
+                match images.and_then(ImageBorders::new) {
+                    Ok(mut borders) => {
                         #[cfg(feature = "borders")]
                         let border = match cfg.border {
-                            None => Ok(Border::default()),
+                            None => Ok(types::BorderSource::default()),
                             Some(border) => borders::BuiltinBorder::from_str(&border)
-                                .map(Border::Builtin)
-                                .or_else(|_| Border::open(PathBuf::from(border))),
+                                .map(types::BorderSource::Builtin)
+                                .or_else(|_| {
+                                    types::Border::open(PathBuf::from(border), None)
+                                        .map(types::BorderSource::Custom)
+                                }),
                         };
 
                         #[cfg(not(feature = "borders"))]
-                        let border = cfg
-                            .border
-                            .ok_or(anyhow::anyhow!("missing border"))
-                            .and_then(|border| {
-                                Border::open(PathBuf::from(border)).map_err(Into::into)
-                            });
+                        let border = cfg.border.ok_or(Error::MissingBorder).and_then(|border| {
+                            types::Border::open(PathBuf::from(border), None)
+                                .map(types::BorderSource::Custom)
+                                .map_err(Into::into)
+                        });
 
                         let border = match border {
                             Ok(border) => border,
@@ -122,20 +133,30 @@ fn main() {
                         };
 
                         let options = Options {
-                            output_size: Some(OutputSize {
+                            output_size: types::OutputSize {
                                 width: cfg.output_width,
                                 height: cfg.output_height,
+                            },
+                            output_size_bounds: types::OutputSize {
+                                width: cfg.max_output_width,
+                                height: cfg.max_output_height,
+                            },
+                            mode: cfg.mode.unwrap_or(types::Mode::default()),
+                            crop: Some(types::SidesPercent {
+                                top: cfg.crop_top.unwrap_or(0.0),
+                                right: cfg.crop_right.unwrap_or(0.0),
+                                bottom: cfg.crop_bottom.unwrap_or(0.0),
+                                left: cfg.crop_left.unwrap_or(0.0),
                             }),
-                            crop: Some(Crop {
-                                top: cfg.crop_top,
-                                right: cfg.crop_right,
-                                bottom: cfg.crop_bottom,
-                                left: cfg.crop_left,
-                            }),
-                            scale_factor: Some(cfg.scale_factor.unwrap_or(0.95)),
-                            border_width: Some(Sides::uniform(cfg.border_width.unwrap_or(10))),
-                            rotate_angle: Some(cfg.rotation.unwrap_or(Rotation::Rotate0)),
-                            background_color: Some(background_color),
+                            // scale_factor: cfg.scale_factor.unwrap_or(0.95),
+                            margin: cfg.margin.unwrap_or(0.05),
+                            frame_width: types::SidesPercent::uniform(
+                                cfg.frame_width.unwrap_or(0.05),
+                            ),
+                            rotate_angle: Some(cfg.rotation.unwrap_or(types::Rotation::Rotate0)),
+                            background_color: cfg.background_color,
+                            frame_color: cfg.frame_color.unwrap_or(types::Color::black()),
+
                             preview: cfg.preview,
                         };
                         filmborders::debug!(&options);
@@ -143,7 +164,12 @@ fn main() {
                             .add_border(border, &options)
                             .and_then(|result| result.save(cfg.output, cfg.quality))
                         {
-                            Ok(_) => println!("completed in {:?}", Utc::now().time() - start),
+                            Ok(_) => {
+                                println!(
+                                    "completed in {} msec",
+                                    (Utc::now().time() - start).num_milliseconds()
+                                )
+                            }
                             Err(err) => eprintln!("{}", err),
                         };
                     }
