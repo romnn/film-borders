@@ -43,9 +43,7 @@ pub fn find_transparent_components(
                     components.retain(|other| {
                         if updated.intersects(&other, 0) || other.intersects(&updated, 0) {
                             updated.extend_to(other.top_left());
-                            // other.left, other.top);
                             updated.extend_to(other.bottom_right());
-                            // other.right, other.bottom);
                             false
                         } else {
                             true
@@ -60,7 +58,6 @@ pub fn find_transparent_components(
                         left: x as i64,
                         right: x as i64,
                     });
-                    // crate::debug!(&components.last());
                 }
             }
         }
@@ -78,12 +75,10 @@ where
     let top_left = top_left.into();
     let color = color.into();
     let top_left: types::Size = top_left.into();
-    // crate::debug!(&top_left);
 
     let bottom_right = top_left + size.into();
     let origin = types::Point::origin();
     let bottom_right = bottom_right.clamp(origin, image.size());
-    // crate::debug!(&bottom_right);
 
     for x in top_left.width..bottom_right.width {
         for y in top_left.height..bottom_right.height {
@@ -98,21 +93,14 @@ pub enum Axis {
     Y,
 }
 
-// pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
-// pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
-// #[inline]
 #[inline]
-// pub fn fade_out<P, S>(image: &mut img::Image, top_left: P, size: S, axis: Axis)
 pub fn fade_out<P1, P2>(image: &mut img::Image, start: P1, end: P2, axis: Axis)
 where
     P1: Into<types::Point>,
     P2: Into<types::Point>,
-    // S: Into<types::Size>,
 {
     let start = start.into();
     let end = end.into();
-    crate::debug!(&start);
-    crate::debug!(&end);
 
     let switch_direction = match axis {
         Axis::X => start.x < end.x,
@@ -120,14 +108,9 @@ where
     };
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
-    crate::debug!(&switch_direction);
-
     let rect = types::Rect::from_points(start, end);
-    crate::debug!(&rect);
     let size = rect.size();
-    crate::debug!(&size);
     let top_left = rect.top_left();
-    crate::debug!(&top_left);
     let dx = max(0, top_left.x) as u32;
     let dy = max(0, top_left.y) as u32;
 
@@ -150,33 +133,4 @@ where
             channels[3] = min(channels[3], alpha);
         }
     }
-    // let (x, y) = match direction {
-    //     Direction::Horizontal => (i, j),
-    //     Direction::Vertical => (j, i),
-    // };
-
-    // for i in min(start, end)..=max(start, end) {
-    //     let alpha = (255.0 * frac) as u8;
-
-    // let other = match direction {
-    //     Direction::Horizontal => image.height(),
-    //     Direction::Vertical => image.width(),
-    // };
-    // let diff = (end as f32 - start as f32).abs();
-    // for i in min(start, end)..=max(start, end) {
-    //     let ir = i - min(start, end);
-    //     let mut frac = ir as f32 / diff;
-    //     if start < end {
-    //         frac = 1.0 - frac;
-    //     }
-    //     let alpha = (255.0 * frac) as u8;
-    //     for j in 0..other {
-    //         let (x, y) = match direction {
-    //             Direction::Horizontal => (i, j),
-    //             Direction::Vertical => (j, i),
-    //         };
-    //         let channels = image.get_pixel_mut(x, y).channels_mut();
-    //         channels[3] = min(channels[3], alpha);
-    //     }
-    // }
 }

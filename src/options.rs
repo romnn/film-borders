@@ -15,15 +15,6 @@ pub struct Options {
     pub rotate_angle: Option<types::Rotation>,
     pub frame_color: types::Color,
     pub background_color: Option<types::Color>,
-    // pub output_size: Option<types::OutputSize>,
-    // pub output_size_bounds: Option<types::OutputSize>,
-    // pub scale_factor: Option<f32>,
-    // pub mode: Option<types::Mode>,
-    // pub crop: Option<types::SidesPercent>,
-    // pub frame_width: Option<types::SidesPercent>,
-    // pub rotate_angle: Option<types::Rotation>,
-    // pub border_color: Option<types::Color>,
-    // pub background_color: Option<types::Color>,
     pub preview: bool,
 }
 

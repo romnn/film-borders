@@ -3,7 +3,6 @@ use super::borders;
 use super::error::{BorderError, ColorError, ParseEnumError};
 use super::utils::{Ceil, Floor, Round, RoundingMode};
 use super::{imageops, img, utils, Error};
-use cgmath::Rotation as VecRotation;
 use num::traits::{Float, NumCast};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -63,17 +62,11 @@ impl Rect {
 
     #[inline]
     pub fn crop_mode(&self, container: &Rect) -> CropMode {
-        // let offset = self.center() - container.center();
         let offset = container.center() - self.center();
-        // offset.unit_vector()
         CropMode::Custom {
             x: offset.x,
             y: offset.y,
         }
-        // let top_left =
-        // let center = self.top_left();
-        // let contaienr_center = container.top_left()
-        // self.top_left() + (self.size() / 2.0f64)
     }
 
     #[inline]
@@ -198,32 +191,6 @@ impl std::ops::Add<Point> for Rect {
     }
 }
 
-// impl std::ops::Add for Rect {
-//     type Output = Self;
-
-//     fn add(self, other: Self) -> Self::Output {
-//         Self {
-//             top: self.top + other.top,
-//             left: self.left + other.left,
-//             bottom: self.bottom + other.bottom,
-//             right: self.right + other.right,
-//         }
-//     }
-// }
-
-// impl std::ops::Sub for Rect {
-//     type Output = Self;
-
-//     fn sub(self, other: Self) -> Self::Output {
-//         Self {
-//             top: self.top - other.top,
-//             left: self.left - other.left,
-//             bottom: self.bottom - other.bottom,
-//             right: self.right - other.right,
-//         }
-//     }
-// }
-
 impl std::ops::Sub<Sides> for Rect {
     type Output = Self;
 
@@ -299,7 +266,6 @@ impl Border {
         content_size: Size,
         stich_direction: Option<Orientation>,
     ) -> Result<Self, Error> {
-        // Self::from_image(img::Image::open(path)?, options)
         let comps = border.transparent_components().len();
         if comps != 1 {
             Err(BorderError::Invalid(format!(
@@ -307,29 +273,20 @@ impl Border {
                 comps
             )))?;
         }
-        //
-        // let border_image = border.inner;
-
         // by default, use the longer dimension to stich
-        // let border_size = border.size(); // or content_size?
         let stich_direction = stich_direction.unwrap_or(border.orientation());
         border.rotate_to_orientation(Orientation::Portrait)?;
         let target_content_size = content_size.rotate_to_orientation(Orientation::Portrait);
         crate::debug!(&border.size());
         crate::debug!(&target_content_size);
 
-        // border is portrait now
-        // we stich vertically
-
+        // border is portrait now, we stich vertically
         let border_size = border.size_for(OutputSize {
             width: Some(target_content_size.width),
-            height: None, // u32::MAX,
+            height: None,
         });
-        // output_size.scale_to_bounds(OutputSize{width: target
         border.rotate_to_orientation(Orientation::Portrait)?;
         border.resize_to_fit(border_size, ResizeMode::Contain)?;
-        // let border_size =
-        // crate::debug!(&border.size());
 
         // todo: find optimal overlay patches somehow
         let top_patch = Rect {
@@ -353,18 +310,11 @@ impl Border {
             right: border_size.width as i64,
         };
 
-        // let content = border.content_rect();
-        // let top_left: Point = content.top_left();
-        // let bottom_right: Point = border_size - content.bottom_right();
-        // crate::debug!(&top_left);
-        // crate::debug!(&bottom_right);
-
         // create buffer for the new border
         let border_padding = border_size - border.content_size();
         crate::debug!(&border_padding);
         let new_border_size = target_content_size + border_padding;
         let mut new_border = img::Image::with_size(new_border_size);
-        // new_border.fill(Color::rgba(0, 255, 0, 100));
         crate::debug!(&new_border.size());
 
         // draw top patch
@@ -372,15 +322,12 @@ impl Border {
         border_top.crop(top_patch.top_left(), top_patch.bottom_right());
         new_border.overlay(border_top.as_ref(), Point::origin());
 
-        // bottom
+        // draw bottom patch
         let mut border_bottom = border.inner.clone();
         border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
         let bottom_patch_top_left: Point =
             Point::from(new_border_size) - bottom_patch.size().into();
         new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
-
-        // let fill_size: Size = fill_size.into();
-        // let patch_safe_height = (1.0 - 2 * fade_frac) * overlay_patch.height();
 
         let fill_size = bottom_patch.top_right() - top_patch.bottom_left();
 
@@ -403,11 +350,9 @@ impl Border {
             height: patch_safe_height + 2 * fade_size.height,
         };
 
-        // let num_patches: i64 = 1;
         for i in 0..num_patches {
             let mut border_overlay_patch = border.inner.clone();
             border_overlay_patch.crop_to_fit(patch_size, CropMode::Center);
-            // let fade_size
             let axis = imageops::Axis::Y;
             border_overlay_patch.fade_out(fade_size, Point::origin(), axis);
             border_overlay_patch.fade_out(
@@ -415,8 +360,6 @@ impl Border {
                 patch_size,
                 axis,
             );
-            // .fade_out(, fade_size);
-            // Size { width: patch_size.width, height: );
             let mut patch_top_left = top_patch.bottom_left()
                 + Point {
                     x: 0,
@@ -425,54 +368,11 @@ impl Border {
             new_border.overlay(border_overlay_patch.as_ref(), patch_top_left);
         }
 
-        // let fill_height = fill_size.size().height + 2 * overlay_patch.size().height * fade_frac
-        // let num_overlays = fill_height as f64 / overlay_patch
-
-        // for i in (start..=end).step_by(step_size) {
-        // let start_y = fill_size.top_left().y;
-        // let end_y = fill_size.bottom_left().y;
-        // for y in (start_y..=end_y).step_by(step_size) {
-
-        // let fade_transition_direction = if photo_is_portrait {
-        //     imageops::Direction::Vertical
-        // } else {
-        //     imageops::Direction::Horizontal
-        // };
-        // let fade_width = (0.05 * fit_height as f32) as u32;
-        // let fb_useable_frac = 0.75;
-
-        // // top border
-        // let mut top_fb = fb.clone();
-        // let top_fb_crop = Size {
-        //     width: if photo_is_portrait {
-        //         fb.width()
-        //     } else {
-        //         min(
-        //             (fb_useable_frac * photo.width() as f32) as u32,
-        //             (fb_useable_frac * fb.width() as f32) as u32,
-        //         )
-        //     },
-        //     height: if photo_is_portrait {
-        //         min(
-        //             (fb_useable_frac * photo.height() as f32) as u32,
-        //             (fb_useable_frac * fb.height() as f32) as u32,
-        //         )
-        //     } else {
-        //         fb.height()
-        //     },
-        // };
-
         let mut new_border = Self::from_image(new_border, border.options)?;
 
         // match orientation to target content size
         new_border.rotate_to_orientation(content_size.orientation())?;
         Ok(new_border)
-
-        // Ok(Self {
-        //     inner: img::Image,
-        //     options: border.options,
-        //     transparent_components,
-        // })
     }
 
     #[inline]
@@ -510,20 +410,10 @@ impl Border {
 
     #[inline]
     pub fn resize_to_fit(&mut self, container: Size, resize_mode: ResizeMode) -> Result<(), Error> {
-        // let padding = Sides::default();
         self.inner
             .resize_to_fit(container, resize_mode, CropMode::Center);
         self.compute_transparent_components(self.options)?;
         Ok(())
-        // let size = self.size().scale_to(container, resize_mode);
-        // self.inner = imageops::resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
-        // if self.inner.orientation() != orientation {
-        //     self.inner.rotate(Rotation::Rotate90);
-        //     // rotate the transparent components by 90 degree to the right
-        //     for c in self.transparent_components.iter_mut() {
-        //         todo!();
-        //     }
-        // }
     }
 
     #[inline]
@@ -531,34 +421,6 @@ impl Border {
         self.inner.rotate(angle);
         self.compute_transparent_components(self.options)?;
         Ok(())
-
-        // todo: rotate the transparent components
-        // for c in self.transparent_components.iter_mut() {
-        //     let top_left = Point {
-        //         y: c.top,
-        //         x: c.left,
-        //     };
-        //     let bottom_right = Point {
-        //         y: c.bottom,
-        //         x: c.right,
-        //     };
-        //     crate::debug!(&top_left);
-        //     crate::debug!(&bottom_right);
-
-        //     let top_left = top_left.rotate(angle);
-        //     let bottom_right = bottom_right.rotate(angle);
-        //     crate::debug!(&top_left);
-        //     crate::debug!(&bottom_right);
-
-        //     c.top = top_left.y;
-        //     c.left = top_left.x;
-        //     c.bottom = bottom_right.y;
-        //     c.right = bottom_right.x;
-
-        //     if angle == Rotation::Rotate90 {
-        //         todo!();
-        //     }
-        // }
     }
 
     #[inline]
@@ -577,32 +439,15 @@ impl Border {
     #[inline]
     pub fn content_size(&self) -> Size {
         self.content_rect().size()
-        // self.transparent_components.first().unwrap().size()
     }
 
     #[inline]
     pub fn size_for<S: Into<OutputSize>>(&self, content: S) -> Size {
         let content_size = self.content_size();
         let border_size = self.inner.size();
-        // crate::debug!(&self.inner.size());
-        // crate::debug!(&content_size);
-        // crate::debug!(&content);
 
         let new_content_size = content_size.scale_to_bounds(content.into(), ResizeMode::Cover);
         let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
-
-        // content_size
-        // let content: OutputSize = content.into();
-        // let content: Size = content.into();
-        // let scale_factor = content_size.scale_factor(content, ResizeMode::Cover);
-        // crate::debug!(
-        //     // "scale {} image by {} to fit {} border content size {}",
-        //     "scale {} border with content size {} to fit {:?} (scale factor {})",
-        //     border_size,
-        //     content_size,
-        //     content,
-        //     &scale_factor.0,
-        // );
         self.size().scale_by::<_, Round>(scale_factor.0)
     }
 
@@ -699,65 +544,6 @@ impl OutputSize {
         let height = utils::opt_min(self.height, other.height);
         Self { width, height }
     }
-
-    // pub fn scale_to(self, bounds: Self, mode: ResizeMode) -> Self {
-    //     // no bounds: fine
-    //     // w,h bounds: fine
-    //     // w bounds: should
-    //     // let bounds = self.min(container);
-    //     // match options.output_size.min(options.output_size_bounds) {
-    //     match bounds {
-    //         // if no bounds
-    //         OutputSize {
-    //             width: None,
-    //             height: None,
-    //         } => self,
-    //         // if some dimension is bounded,
-    //         // scale by default content aspect ratio
-    //         // or no just clamp
-    //         OutputSize {
-    //             width: None,
-    //             height: Some(height),
-    //         } => {
-    //             // height changed, compute ratio
-    //             let ratio = height as f64 / output_size.height as f64;
-    //             let width = output_size.width as f64 * ratio;
-    //             Self {
-    //                 width: width as u32,
-    //                 height,
-    //             }
-    //         }
-    //         OutputSize {
-    //             width: Some(width),
-    //             height: None,
-    //         } => {
-    //             let ratio = width as f64 / output_size.width as f64;
-    //             let height = output_size.height as f64 * ratio;
-    //             Self {
-    //                 width,
-    //                 height: height as u32,
-    //             }
-    //         }
-    //         // if only absolute values, nothing to be done
-    //         OutputSize {
-    //             width: Some(width),
-    //             height: Some(height),
-    //         } => Self { width, height },
-    //     }
-
-    //     // Self {
-    //     //     width,
-    //     //     height,
-    //     // }
-    //     // let container = container.into();
-    //     match mode {
-    //         ResizeMode::Fill => container,
-    //         _ => {
-    //             let scale = self.scale_factor(container, mode);
-    //             self.scale_by::<_, Ceil>(scale.0)
-    //         }
-    //     }
-    // }
 }
 
 #[wasm_bindgen]
@@ -895,18 +681,8 @@ impl<'a> From<&'a image::DynamicImage> for Size {
     }
 }
 
-// impl From<image::DynamicImage> for Size {
-//     fn from(image: &image::DynamicImage) -> Self {
-//         Self {
-//             width: image.width(),
-//             height: image.height(),
-//         }
-//     }
-// }
-
 #[derive(Debug, Copy, Clone)]
 pub enum CropMode {
-    // Custom { x: f64, y: f64 },
     Custom { x: i64, y: i64 },
     Center,
     Bottom,
@@ -991,13 +767,6 @@ impl Size {
         }
     }
 
-    // pub fn diagonal(&self) -> f64 {
-    //     Point::from(*self).magnitude();
-    //     let width = (self.width as f64).powi(2);
-    //     let height = (self.height as f64).powi(2);
-    //     (width + height).sqrt()
-    // }
-
     pub fn clamp<S1, S2>(self, min: S1, max: S2) -> Self
     where
         S1: Into<Size>,
@@ -1041,20 +810,7 @@ impl Size {
         }
     }
 
-    // pub fn scale_by<B: Bounded, F: NumCast>(self, scalar: F) -> Self {
-    //     let point: Point = self.into();
-    //     point.scale_by(scalar).into();
-    //     match mode {
-    //         ResizeMode::Fill => container,
-    //         _ => {
-    //             let scale = self.scale_factor(container, mode);
-    //             self.scale_by(scale.0)
-    //         }
-    //     }
-    // }
-
     pub fn scale_to_bounds(self, bounds: OutputSize, mode: ResizeMode) -> Self {
-        // let ratio = self.aspect_ratio();
         match bounds {
             // unbounded
             OutputSize {
@@ -1065,54 +821,29 @@ impl Size {
             OutputSize {
                 width: None,
                 height: Some(height),
-            } => {
-                self.scale_to(
-                    Size {
-                        width: self.width,
-                        height,
-                    },
-                    ResizeMode::Contain,
-                    // mode,
-                )
-                // let ratio = height as f64 / output_size.height as f64;
-                // let width = output_size.width as f64 * ratio;
-                // Size {
-                //     width: width as u32,
-                //     height,
-                // }
-            }
+            } => self.scale_to(
+                Size {
+                    width: self.width,
+                    height,
+                },
+                ResizeMode::Contain,
+            ),
             OutputSize {
                 width: Some(width),
                 height: None,
-            } => {
-                self.scale_to(
-                    Size {
-                        width,
-                        height: self.height,
-                    },
-                    ResizeMode::Contain,
-                )
-                // let ratio = width as f64 / output_size.width as f64;
-                // let height = output_size.height as f64 * ratio;
-                // Size {
-                //     width,
-                //     height: height as u32,
-                // }
-            }
+            } => self.scale_to(
+                Size {
+                    width,
+                    height: self.height,
+                },
+                ResizeMode::Contain,
+            ),
             // all dimensions bounded
             OutputSize {
                 width: Some(width),
                 height: Some(height),
             } => self.scale_to(Size { width, height }, mode),
         }
-        // let container = container.into();
-        // match mode {
-        //     ResizeMode::Fill => container,
-        //     _ => {
-        //         let scale = self.scale_factor(container, mode);
-        //         self.scale_by::<_, Ceil>(scale.0)
-        //     }
-        // }
     }
 
     pub fn scale_to<S: Into<Size>>(self, container: S, mode: ResizeMode) -> Self {
@@ -1130,15 +861,10 @@ impl Size {
         // avoid underflow if container is larger than self
         let container = container.clamp(Point::origin(), *self);
 
-        crate::debug!(self);
-        crate::debug!(&container);
         assert!(self.width >= container.width);
         assert!(self.height >= container.height);
 
         let center_top_left = self.center(container).top_left();
-        // let mut top_left: Point = Point::from(container) - (*self).into();
-        // top_left = top_left / 0.5f64;
-        // top_left = top_left.scale_by::<_, Round>(0.5f64);
 
         let top_left: Point = match mode {
             CropMode::Custom { x, y } => center_top_left + Point { x, y },
@@ -1160,34 +886,15 @@ impl Size {
             },
             CropMode::Center => center_top_left,
         };
-        // do we need a clip to with keep ratio / shift?
-        // not really because we compute bottom right anyways without changing the container size
-
-        // let parent_rect: Rect = (*self).into();
-        // let crop_rect = Rect::new(top_left, container);
-        // let crop_rect = crop_rect.clip_to(&parent_rect);
-        // let top_left: Size = crop_rect.top_left().into();
-
-        // this could go wrong but we are careful that top_left +
+        // this could go wrong but we are careful
         let top_left: Size = top_left.into();
         let top_left = top_left.clamp(Point::origin(), *self - container);
-        // let bottom_right = *self - (top_left + container);
-        // let bottom_right: Size = *self - (top_left + container).into();
 
-        // let bottom_right: Point = (*self - (top_left + container)).into();
-        // let bottom_right: Size = *self - (top_left + container);
-        // let bottom_right: Size = bottom_right.into();
-
-        // let top_left: Size = top_left.into();
         let bottom_right = top_left + container;
         let bottom_right = bottom_right.clamp(Point::origin(), *self);
         let bottom_right = *self - bottom_right;
 
         Sides {
-            // top: top_left.y as u32,
-            // left: top_left.x as u32,
-            // bottom: bottom_right.y as u32,
-            // right: bottom_right.x as u32,
             top: top_left.height,
             left: top_left.width,
             bottom: bottom_right.height,
@@ -1247,10 +954,6 @@ impl std::ops::Sub<Sides> for Size {
     fn sub(self, sides: Sides) -> Self::Output {
         let width = self.width as i64 - sides.width() as i64;
         let height = self.height as i64 - sides.height() as i64;
-        // let top_left =
-        // let width = self.width as i64 - top_left
-        // width = width - sides.left as i64 - sides.right as i64;
-        // let width = self.width as i64 - sides.left as i64 - sides.right as i64;
         Size {
             width: utils::clamp(width, 0, u32::MAX as i64) as u32,
             height: utils::clamp(height, 0, u32::MAX as i64) as u32,
@@ -1267,9 +970,6 @@ impl std::ops::Add<Sides> for Size {
         Size {
             width: utils::clamp(width, 0, u32::MAX as i64) as u32,
             height: utils::clamp(height, 0, u32::MAX as i64) as u32,
-            // height: self.height + sides.top + sides.bottom,
-            // width: self.width + sides.left + sides.right,
-            // height: self.height + sides.top + sides.bottom,
         }
     }
 }
@@ -1351,13 +1051,11 @@ pub struct Vector<I> {
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, PartialEq, Debug, Copy, Clone)]
-// pub struct Point<I> {
 pub struct Point {
     pub x: i64,
     pub y: i64,
 }
 
-// impl<I> std::ops::Add for Point<I> {
 impl std::ops::Add for Point {
     type Output = Self;
 
@@ -1369,7 +1067,6 @@ impl std::ops::Add for Point {
     }
 }
 
-// impl<I> std::ops::Sub for Point<I> {
 impl std::ops::Sub for Point {
     type Output = Self;
 
@@ -1381,21 +1078,17 @@ impl std::ops::Sub for Point {
     }
 }
 
-// impl<I> std::ops::Add<Size> for Point<I> {
-// impl std::ops::Add<Size> for Point<i64> {
 impl std::ops::Add<Size> for Point {
     type Output = Self;
 
     fn add(self, size: Size) -> Self::Output {
         Point {
-            // x: NumCast::from(self.x + size.width as i64,
             x: self.x + size.width as i64,
             y: self.y + size.height as i64,
         }
     }
 }
 
-// impl<I, F> std::ops::Mul<F> for Point<I>
 impl<F> std::ops::Mul<F> for Point
 where
     F: NumCast,
@@ -1407,7 +1100,6 @@ where
     }
 }
 
-// impl<I, F> std::ops::Div<F> for Point<I>
 impl<F> std::ops::Div<F> for Point
 where
     F: NumCast,
@@ -1420,31 +1112,6 @@ where
     }
 }
 
-// impl<I, S> From<cgmath::Point2<S>> for Point<I>
-// where
-//     S: cgmath::BaseNum,
-// {
-//     fn from(point: cgmath::Point2<S>) -> Self {
-//         Self {
-//             x: NumCast::from(point.x).unwrap(),
-//             y: NumCast::from(point.y).unwrap(),
-//         }
-//     }
-// }
-
-// impl<S> Into<cgmath::Point2<S>> for Point<I>
-// where
-//     S: cgmath::BaseNum,
-// {
-//     fn into(self) -> cgmath::Point2<S> {
-//         cgmath::Point2 {
-//             x: NumCast::from(self.x).unwrap(),
-//             y: NumCast::from(self.y).unwrap(),
-//         }
-//     }
-// }
-
-// impl From<Size> for Point<i64> {
 impl From<Size> for Point {
     fn from(size: Size) -> Self {
         Self {
@@ -1492,20 +1159,6 @@ impl Point {
             x: x as i64,
             y: y as i64,
         }
-        // if x > u32::MAX as u64 {
-        //     let ratio = u32::MAX as f64 / self.x as f64;
-        //     let y = max((self.y as f64 * ratio).ceil() as u32, 1);
-        //     Self { x: u32::MAX, y }
-        // } else if y > u32::MAX as u64 {
-        //     let ratio = u32::MAX as f64 / self.y as f64;
-        //     let x = max((self.x as f64 * ratio).ceil() as u32, 1);
-        //     Self { x, y: u32::MAX }
-        // } else {
-        //     Self {
-        //         x: x as u32,
-        //         y: y as u32,
-        //     }
-        // }
     }
 
     pub fn unit_vector(self) -> Vector<f64> {
@@ -1521,10 +1174,6 @@ impl Point {
         let x = (self.x as f64).powi(2);
         let y = (self.y as f64).powi(2);
         (x + y).sqrt()
-        // (self.x.powi(2) + self.y.powi(2)).sqrt()
-        // let point: cgmath::Point2<f64> = self.into();
-        // let rot: cgmath::Basis2<f64> = rotation.into();
-        // rot.rotate_point(point).into()
     }
 
     pub fn abs(self) -> Self {
@@ -1533,12 +1182,6 @@ impl Point {
             y: self.y.abs(),
         }
     }
-
-    // pub fn rotate(self, rotation: Rotation) -> Self {
-    //     let point: cgmath::Point2<f64> = self.into();
-    //     let rot: cgmath::Basis2<f64> = rotation.into();
-    //     rot.rotate_point(point).into()
-    // }
 }
 
 #[wasm_bindgen]
@@ -1550,28 +1193,17 @@ pub struct SidesPercent {
     pub bottom: f32,
 }
 
-fn percent_to_abs(percent: f32, dimension: u32) -> u32
-// fn percent_to_abs<I>(percent: f32, dimension: I) -> I
-// where
-//     I: NumCast,
-{
+fn percent_to_abs(percent: f32, dimension: u32) -> u32 {
     let percent = percent.max(0.0);
-    // let dimension: f32 = NumCast::from(dimension).unwrap();
-
     if percent <= 1.0 {
         let absolute = percent * dimension as f32;
         utils::clamp(absolute, 0.0, dimension as f32).ceil() as u32
     } else {
         utils::clamp(percent, 0.0, dimension as f32).ceil() as u32
     }
-    // NumCast::from(abs).unwrap()
 }
 
-impl std::ops::Mul<u32> for SidesPercent
-// impl<I> std::ops::Mul<I> for SidesPercent
-// where
-//     I: NumCast,
-{
+impl std::ops::Mul<u32> for SidesPercent {
     type Output = Sides;
 
     fn mul(self, scalar: u32) -> Self::Output {
@@ -1631,14 +1263,6 @@ impl Sides {
             bottom: side,
         }
     }
-    // pub fn padding(value: u32) -> Self {
-    //     Self {
-    //         top: -value,
-    //         left: -value,
-    //         right: value,
-    //         bottom: value,
-    //     }
-    // }
 
     pub fn height(&self) -> u32 {
         self.top + self.bottom
@@ -1676,19 +1300,6 @@ impl std::ops::Add for Sides {
     }
 }
 
-// impl std::ops::Add<u32> for Sides {
-//     type Output = Self;
-
-//     fn add(self, scalar: u32) -> Self::Output {
-//         Self {
-//             top: self.top + scalar,
-//             right: self.right + scalar,
-//             bottom: self.bottom + scalar,
-//             left: self.left + scalar,
-//         }
-//     }
-// }
-
 impl<F> std::ops::Mul<F> for Sides
 where
     F: NumCast,
@@ -1697,7 +1308,6 @@ where
 
     fn mul(self, scalar: F) -> Self::Output {
         let scalar: f32 = NumCast::from(scalar).unwrap();
-        // let scalar = max(0.0, scalar);
         Self {
             top: (self.top as f32 * scalar).ceil() as u32,
             right: (self.right as f32 * scalar).ceil() as u32,
@@ -1714,21 +1324,6 @@ pub enum Rotation {
     Rotate90,
     Rotate180,
     Rotate270,
-}
-
-impl<F> Into<cgmath::Basis2<F>> for Rotation
-where
-    F: cgmath::BaseFloat,
-{
-    fn into(self) -> cgmath::Basis2<F> {
-        let angle: F = match self {
-            Rotation::Rotate270 => NumCast::from(270.0).unwrap(),
-            Rotation::Rotate180 => NumCast::from(180.0).unwrap(),
-            Rotation::Rotate90 => NumCast::from(90.0).unwrap(),
-            Rotation::Rotate0 => NumCast::from(0.0).unwrap(),
-        };
-        cgmath::Rotation2::from_angle(cgmath::Deg(angle))
-    }
 }
 
 impl std::str::FromStr for Rotation {
@@ -1785,11 +1380,11 @@ mod tests {
 
     fn draw_transparent_components<P: AsRef<Path>>(
         mut border: img::Image,
-        components: &Vec<Component>,
+        components: &Vec<Rect>,
         output: P,
     ) -> Result<()> {
         let alpha = (255.0f32 * 0.5).ceil() as u8;
-        let red = Color::rgba(255, 0, 0, alpha).to_rgba();
+        let red = Color::rgba(255, 0, 0, alpha);
         for c in components {
             let top_left = Point {
                 y: c.top,
@@ -1800,7 +1395,7 @@ mod tests {
                 x: c.right,
             };
             let size = bottom_right - top_left;
-            border.fill_rect(&red, top_left, size);
+            border.fill_rect(red, top_left, size);
             // imageops::fill_rect(&mut border, &red, top_left, size);
         }
         border.save(Some(&output), None)?;
@@ -1919,25 +1514,5 @@ mod tests {
                 height: None
             }
         );
-    }
-
-    #[ignore]
-    #[test]
-    fn try_rotations() -> Result<()> {
-        use anyhow;
-        use cgmath::*;
-        let unit_x: Vector2<f32> = Vector2::unit_y();
-        println!("{:?}", &unit_x);
-        let point: Point2<f32> = Point2 { x: 0f32, y: 1f32 };
-        println!("{:?}", &point);
-        let rot: Basis2<f32> = Rotation2::from_angle(Deg(90.0f32));
-        println!("{:?}", &rot);
-
-        let test = rot.rotate_point(point);
-        println!("{:?}", &test);
-        println!("{:?}", &rot.rotate_vector(unit_x));
-
-        return Err(anyhow::anyhow!("does not work yet"));
-        Ok(())
     }
 }

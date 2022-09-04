@@ -133,7 +133,6 @@ impl WasmImageBorders {
     ) -> Result<ImageData, JsValue> {
         console_log!("border: {:?}", &border);
         console_log!("options: {:?}", &options);
-        // .unwrap_or(types::BorderSource::default()),
         let border = match border.custom {
             None => border.builtin.map(types::BorderSource::Builtin),
             Some(data) => {

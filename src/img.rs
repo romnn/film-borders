@@ -13,12 +13,6 @@ use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
-// #[derive(PartialEq, Clone, Copy, Debug)]
-// pub enum Direction {
-//     Horizontal,
-//     Vertical,
-// }
-
 #[derive(Clone)]
 pub struct Image {
     pub(crate) inner: RgbaImage,
@@ -74,16 +68,10 @@ impl Image {
 
     pub fn is_portrait(&self) -> bool {
         self.size().is_portrait()
-        // self.orientation() == Orientation::Portrait
     }
 
     pub fn orientation(&self) -> types::Orientation {
         self.size().orientation()
-        // if self.inner.width() <= self.inner.height() {
-        //     Orientation::Portrait
-        // } else {
-        //     Orientation::Landscape
-        // }
     }
 
     pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C) {
@@ -107,28 +95,12 @@ impl Image {
         container: S,
         resize_mode: types::ResizeMode,
         crop_mode: types::CropMode,
-        // padding: P,
     ) where
         S: Into<types::Size>,
-        // P: Into<types::Sides>,
     {
         let container = container.into();
         self.resize(container, resize_mode);
         self.crop_to_fit(container, crop_mode);
-        // let padding: types::Sides = padding.into();
-        // crate::debug!(&container);
-        // crate::debug!(&padding);
-
-        // let padded_container = container + padding;
-
-        // crate::debug!(&size);
-
-        // crate::debug!(&self.size());
-
-        // let crop = size.crop_to_fit(container, crop_mode);
-        // crate::debug!(&crop);
-        // self.crop_sides(crop);
-        // crate::debug!(&self.size());
     }
 
     #[inline]
@@ -136,23 +108,9 @@ impl Image {
     where
         P1: Into<types::Point>,
         P2: Into<types::Point>,
-        // pub fn fade_out<P, S>(&mut self, top_left: P, size: S, axis: imageops::Axis)
-        // where
-        //     P: Into<types::Point>,
-        //     S: Into<types::Size>,
     {
         imageops::fade_out(self, top_left.into(), bottom_right.into(), axis);
-        // imageops::fade_out(self, top_left.into(), size.into(), axis);
     }
-
-    // pub fn fade_out(&mut self) {
-    //     // imageops::fade_out(
-    //     //     &mut top_fb,
-    //     //     max(0, fade_dim - fade_width),
-    //     //     fade_dim - 1,
-    //     //     fade_transition_direction,
-    //     // );
-    // }
 
     pub fn resize<S>(&mut self, size: S, mode: types::ResizeMode)
     where
@@ -196,7 +154,6 @@ impl Image {
             &mut self.inner,
             max(0, top_left.x) as u32,
             max(0, top_left.y) as u32,
-            // top_left.y,
             cropped_size.width,
             cropped_size.height,
         )

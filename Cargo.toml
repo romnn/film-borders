@@ -79,7 +79,6 @@ regex = "1"
 cfg-if = "0.1"
 anyhow = "1"
 num = "0.4"
-cgmath = "0.18"
 approx = "0.5"
 
 [dev-dependencies]
