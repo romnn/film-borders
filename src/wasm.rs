@@ -63,7 +63,6 @@ impl Border {
 }
 
 #[wasm_bindgen]
-#[derive(Debug)]
 pub struct WasmImage {
     inner: img::Image,
 }
@@ -77,10 +76,7 @@ impl WasmImage {
         utils::set_panic_hook();
         let inner = image_from_canvas(canvas, ctx)?.to_rgba8();
         Ok(WasmImage {
-            inner: img::Image {
-                inner,
-                path: None,
-            },
+            inner: img::Image { inner, path: None },
         })
     }
 
@@ -88,16 +84,12 @@ impl WasmImage {
         utils::set_panic_hook();
         let inner = image_from_image_data(data)?.to_rgba8();
         Ok(WasmImage {
-            inner: img::Image {
-                inner,
-                path: None,
-            },
+            inner: img::Image { inner, path: None },
         })
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug)]
 pub struct WasmImageBorders {
     inner: ImageBorders,
 }
@@ -141,16 +133,15 @@ impl WasmImageBorders {
     ) -> Result<ImageData, JsValue> {
         console_log!("border: {:?}", &border);
         console_log!("options: {:?}", &options);
+        // .unwrap_or(types::BorderSource::default()),
         let border = match border.custom {
-            None => border
-                .builtin
-                .map(types::BorderSource::Builtin)
-                .unwrap_or(types::BorderSource::default()),
+            None => border.builtin.map(types::BorderSource::Builtin),
             Some(data) => {
                 let image = WasmImage::from_image_data(data)?;
-                types::Border::from_image(image.inner, None)
+                let border = types::Border::from_image(image.inner, None)
                     .map(types::BorderSource::Custom)
-                    .map_err(|err| JsValue::from_str(&err.to_string()))?
+                    .map_err(|err| JsValue::from_str(&err.to_string()))?;
+                Some(border)
             }
         };
         console_log!("selected border: {:?}", &border);

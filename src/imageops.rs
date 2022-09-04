@@ -93,32 +93,90 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Direction {
-    Horizontal,
-    Vertical,
+pub enum Axis {
+    X,
+    Y,
 }
 
+// pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
+// pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
+// #[inline]
 #[inline]
-pub fn fade_out(image: &mut RgbaImage, start: u32, end: u32, direction: Direction) {
-    let other = match direction {
-        Direction::Horizontal => image.height(),
-        Direction::Vertical => image.width(),
+// pub fn fade_out<P, S>(image: &mut img::Image, top_left: P, size: S, axis: Axis)
+pub fn fade_out<P1, P2>(image: &mut img::Image, start: P1, end: P2, axis: Axis)
+where
+    P1: Into<types::Point>,
+    P2: Into<types::Point>,
+    // S: Into<types::Size>,
+{
+    let start = start.into();
+    let end = end.into();
+    crate::debug!(&start);
+    crate::debug!(&end);
+
+    let switch_direction = match axis {
+        Axis::X => start.x < end.x,
+        Axis::Y => start.y < end.y,
     };
-    let diff = (end as f32 - start as f32).abs();
-    for i in min(start, end)..=max(start, end) {
-        let ir = i - min(start, end);
-        let mut frac = ir as f32 / diff;
-        if start < end {
-            frac = 1.0 - frac;
-        }
+    let switch_direction = if switch_direction { 1.0 } else { 0.0 };
+
+    crate::debug!(&switch_direction);
+
+    let rect = types::Rect::from_points(start, end);
+    crate::debug!(&rect);
+    let size = rect.size();
+    crate::debug!(&size);
+    let top_left = rect.top_left();
+    crate::debug!(&top_left);
+    let dx = max(0, top_left.x) as u32;
+    let dy = max(0, top_left.y) as u32;
+
+    let (w, h) = match axis {
+        Axis::X => (size.height, size.width),
+        Axis::Y => (size.width, size.height),
+    };
+    for y in 0..h {
+        let mut frac = y as f32 / h as f32;
+        frac = (switch_direction - frac).abs();
         let alpha = (255.0 * frac) as u8;
-        for j in 0..other {
-            let (x, y) = match direction {
-                Direction::Horizontal => (i, j),
-                Direction::Vertical => (j, i),
+
+        for x in 0..w {
+            let (x, y) = match axis {
+                Axis::X => (y, x),
+                Axis::Y => (x, y),
             };
-            let channels = image.get_pixel_mut(x, y).channels_mut();
+
+            let channels = image.inner.get_pixel_mut(dx + x, dy + y).channels_mut();
             channels[3] = min(channels[3], alpha);
         }
     }
+    // let (x, y) = match direction {
+    //     Direction::Horizontal => (i, j),
+    //     Direction::Vertical => (j, i),
+    // };
+
+    // for i in min(start, end)..=max(start, end) {
+    //     let alpha = (255.0 * frac) as u8;
+
+    // let other = match direction {
+    //     Direction::Horizontal => image.height(),
+    //     Direction::Vertical => image.width(),
+    // };
+    // let diff = (end as f32 - start as f32).abs();
+    // for i in min(start, end)..=max(start, end) {
+    //     let ir = i - min(start, end);
+    //     let mut frac = ir as f32 / diff;
+    //     if start < end {
+    //         frac = 1.0 - frac;
+    //     }
+    //     let alpha = (255.0 * frac) as u8;
+    //     for j in 0..other {
+    //         let (x, y) = match direction {
+    //             Direction::Horizontal => (i, j),
+    //             Direction::Vertical => (j, i),
+    //         };
+    //         let channels = image.get_pixel_mut(x, y).channels_mut();
+    //         channels[3] = min(channels[3], alpha);
+    //     }
+    // }
 }

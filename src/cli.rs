@@ -29,12 +29,12 @@ struct ApplyOpts {
 
     #[clap(long = "max-height")]
     max_output_height: Option<u32>,
-    
+
     #[clap(long = "margin", aliases = &["margin-factor"])]
     margin: Option<f32>,
 
-    // #[clap(long = "scale", aliases = &["scale-factor"])]
-    // scale_factor: Option<f32>,
+    #[clap(long = "scale", aliases = &["scale-factor"])]
+    scale_factor: Option<f32>,
 
     #[clap(long = "crop-top")]
     crop_top: Option<f32>,
@@ -48,7 +48,7 @@ struct ApplyOpts {
     #[clap(long = "frame-width")]
     frame_width: Option<f32>,
 
-    #[clap(long = "mode", help = "scaling mode")]
+    #[clap(long = "fit", help = "fitting mode")]
     mode: Option<types::Mode>,
 
     #[clap(long = "rotate")]
@@ -62,6 +62,9 @@ struct ApplyOpts {
 
     #[clap(long = "preview", help = "overlay instagram preview visiable area", action = clap::ArgAction::SetTrue)]
     preview: bool,
+
+    #[clap(long = "no-border", action = clap::ArgAction::SetTrue)]
+    no_border: bool,
 
     #[clap(long = "quality", help = "output image quality (1-100)")]
     quality: Option<u8>,
@@ -106,30 +109,36 @@ fn main() {
 
                 match images.and_then(ImageBorders::new) {
                     Ok(mut borders) => {
-                        #[cfg(feature = "borders")]
-                        let border = match cfg.border {
-                            None => Ok(types::BorderSource::default()),
-                            Some(border) => borders::BuiltinBorder::from_str(&border)
-                                .map(types::BorderSource::Builtin)
-                                .or_else(|_| {
+                        let border = if cfg.no_border {
+                            None
+                        } else {
+                            #[cfg(feature = "borders")]
+                            let border = match cfg.border {
+                                None => Ok(types::BorderSource::default()),
+                                Some(border) => borders::BuiltinBorder::from_str(&border)
+                                    .map(types::BorderSource::Builtin)
+                                    .or_else(|_| {
+                                        types::Border::open(PathBuf::from(border), None)
+                                            .map(types::BorderSource::Custom)
+                                    }),
+                            };
+
+                            #[cfg(not(feature = "borders"))]
+                            let border =
+                                cfg.border.ok_or(Error::MissingBorder).and_then(|border| {
                                     types::Border::open(PathBuf::from(border), None)
                                         .map(types::BorderSource::Custom)
-                                }),
-                        };
+                                        .map_err(Into::into)
+                                });
 
-                        #[cfg(not(feature = "borders"))]
-                        let border = cfg.border.ok_or(Error::MissingBorder).and_then(|border| {
-                            types::Border::open(PathBuf::from(border), None)
-                                .map(types::BorderSource::Custom)
-                                .map_err(Into::into)
-                        });
-
-                        let border = match border {
-                            Ok(border) => border,
-                            Err(err) => {
-                                eprintln!("failed to read border: {:?}", err);
-                                return;
-                            }
+                            let border = match border {
+                                Ok(border) => border,
+                                Err(err) => {
+                                    eprintln!("failed to read border: {:?}", err);
+                                    return;
+                                }
+                            };
+                            Some(border)
                         };
 
                         let options = Options {
@@ -148,10 +157,10 @@ fn main() {
                                 bottom: cfg.crop_bottom.unwrap_or(0.0),
                                 left: cfg.crop_left.unwrap_or(0.0),
                             }),
-                            // scale_factor: cfg.scale_factor.unwrap_or(0.95),
+                            scale_factor: cfg.scale_factor.unwrap_or(1.0),
                             margin: cfg.margin.unwrap_or(0.05),
                             frame_width: types::SidesPercent::uniform(
-                                cfg.frame_width.unwrap_or(0.05),
+                                cfg.frame_width.unwrap_or(0.01),
                             ),
                             rotate_angle: Some(cfg.rotation.unwrap_or(types::Rotation::Rotate0)),
                             background_color: cfg.background_color,

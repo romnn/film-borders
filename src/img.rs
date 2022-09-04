@@ -8,21 +8,16 @@ use image::{
     ImageOutputFormat, RgbaImage,
 };
 
+use std::cmp::{max, min};
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum Direction {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum Orientation {
-    Portrait,
-    Landscape,
-}
+// #[derive(PartialEq, Clone, Copy, Debug)]
+// pub enum Direction {
+//     Horizontal,
+//     Vertical,
+// }
 
 #[derive(Clone)]
 pub struct Image {
@@ -78,15 +73,17 @@ impl Image {
     }
 
     pub fn is_portrait(&self) -> bool {
-        self.orientation() == Orientation::Portrait
+        self.size().is_portrait()
+        // self.orientation() == Orientation::Portrait
     }
 
-    pub fn orientation(&self) -> Orientation {
-        if self.inner.width() <= self.inner.height() {
-            Orientation::Portrait
-        } else {
-            Orientation::Landscape
-        }
+    pub fn orientation(&self) -> types::Orientation {
+        self.size().orientation()
+        // if self.inner.width() <= self.inner.height() {
+        //     Orientation::Portrait
+        // } else {
+        //     Orientation::Landscape
+        // }
     }
 
     pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C) {
@@ -94,6 +91,15 @@ impl Image {
         for p in self.inner.pixels_mut() {
             *p = color;
         }
+    }
+
+    pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S)
+    where
+        TL: Into<types::Point>,
+        S: Into<types::Size>,
+        C: Into<image::Rgba<u8>>,
+    {
+        imageops::fill_rect(self, color.into(), top_left.into(), size.into());
     }
 
     pub fn resize_to_fit<S>(
@@ -106,34 +112,73 @@ impl Image {
         S: Into<types::Size>,
         // P: Into<types::Sides>,
     {
-        let container: types::Size = container.into();
+        let container = container.into();
+        self.resize(container, resize_mode);
+        self.crop_to_fit(container, crop_mode);
         // let padding: types::Sides = padding.into();
-        crate::debug!(&container);
+        // crate::debug!(&container);
         // crate::debug!(&padding);
 
         // let padded_container = container + padding;
-        let size = self.size().scale_to(container, resize_mode);
-        // let scale_factor = 
 
-        crate::debug!(&size);
+        // crate::debug!(&size);
 
+        // crate::debug!(&self.size());
+
+        // let crop = size.crop_to_fit(container, crop_mode);
+        // crate::debug!(&crop);
+        // self.crop_sides(crop);
+        // crate::debug!(&self.size());
+    }
+
+    #[inline]
+    pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: imageops::Axis)
+    where
+        P1: Into<types::Point>,
+        P2: Into<types::Point>,
+        // pub fn fade_out<P, S>(&mut self, top_left: P, size: S, axis: imageops::Axis)
+        // where
+        //     P: Into<types::Point>,
+        //     S: Into<types::Size>,
+    {
+        imageops::fade_out(self, top_left.into(), bottom_right.into(), axis);
+        // imageops::fade_out(self, top_left.into(), size.into(), axis);
+    }
+
+    // pub fn fade_out(&mut self) {
+    //     // imageops::fade_out(
+    //     //     &mut top_fb,
+    //     //     max(0, fade_dim - fade_width),
+    //     //     fade_dim - 1,
+    //     //     fade_transition_direction,
+    //     // );
+    // }
+
+    pub fn resize<S>(&mut self, size: S, mode: types::ResizeMode)
+    where
+        S: Into<types::Size>,
+    {
         #[cfg(debug_assertions)]
         let start = chrono::Utc::now().time();
 
+        let size = self.size().scale_to(size.into(), mode);
         self.inner = imageops::resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
-        crate::debug!(&self.size());
 
-        let crop = size.crop_to_fit(container, crop_mode);
-        crate::debug!(&crop);
-        self.crop(crop);
-        crate::debug!(&self.size());
-
+        #[cfg(debug_assertions)]
         crate::debug!(
-            "fitting to {} x {} took {:?} msec",
-            container.width,
-            container.height,
+            "fitting to {} took {:?} msec",
+            size,
             (chrono::Utc::now().time() - start).num_milliseconds(),
         );
+    }
+
+    pub fn crop_to_fit<S>(&mut self, container: S, mode: types::CropMode)
+    where
+        S: Into<types::Size>,
+    {
+        let container = container.into();
+        let crop = self.size().crop_to_fit(container, mode);
+        self.crop_sides(crop);
     }
 
     pub fn overlay<O, P>(&mut self, overlay: &O, offset: P)
@@ -145,7 +190,20 @@ impl Image {
         imageops::overlay(&mut self.inner, overlay, offset.x, offset.y);
     }
 
-    pub fn crop(&mut self, crop: types::Sides) {
+    pub fn crop(&mut self, top_left: types::Point, bottom_right: types::Point) {
+        let cropped_size: types::Size = (bottom_right - top_left).into();
+        self.inner = imageops::crop(
+            &mut self.inner,
+            max(0, top_left.x) as u32,
+            max(0, top_left.y) as u32,
+            // top_left.y,
+            cropped_size.width,
+            cropped_size.height,
+        )
+        .to_image();
+    }
+
+    pub fn crop_sides(&mut self, crop: types::Sides) {
         let cropped_size = self.size() - crop;
         self.inner = imageops::crop(
             &mut self.inner,

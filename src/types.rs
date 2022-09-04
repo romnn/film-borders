@@ -12,6 +12,12 @@ use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
+pub enum Orientation {
+    Portrait,
+    Landscape,
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct Rect {
     pub top: i64,
     pub left: i64,
@@ -27,6 +33,15 @@ impl Rect {
             left: top_left.x,
             bottom: bottom_right.y,
             right: bottom_right.x,
+        }
+    }
+
+    pub fn from_points(p1: Point, p2: Point) -> Self {
+        Self {
+            top: min(p1.y, p2.y),
+            bottom: max(p1.y, p2.y),
+            left: min(p1.x, p2.x),
+            right: max(p1.x, p2.x),
         }
     }
 
@@ -62,9 +77,25 @@ impl Rect {
     }
 
     #[inline]
+    pub fn top_right(&self) -> Point {
+        Point {
+            y: self.top,
+            x: self.right,
+        }
+    }
+
+    #[inline]
     pub fn top_left(&self) -> Point {
         Point {
             y: self.top,
+            x: self.left,
+        }
+    }
+
+    #[inline]
+    pub fn bottom_left(&self) -> Point {
+        Point {
+            y: self.bottom,
             x: self.left,
         }
     }
@@ -237,7 +268,7 @@ impl Default for BorderOptions {
 
 #[derive(Clone)]
 pub struct Border {
-    pub inner: img::Image,
+    inner: img::Image,
     options: Option<BorderOptions>,
     transparent_components: Vec<Rect>,
 }
@@ -260,6 +291,188 @@ impl Border {
     #[inline]
     pub fn open<P: AsRef<Path>>(path: P, options: Option<BorderOptions>) -> Result<Self, Error> {
         Self::from_image(img::Image::open(path)?, options)
+    }
+
+    #[inline]
+    pub fn new(
+        mut border: Self,
+        content_size: Size,
+        stich_direction: Option<Orientation>,
+    ) -> Result<Self, Error> {
+        // Self::from_image(img::Image::open(path)?, options)
+        let comps = border.transparent_components().len();
+        if comps != 1 {
+            Err(BorderError::Invalid(format!(
+                "border must only have one transparent area, found {}",
+                comps
+            )))?;
+        }
+        //
+        // let border_image = border.inner;
+
+        // by default, use the longer dimension to stich
+        // let border_size = border.size(); // or content_size?
+        let stich_direction = stich_direction.unwrap_or(border.orientation());
+        border.rotate_to_orientation(Orientation::Portrait)?;
+        let target_content_size = content_size.rotate_to_orientation(Orientation::Portrait);
+        crate::debug!(&border.size());
+        crate::debug!(&target_content_size);
+
+        // border is portrait now
+        // we stich vertically
+
+        let border_size = border.size_for(OutputSize {
+            width: Some(target_content_size.width),
+            height: None, // u32::MAX,
+        });
+        // output_size.scale_to_bounds(OutputSize{width: target
+        border.rotate_to_orientation(Orientation::Portrait)?;
+        border.resize_to_fit(border_size, ResizeMode::Contain)?;
+        // let border_size =
+        // crate::debug!(&border.size());
+
+        // todo: find optimal overlay patches somehow
+        let top_patch = Rect {
+            top: 0 as i64,
+            bottom: (0.25 * border_size.height as f32) as i64,
+            left: 0,
+            right: border_size.width as i64,
+        };
+
+        let bottom_patch = Rect {
+            top: (0.75 * border_size.height as f32) as i64,
+            bottom: border_size.height as i64,
+            left: 0,
+            right: border_size.width as i64,
+        };
+
+        let overlay_patch = Rect {
+            top: (0.3 * border_size.height as f32) as i64,
+            bottom: (0.7 * border_size.height as f32) as i64,
+            left: 0,
+            right: border_size.width as i64,
+        };
+
+        // let content = border.content_rect();
+        // let top_left: Point = content.top_left();
+        // let bottom_right: Point = border_size - content.bottom_right();
+        // crate::debug!(&top_left);
+        // crate::debug!(&bottom_right);
+
+        // create buffer for the new border
+        let border_padding = border_size - border.content_size();
+        crate::debug!(&border_padding);
+        let new_border_size = target_content_size + border_padding;
+        let mut new_border = img::Image::with_size(new_border_size);
+        // new_border.fill(Color::rgba(0, 255, 0, 100));
+        crate::debug!(&new_border.size());
+
+        // draw top patch
+        let mut border_top = border.inner.clone();
+        border_top.crop(top_patch.top_left(), top_patch.bottom_right());
+        new_border.overlay(border_top.as_ref(), Point::origin());
+
+        // bottom
+        let mut border_bottom = border.inner.clone();
+        border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
+        let bottom_patch_top_left: Point =
+            Point::from(new_border_size) - bottom_patch.size().into();
+        new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
+
+        // let fill_size: Size = fill_size.into();
+        // let patch_safe_height = (1.0 - 2 * fade_frac) * overlay_patch.height();
+
+        let fill_size = bottom_patch.top_right() - top_patch.bottom_left();
+
+        let fade_frac = 0.2f64;
+        let fade_height = fade_frac * overlay_patch.height() as f64;
+        let fade_size = Size {
+            width: overlay_patch.width(),
+            height: fade_height.ceil() as u32,
+        };
+        let patch_safe_height = overlay_patch.height() - 2 * fade_size.height;
+
+        let num_patches = fill_size.y as f64 / patch_safe_height as f64;
+        let num_patches = num_patches.ceil() as i64;
+        crate::debug!(&num_patches);
+
+        let patch_safe_height = fill_size.y as f64 / num_patches as f64;
+        let patch_safe_height = patch_safe_height.ceil() as u32;
+        let patch_size = Size {
+            width: overlay_patch.width(),
+            height: patch_safe_height + 2 * fade_size.height,
+        };
+
+        // let num_patches: i64 = 1;
+        for i in 0..num_patches {
+            let mut border_overlay_patch = border.inner.clone();
+            border_overlay_patch.crop_to_fit(patch_size, CropMode::Center);
+            // let fade_size
+            let axis = imageops::Axis::Y;
+            border_overlay_patch.fade_out(fade_size, Point::origin(), axis);
+            border_overlay_patch.fade_out(
+                Point::from(patch_size) - Point::from(fade_size),
+                patch_size,
+                axis,
+            );
+            // .fade_out(, fade_size);
+            // Size { width: patch_size.width, height: );
+            let mut patch_top_left = top_patch.bottom_left()
+                + Point {
+                    x: 0,
+                    y: i * patch_safe_height as i64 - fade_height as i64,
+                };
+            new_border.overlay(border_overlay_patch.as_ref(), patch_top_left);
+        }
+
+        // let fill_height = fill_size.size().height + 2 * overlay_patch.size().height * fade_frac
+        // let num_overlays = fill_height as f64 / overlay_patch
+
+        // for i in (start..=end).step_by(step_size) {
+        // let start_y = fill_size.top_left().y;
+        // let end_y = fill_size.bottom_left().y;
+        // for y in (start_y..=end_y).step_by(step_size) {
+
+        // let fade_transition_direction = if photo_is_portrait {
+        //     imageops::Direction::Vertical
+        // } else {
+        //     imageops::Direction::Horizontal
+        // };
+        // let fade_width = (0.05 * fit_height as f32) as u32;
+        // let fb_useable_frac = 0.75;
+
+        // // top border
+        // let mut top_fb = fb.clone();
+        // let top_fb_crop = Size {
+        //     width: if photo_is_portrait {
+        //         fb.width()
+        //     } else {
+        //         min(
+        //             (fb_useable_frac * photo.width() as f32) as u32,
+        //             (fb_useable_frac * fb.width() as f32) as u32,
+        //         )
+        //     },
+        //     height: if photo_is_portrait {
+        //         min(
+        //             (fb_useable_frac * photo.height() as f32) as u32,
+        //             (fb_useable_frac * fb.height() as f32) as u32,
+        //         )
+        //     } else {
+        //         fb.height()
+        //     },
+        // };
+
+        let mut new_border = Self::from_image(new_border, border.options)?;
+
+        // match orientation to target content size
+        new_border.rotate_to_orientation(content_size.orientation())?;
+        Ok(new_border)
+
+        // Ok(Self {
+        //     inner: img::Image,
+        //     options: border.options,
+        //     transparent_components,
+        // })
     }
 
     #[inline]
@@ -349,7 +562,7 @@ impl Border {
     }
 
     #[inline]
-    pub fn rotate_to_orientation(&mut self, orientation: img::Orientation) -> Result<(), Error> {
+    pub fn rotate_to_orientation(&mut self, orientation: Orientation) -> Result<(), Error> {
         if self.inner.orientation() != orientation {
             self.rotate(Rotation::Rotate90)?;
         }
@@ -357,28 +570,40 @@ impl Border {
     }
 
     #[inline]
-    pub fn content_size(&self) -> Size {
-        self.transparent_components.first().unwrap().size()
+    pub fn content_rect(&self) -> &Rect {
+        self.transparent_components.first().unwrap()
     }
 
     #[inline]
-    pub fn size_for(&self, content: Size) -> Size {
+    pub fn content_size(&self) -> Size {
+        self.content_rect().size()
+        // self.transparent_components.first().unwrap().size()
+    }
+
+    #[inline]
+    pub fn size_for<S: Into<OutputSize>>(&self, content: S) -> Size {
         let content_size = self.content_size();
         let border_size = self.inner.size();
         // crate::debug!(&self.inner.size());
         // crate::debug!(&content_size);
         // crate::debug!(&content);
 
-        let scale = content_size.scale_factor(content, ResizeMode::Cover);
-        crate::debug!(
-            // "scale {} image by {} to fit {} border content size {}",
-            "scale {} border with content size {} to fit {} image (scale factor {})",
-            border_size,
-            content_size,
-            content,
-            &scale.0,
-        );
-        self.size().scale_by::<_, Round>(scale.0)
+        let new_content_size = content_size.scale_to_bounds(content.into(), ResizeMode::Cover);
+        let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
+
+        // content_size
+        // let content: OutputSize = content.into();
+        // let content: Size = content.into();
+        // let scale_factor = content_size.scale_factor(content, ResizeMode::Cover);
+        // crate::debug!(
+        //     // "scale {} image by {} to fit {} border content size {}",
+        //     "scale {} border with content size {} to fit {:?} (scale factor {})",
+        //     border_size,
+        //     content_size,
+        //     content,
+        //     &scale_factor.0,
+        // );
+        self.size().scale_by::<_, Round>(scale_factor.0)
     }
 
     #[inline]
@@ -390,13 +615,27 @@ impl Border {
     pub fn size(&self) -> Size {
         self.inner.size()
     }
+
+    #[inline]
+    pub fn orientation(&self) -> Orientation {
+        self.size().orientation()
+    }
 }
 
-#[derive()]
 pub enum BorderSource {
     #[cfg(feature = "borders")]
     Builtin(borders::BuiltinBorder),
     Custom(Border),
+}
+
+impl std::fmt::Debug for BorderSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            #[cfg(feature = "borders")]
+            BorderSource::Builtin(builtin) => write!(f, "Builtin({:?})", builtin),
+            BorderSource::Custom(_) => write!(f, "Custom"),
+        }
+    }
 }
 
 impl BorderSource {
@@ -414,7 +653,7 @@ impl BorderSource {
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum Mode {
     FitImage,
-    ScaleBorder,
+    FitBorder,
 }
 
 impl Default for Mode {
@@ -431,8 +670,8 @@ impl std::str::FromStr for Mode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_ascii_lowercase();
         match s.as_str() {
-            "fit" => Ok(Mode::FitImage),
-            "scale" => Ok(Mode::ScaleBorder),
+            "image" => Ok(Mode::FitImage),
+            "border" => Ok(Mode::FitBorder),
             _ => Err(ParseEnumError::Unknown(s.to_string())),
         }
     }
@@ -695,12 +934,48 @@ impl Size {
         }
     }
 
+    #[inline]
     pub fn min_dim(&self) -> u32 {
         min(self.width, self.height)
     }
 
+    #[inline]
     pub fn aspect_ratio(&self) -> f64 {
         self.width as f64 / self.height as f64
+    }
+
+    #[inline]
+    pub fn is_portrait(&self) -> bool {
+        self.orientation() == Orientation::Portrait
+    }
+
+    #[inline]
+    pub fn orientation(&self) -> Orientation {
+        if self.width <= self.height {
+            Orientation::Portrait
+        } else {
+            Orientation::Landscape
+        }
+    }
+
+    #[inline]
+    pub fn rotate(self, angle: Rotation) -> Self {
+        match angle {
+            Rotation::Rotate0 | Rotation::Rotate180 => self,
+            Rotation::Rotate90 | Rotation::Rotate270 => Self {
+                width: self.height,
+                height: self.width,
+            },
+        }
+    }
+
+    #[inline]
+    pub fn rotate_to_orientation(self, orientation: Orientation) -> Size {
+        self.rotate(if self.orientation() != orientation {
+            Rotation::Rotate90
+        } else {
+            Rotation::Rotate0
+        })
     }
 
     pub fn center(self, size: Self) -> Rect {
@@ -1252,6 +1527,13 @@ impl Point {
         // rot.rotate_point(point).into()
     }
 
+    pub fn abs(self) -> Self {
+        Self {
+            x: self.x.abs(),
+            y: self.y.abs(),
+        }
+    }
+
     // pub fn rotate(self, rotation: Rotation) -> Self {
     //     let point: cgmath::Point2<f64> = self.into();
     //     let rot: cgmath::Basis2<f64> = rotation.into();
@@ -1469,7 +1751,7 @@ impl std::str::FromStr for Rotation {
 mod tests {
     use super::{Border, BorderOptions, Color, Point, Rect, Rotation};
     use crate::error::{BorderError, Error};
-    use crate::{imageops, img};
+    use crate::img;
     use anyhow::Result;
     use std::path::{Path, PathBuf};
 
@@ -1518,7 +1800,8 @@ mod tests {
                 x: c.right,
             };
             let size = bottom_right - top_left;
-            imageops::fill_rect(&mut border, &red, top_left, size);
+            border.fill_rect(&red, top_left, size);
+            // imageops::fill_rect(&mut border, &red, top_left, size);
         }
         border.save(Some(&output), None)?;
         Ok(())

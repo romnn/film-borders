@@ -33,12 +33,12 @@ film-borders apply --help
 ```
 
 #### TODO
-- make border optional
-- update the website
 - implement scale border mode (not sophisticated)
+- update the website
 - add some more tests
 
 #### Done
+- make border optional
 - allow custom border images (cli, lib and web)
 - make nice ui components
 - custom background color

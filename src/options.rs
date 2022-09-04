@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 pub struct Options {
     pub output_size: types::OutputSize,
     pub output_size_bounds: types::OutputSize,
-    // pub scale_factor: f32,
+    pub scale_factor: f32,
     pub margin: f32,
     pub mode: types::Mode,
     pub crop: Option<types::SidesPercent>,
@@ -33,7 +33,7 @@ impl Default for Options {
             output_size: types::OutputSize::default(),
             output_size_bounds: types::OutputSize::default(),
             margin: 0.0,
-            // scale_factor: 1.0,
+            scale_factor: 1.0,
             mode: types::Mode::default(),
             crop: None,
             frame_width: types::SidesPercent::default(),

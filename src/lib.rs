@@ -53,16 +53,9 @@ impl ImageBorders {
 
     pub fn add_border(
         &mut self,
-        border_src: BorderSource,
+        border: Option<BorderSource>,
         options: &Options,
     ) -> Result<img::Image, Error> {
-        let mut border = border_src.into_border()?;
-
-        // let scale_factor = utils::clamp(options.scale_factor, 0.05, 1.0);
-        // let margin_factor = utils::clamp(options.margin, 0.0, 0.5);
-        let margin_factor = options.margin.max(0.0);
-        crate::debug!(&margin_factor);
-
         // prepare images
         let mut images: Vec<img::Image> = self.images.clone();
         let primary = images.get_mut(0).ok_or(Error::MissingImage)?;
@@ -71,29 +64,40 @@ impl ImageBorders {
         }
         if let Some(crop_percent) = options.crop {
             let crop = crop_percent * primary.size();
-            primary.crop(crop);
+            primary.crop_sides(crop);
         };
 
-        // prepare the border for the primary image
-        border.rotate_to_orientation(primary.orientation())?;
+        // border.map(BorderSource::into_border); // ()?;
 
-        let original_content_size = match options.mode {
-            Mode::FitImage => {
-                let border_size = border.size_for(primary.size());
-                border_size
+        // prepare the border for the primary image
+        let mut border = match border {
+            Some(border) => {
+                let mut border = border.into_border()?;
+                border.rotate_to_orientation(primary.orientation())?;
+                Some(border)
             }
-            Mode::ScaleBorder => {
-                let comps = border.transparent_components().len();
-                if comps != 1 {
-                    Err(error::BorderError::Invalid(format!(
-                        "{:?} only supports ingle transparent area, found {}",
-                        options.mode, comps
-                    )))?;
+            None => None,
+        };
+
+        // let default_padding = 3;
+        let original_content_size = match border {
+            Some(ref mut border) => match options.mode {
+                Mode::FitImage => {
+                    let border_size = border.size_for(primary.size());
+                    border_size
                 }
-                let comp = border.transparent_components().first().unwrap();
-                let border_padding = border.size() - comp.size();
-                primary.size() + border_padding
-            }
+                Mode::FitBorder => {
+                    // create a new custom border
+                    let mut test = Border::new(border.clone(), primary.size(), None)?;
+                    *border = test;
+                    // border = test;
+                    border.size()
+                    // let padding = min(default_padding, p
+                    // let border_padding = border.size() - comp.size();
+                    // primary.size() + border_padding
+                }
+            },
+            None => primary.size(),
         };
         crate::debug!("image with border size: {}", &original_content_size);
         // .min(options.output_size_bounds);
@@ -105,12 +109,17 @@ impl ImageBorders {
         // let frame_width = 10; // options.frame_width * base;
         // let margin = 20; // ((1.0 - scale_factor) * base as f32) as u32;
         // crate::debug!(&options.output_size);
+
+        let scale_factor = utils::clamp(options.scale_factor, 0.0, 1.0);
+        let margin_factor = options.margin.max(0.0);
+
         let base = original_content_size.min_dim();
         let frame_width: Sides = options.frame_width * base;
         let margin: Sides = Sides::uniform((margin_factor * base as f32) as u32);
-        let content_size = original_content_size + frame_width + margin;
+        let mut content_size = original_content_size + frame_width + margin;
+        // content_size = content_size * scale_factor;
 
-        let default_output_size = content_size;
+        let default_output_size = content_size * (1.0 / scale_factor);
 
         // set output size and do not keep aspect ratio
         let output_size =
@@ -170,7 +179,7 @@ impl ImageBorders {
         // let content_size = content_size + frame_width + margin;
 
         let new_content_size = content_size.scale_to(
-            output_size, //  - frame_width - margin,
+            output_size * scale_factor, //  - frame_width - margin,
             types::ResizeMode::Contain,
         );
         // let scale = new_content_size.min_dim() / content_size.min_dim();
@@ -233,12 +242,13 @@ impl ImageBorders {
         // return Ok(result_image);
         // todo!();
 
+        let border_rect = content_rect - margin - frame_width;
+
         crate::debug!("overlay content now");
         match options.mode {
             Mode::FitImage => {
                 // let frame_width = 10;
                 // let border_rect = content_rect - Sides::uniform(frame_width); // .into();
-                let border_rect = content_rect - margin - frame_width;
                 // Sides::uniform(frame_width); // .into();
                 crate::debug!(&content_rect);
                 crate::debug!(&frame_width);
@@ -250,19 +260,31 @@ impl ImageBorders {
                 // crate::debug!(&border.size());
                 // crate::debug!(&border_top_left);
                 // border.resize_to_fit(border_size, types::ResizeMode::Contain)?;
-                border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
+                // if let Some(ref mut border) = border {
+                //     border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
+                // }
 
-                let default_image = primary.clone();
-                images.resize(border.transparent_components().len(), default_image);
-                let components = border
-                    .transparent_components()
-                    .iter()
-                    .zip(images.iter_mut());
+                let default_component = vec![border_rect];
+                let mut components = match border {
+                    Some(ref mut border) => {
+                        border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
+
+                        let default_image = primary.clone();
+                        images.resize(border.transparent_components().len(), default_image);
+                        border
+                            .transparent_components()
+                            // .to_vec()
+                            // .into_iter()
+                            .iter()
+                            .zip(images.iter_mut())
+                    }
+                    None => default_component.iter().zip(images.iter_mut()),
+                };
 
                 for (c, image) in components {
                     crate::debug!("drawing {:?}", &c);
-                    crate::debug!(&c.size());
-                    crate::debug!(&c.top_left());
+                    // crate::debug!(&c.size());
+                    // crate::debug!(&c.top_left());
                     let mut image_rect = *c + border_rect.top_left();
                     image_rect = image_rect.extend(3);
                     image_rect = image_rect.clip_to(&border_rect);
@@ -287,19 +309,37 @@ impl ImageBorders {
                 // THIS IS ONLY VALID FOR ZERO FRAME
                 // crate::debug!(border_rect.top_left() == content_rect.top_left());
                 // crate::debug!(border.size() == content_rect.size());
-                result_image.overlay(border.as_ref(), border_rect.top_left());
+                if let Some(border) = border {
+                    result_image.overlay(border.as_ref(), border_rect.top_left());
+                }
             }
-            Mode::ScaleBorder => {
+            Mode::FitBorder => {
                 // let (c, image) = components.next().ok_or(Error::MissingImage)?;
                 // let primary_size = border.size_for(primary.size());
-                // let c = border
-                //     .transparent_components()
-                //     .first()
-                //     .ok_or(Error::MissingImage)?;
-                // let primary =
-                // crate::debug!("drawing {:?}", &c);
-                // draw the image in full size
-                todo!();
+                let c = match border {
+                    Some(ref mut border) => {
+                        border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
+                        border.content_rect()
+                    }
+                    None => &border_rect,
+                };
+
+                let mut image_rect = *c + border_rect.top_left();
+                image_rect = image_rect.extend(3);
+                image_rect = image_rect.clip_to(&border_rect);
+
+                primary.resize_to_fit(
+                    image_rect.size(),
+                    types::ResizeMode::Cover,
+                    types::CropMode::Center,
+                    // crop_mode,
+                    // types::CropMode::Right,
+                );
+
+                result_image.overlay(primary.as_ref(), image_rect.top_left());
+                if let Some(border) = border {
+                    result_image.overlay(border.as_ref(), border_rect.top_left());
+                }
             }
         };
 

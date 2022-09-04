@@ -11,13 +11,13 @@ pub enum Error {
     #[error("missing output path")]
     MissingOutputFile,
 
-    #[error("image error: `{0}`")]
+    #[error("image error: {0}")]
     Image(#[from] image::error::ImageError),
 
-    #[error("border error: `{0}`")]
+    #[error("border error: {0}")]
     Border(#[from] BorderError),
 
-    #[error("io error: `{0}`")]
+    #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
 
