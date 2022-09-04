@@ -1,4 +1,3 @@
-use super::types;
 use num::traits::Float;
 
 pub fn opt_min<T>(v: Option<T>, min: Option<T>) -> Option<T>

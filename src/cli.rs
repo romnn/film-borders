@@ -150,7 +150,7 @@ fn main() {
                                 width: cfg.max_output_width,
                                 height: cfg.max_output_height,
                             },
-                            mode: cfg.mode.unwrap_or(types::Mode::default()),
+                            mode: cfg.mode.unwrap_or_default(),
                             crop: Some(types::SidesPercent {
                                 top: cfg.crop_top.unwrap_or(0.0),
                                 right: cfg.crop_right.unwrap_or(0.0),
@@ -164,7 +164,7 @@ fn main() {
                             ),
                             rotate_angle: Some(cfg.rotation.unwrap_or(types::Rotation::Rotate0)),
                             background_color: cfg.background_color,
-                            frame_color: cfg.frame_color.unwrap_or(types::Color::black()),
+                            frame_color: cfg.frame_color.unwrap_or_else(types::Color::black),
 
                             preview: cfg.preview,
                         };

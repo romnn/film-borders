@@ -1,14 +1,13 @@
-use crate::defaults;
-use crate::imageops;
-use crate::types;
-use crate::utils::{Ceil, Floor, Round, RoundingMode};
-use crate::Error;
+use super::defaults;
+pub use super::imageops::*;
+use super::types;
+use super::Error;
 use image::{
     codecs, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageFormat,
     ImageOutputFormat, RgbaImage,
 };
 
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
@@ -87,7 +86,7 @@ impl Image {
         S: Into<types::Size>,
         C: Into<image::Rgba<u8>>,
     {
-        imageops::fill_rect(self, color.into(), top_left.into(), size.into());
+        fill_rect(self, color.into(), top_left.into(), size.into());
     }
 
     pub fn resize_to_fit<S>(
@@ -104,12 +103,12 @@ impl Image {
     }
 
     #[inline]
-    pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: imageops::Axis)
+    pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: Axis)
     where
         P1: Into<types::Point>,
         P2: Into<types::Point>,
     {
-        imageops::fade_out(self, top_left.into(), bottom_right.into(), axis);
+        fade_out(self, top_left.into(), bottom_right.into(), axis);
     }
 
     pub fn resize<S>(&mut self, size: S, mode: types::ResizeMode)
@@ -120,7 +119,7 @@ impl Image {
         let start = chrono::Utc::now().time();
 
         let size = self.size().scale_to(size.into(), mode);
-        self.inner = imageops::resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
+        self.inner = resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
 
         #[cfg(debug_assertions)]
         crate::debug!(
@@ -139,18 +138,18 @@ impl Image {
         self.crop_sides(crop);
     }
 
-    pub fn overlay<O, P>(&mut self, overlay: &O, offset: P)
+    pub fn overlay<O, P>(&mut self, overlay_image: &O, offset: P)
     where
         O: image::GenericImageView<Pixel = image::Rgba<u8>>,
         P: Into<types::Point>,
     {
         let offset: types::Point = offset.into();
-        imageops::overlay(&mut self.inner, overlay, offset.x, offset.y);
+        overlay(&mut self.inner, overlay_image, offset.x, offset.y);
     }
 
     pub fn crop(&mut self, top_left: types::Point, bottom_right: types::Point) {
         let cropped_size: types::Size = (bottom_right - top_left).into();
-        self.inner = imageops::crop(
+        self.inner = crop(
             &mut self.inner,
             max(0, top_left.x) as u32,
             max(0, top_left.y) as u32,
@@ -160,12 +159,12 @@ impl Image {
         .to_image();
     }
 
-    pub fn crop_sides(&mut self, crop: types::Sides) {
-        let cropped_size = self.size() - crop;
-        self.inner = imageops::crop(
+    pub fn crop_sides(&mut self, crop_sides: types::Sides) {
+        let cropped_size = self.size() - crop_sides;
+        self.inner = crop(
             &mut self.inner,
-            crop.left,
-            crop.top,
+            crop_sides.left,
+            crop_sides.top,
             cropped_size.width,
             cropped_size.height,
         )
@@ -175,9 +174,9 @@ impl Image {
     pub fn rotate(&mut self, angle: types::Rotation) {
         if let Some(rotated) = match angle {
             types::Rotation::Rotate0 => None,
-            types::Rotation::Rotate90 => Some(imageops::rotate90(&self.inner)),
-            types::Rotation::Rotate180 => Some(imageops::rotate180(&self.inner)),
-            types::Rotation::Rotate270 => Some(imageops::rotate270(&self.inner)),
+            types::Rotation::Rotate90 => Some(rotate90(&self.inner)),
+            types::Rotation::Rotate180 => Some(rotate180(&self.inner)),
+            types::Rotation::Rotate270 => Some(rotate270(&self.inner)),
         } {
             self.inner = rotated;
         }
@@ -188,7 +187,7 @@ impl Image {
         let path = path
             .as_ref()
             .map(|p| p.as_ref())
-            .or(default_output.as_ref().map(|p| p.as_path()))
+            .or(default_output.as_deref())
             .ok_or(Error::MissingOutputFile)?;
 
         let format = ImageFormat::from_path(&path)?;

@@ -2,7 +2,7 @@ use crate::img;
 use crate::types;
 use crate::utils;
 pub use image::imageops::*;
-use image::{Pixel, Rgba, RgbaImage};
+use image::{Pixel, Rgba};
 use std::cmp::{max, min};
 
 #[inline]
@@ -41,7 +41,7 @@ pub fn find_transparent_components(
                     // merge components
                     // this will remove updated component as well
                     components.retain(|other| {
-                        if updated.intersects(&other, 0) || other.intersects(&updated, 0) {
+                        if updated.intersects(other, 0) || other.intersects(&updated, 0) {
                             updated.extend_to(other.top_left());
                             updated.extend_to(other.bottom_right());
                             false

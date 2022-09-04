@@ -17,11 +17,6 @@ pub use img::Image;
 pub use options::*;
 pub use types::*;
 
-use approx;
-#[cfg(debug_assertions)]
-use chrono::Utc;
-use image::{DynamicImage, Rgba, RgbaImage};
-use std::cmp::{max, min};
 use std::path::Path;
 
 pub struct ImageBorders {
@@ -79,10 +74,7 @@ impl ImageBorders {
 
         let original_content_size = match border {
             Some(ref mut border) => match options.mode {
-                Mode::FitImage => {
-                    let border_size = border.size_for(primary.size());
-                    border_size
-                }
+                Mode::FitImage => border.size_for(primary.size()),
                 Mode::FitBorder => {
                     // create a new custom border
                     *border = Border::new(border.clone(), primary.size(), None)?;
@@ -132,15 +124,13 @@ impl ImageBorders {
         crate::debug!(&content_rect);
 
         #[cfg(debug_assertions)]
-        imageops::fill_rect(
-            &mut result_image,
+        result_image.fill_rect(
             types::Color::rgba(0, 0, 255, 100),
             content_rect.top_left(),
             content_rect.size(),
         );
 
-        imageops::fill_rect(
-            &mut result_image,
+        result_image.fill_rect(
             options.frame_color,
             (content_rect - margin).top_left(),
             (content_rect - margin).size(),
@@ -153,7 +143,7 @@ impl ImageBorders {
         match options.mode {
             Mode::FitImage => {
                 let default_component = vec![border_rect];
-                let mut components = match border {
+                let components = match border {
                     Some(ref mut border) => {
                         border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
 

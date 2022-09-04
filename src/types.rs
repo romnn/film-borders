@@ -1,9 +1,9 @@
 #[cfg(feature = "borders")]
 use super::borders;
 use super::error::{BorderError, ColorError, ParseEnumError};
-use super::utils::{Ceil, Floor, Round, RoundingMode};
+use super::utils::{Ceil, Round, RoundingMode};
 use super::{imageops, img, utils, Error};
-use num::traits::{Float, NumCast};
+use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
@@ -268,15 +268,16 @@ impl Border {
     ) -> Result<Self, Error> {
         let comps = border.transparent_components().len();
         if comps != 1 {
-            Err(BorderError::Invalid(format!(
+            return Err(BorderError::Invalid(format!(
                 "border must only have one transparent area, found {}",
                 comps
-            )))?;
+            ))
+            .into());
         }
         // by default, use the longer dimension to stich
-        let stich_direction = stich_direction.unwrap_or(border.orientation());
-        border.rotate_to_orientation(Orientation::Portrait)?;
-        let target_content_size = content_size.rotate_to_orientation(Orientation::Portrait);
+        let stich_direction = stich_direction.unwrap_or(Orientation::Portrait);
+        border.rotate_to_orientation(stich_direction)?;
+        let target_content_size = content_size.rotate_to_orientation(stich_direction);
         crate::debug!(&border.size());
         crate::debug!(&target_content_size);
 
@@ -290,7 +291,7 @@ impl Border {
 
         // todo: find optimal overlay patches somehow
         let top_patch = Rect {
-            top: 0 as i64,
+            top: 0,
             bottom: (0.25 * border_size.height as f32) as i64,
             left: 0,
             right: border_size.width as i64,
@@ -353,14 +354,14 @@ impl Border {
         for i in 0..num_patches {
             let mut border_overlay_patch = border.inner.clone();
             border_overlay_patch.crop_to_fit(patch_size, CropMode::Center);
-            let axis = imageops::Axis::Y;
+            let axis = img::Axis::Y;
             border_overlay_patch.fade_out(fade_size, Point::origin(), axis);
             border_overlay_patch.fade_out(
                 Point::from(patch_size) - Point::from(fade_size),
                 patch_size,
                 axis,
             );
-            let mut patch_top_left = top_patch.bottom_left()
+            let patch_top_left = top_patch.bottom_left()
                 + Point {
                     x: 0,
                     y: i * patch_safe_height as i64 - fade_height as i64,
@@ -380,7 +381,7 @@ impl Border {
         &mut self,
         options: Option<BorderOptions>,
     ) -> Result<(), BorderError> {
-        let options = options.unwrap_or(Default::default());
+        let options = options.unwrap_or_default();
         self.transparent_components = imageops::find_transparent_components(
             &self.inner,
             options.alpha_threshold,
@@ -444,8 +445,6 @@ impl Border {
     #[inline]
     pub fn size_for<S: Into<OutputSize>>(&self, content: S) -> Size {
         let content_size = self.content_size();
-        let border_size = self.inner.size();
-
         let new_content_size = content_size.scale_to_bounds(content.into(), ResizeMode::Cover);
         let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
         self.size().scale_by::<_, Round>(scale_factor.0)
@@ -571,7 +570,7 @@ fn hex_to_color(hex: &str) -> Result<Color, ColorError> {
     let hex = hex.to_ascii_lowercase();
     let components = HEX_REGEX
         .captures(&hex)
-        .ok_or(ColorError::InvalidHex(hex.to_owned()))?;
+        .ok_or_else(|| ColorError::InvalidHex(hex.to_owned()))?;
     let r = from_hex!(components.name("r"))?;
     let g = from_hex!(components.name("g"))?;
     let b = from_hex!(components.name("b"))?;
@@ -615,9 +614,9 @@ impl Color {
     }
 }
 
-impl Into<image::Rgba<u8>> for Color {
-    fn into(self) -> image::Rgba<u8> {
-        image::Rgba(self.rgba)
+impl From<Color> for image::Rgba<u8> {
+    fn from(color: Color) -> image::Rgba<u8> {
+        image::Rgba(color.rgba)
     }
 }
 
@@ -1125,11 +1124,17 @@ impl From<Size> for Point {
 impl Point {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Point::origin()
+        Point::default()
     }
 
     pub fn origin() -> Self {
         Self { x: 0, y: 0 }
+    }
+}
+
+impl Default for Point {
+    fn default() -> Self {
+        Self::origin()
     }
 }
 
@@ -1396,7 +1401,6 @@ mod tests {
             };
             let size = bottom_right - top_left;
             border.fill_rect(red, top_left, size);
-            // imageops::fill_rect(&mut border, &red, top_left, size);
         }
         border.save(Some(&output), None)?;
         Ok(())
@@ -1449,7 +1453,6 @@ mod tests {
     fn test_transparent_areas_3_rotate() -> Result<()> {
         let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
         let border_file = repo.join("samples/borders/border_3_areas_vertical.png");
-        let options = BorderOptions::default();
         let options = BorderOptions {
             transparent_component_threshold: 8,
             alpha_threshold: 0.95,
@@ -1464,7 +1467,7 @@ mod tests {
             Rotation::Rotate270,
         ] {
             let mut rotated = border.clone();
-            rotated.rotate(rotation);
+            rotated.rotate(rotation)?;
             let output = repo.join(format!(
                 "testing/border_3_areas_vertical_{:?}.png",
                 rotation
