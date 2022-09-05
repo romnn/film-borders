@@ -165,8 +165,8 @@ fn main() {
                             frame_width: types::SidesPercent::uniform(
                                 cfg.frame_width.unwrap_or(0.01),
                             ),
-                            image_rotation: cfg.image_rotation,
-                            border_rotation: cfg.border_rotation,
+                            image_rotation: cfg.image_rotation.unwrap_or_default(),
+                            border_rotation: cfg.border_rotation.unwrap_or_default(),
                             background_color: cfg.background_color,
                             frame_color: cfg.frame_color.unwrap_or_else(types::Color::black),
 

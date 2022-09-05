@@ -91,6 +91,7 @@ def install_wasm_pack(c):
 @task
 def clean_wasm(c):
     """Clean up generated wasm files"""
+    shutil.rmtree(ROOT_DIR / "www/node_modules/filmborders", ignore_errors=True)
     shutil.rmtree(ROOT_DIR / "pkg/", ignore_errors=True)
     shutil.rmtree(WWW_PUBLIC_WASM_DIR, ignore_errors=True)
 

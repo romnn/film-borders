@@ -55,9 +55,7 @@ impl ImageBorders {
         // prepare images
         let mut images: Vec<img::Image> = self.images.clone();
         let primary = images.get_mut(0).ok_or(Error::MissingImage)?;
-        if let Some(rotation) = options.image_rotation {
-            primary.rotate(rotation);
-        }
+        primary.rotate(options.image_rotation);
         if let Some(crop_percent) = options.crop {
             let crop = crop_percent * primary.size();
             primary.crop_sides(crop);
@@ -68,9 +66,7 @@ impl ImageBorders {
             Some(border) => {
                 let mut border = border.into_border()?;
                 border.rotate_to_orientation(primary.orientation())?;
-                if let Some(rotation) = options.border_rotation {
-                    border.rotate(rotation)?;
-                }
+                border.rotate(options.border_rotation)?;
                 Some(border)
             }
             None => None,

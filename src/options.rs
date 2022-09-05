@@ -1,37 +1,37 @@
-use crate::types;
+use super::types::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Options {
-    pub output_size: types::OutputSize,
-    pub output_size_bounds: types::OutputSize,
+    pub output_size: OutputSize,
+    pub output_size_bounds: OutputSize,
     pub scale_factor: f32,
     pub margin: f32,
-    pub mode: types::Mode,
-    pub crop: Option<types::SidesPercent>,
-    pub frame_width: types::SidesPercent,
-    pub image_rotation: Option<types::Rotation>,
-    pub border_rotation: Option<types::Rotation>,
-    pub frame_color: types::Color,
-    pub background_color: Option<types::Color>,
+    pub mode: Mode,
+    pub crop: Option<SidesPercent>,
+    pub frame_width: SidesPercent,
+    pub image_rotation: Rotation,
+    pub border_rotation: Rotation,
+    pub frame_color: Color,
+    pub background_color: Option<Color>,
     pub preview: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            output_size: types::OutputSize::default(),
-            output_size_bounds: types::OutputSize::default(),
+            output_size: OutputSize::default(),
+            output_size_bounds: OutputSize::default(),
             margin: 0.0,
             scale_factor: 1.0,
-            mode: types::Mode::default(),
+            mode: Mode::default(),
             crop: None,
-            frame_width: types::SidesPercent::default(),
-            image_rotation: None,
-            border_rotation: None,
-            frame_color: types::Color::black(),
+            frame_width: SidesPercent::default(),
+            image_rotation: Rotation::default(),
+            border_rotation: Rotation::default(),
+            frame_color: Color::black(),
             background_color: None,
             preview: false,
         }

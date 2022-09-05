@@ -4,12 +4,12 @@ import { Oval } from "react-loader-spinner";
 import { Buffer } from "buffer";
 import init, {
   SidesPercent,
+  Mode,
   Options,
   OutputSize,
   Rotation,
   BuiltinBorder,
   Color,
-  WasmImageBorders,
 } from "filmborders";
 import "./App.sass";
 import hash from "object-hash";
@@ -20,6 +20,8 @@ type AppState = {
   rendering: boolean;
   exporting: boolean;
   filename?: string;
+  fitMode?: Mode;
+  fitModeName?: string;
   borderOverlay?: BuiltinBorder;
   borderOverlayName?: string;
   canvasScale: number;
@@ -29,6 +31,7 @@ type AppState = {
   frameColor: string;
   backgroundColor: string;
   scaleFactor: number;
+  preview: boolean;
   margin: number;
   cropTop?: number;
   cropRight?: number;
@@ -102,6 +105,8 @@ export default class App extends React.Component<AppProps, AppState> {
       rendering: false,
       exporting: false,
       filename: undefined,
+      fitMode: undefined,
+      fitModeName: undefined,
       borderOverlay: undefined,
       borderOverlayName: undefined,
       canvasScale: 0.0,
@@ -111,6 +116,7 @@ export default class App extends React.Component<AppProps, AppState> {
       frameColor: "#000000",
       backgroundColor: "#ffffff",
       scaleFactor: 1.0,
+      preview: false,
       margin: 0.1,
       cropTop: 0.0,
       cropRight: 0.0,
@@ -130,12 +136,15 @@ export default class App extends React.Component<AppProps, AppState> {
   setWasmDefaults = async () => {
     const borderOverlay = BuiltinBorder.Border120_1;
     const defaultRotation = Rotation.Rotate0;
+    const fitMode = Mode.FitImage;
 
     await this.setState({
       imageRotation: defaultRotation,
       imageRotationName: Rotation[defaultRotation],
       borderRotation: defaultRotation,
       borderRotationName: Rotation[defaultRotation],
+      fitMode,
+      fitModeName: Mode[fitMode],
       borderOverlay,
       borderOverlayName: BuiltinBorder[borderOverlay],
     });
@@ -182,6 +191,9 @@ export default class App extends React.Component<AppProps, AppState> {
     output_size.height = this.state.outputHeight;
     options.output_size = output_size;
 
+    // fit mode
+    options.mode = this.state.fitMode ?? Mode.FitImage;
+
     // frame color
     try {
       options.frame_color = new Color(this.state.frameColor);
@@ -199,7 +211,10 @@ export default class App extends React.Component<AppProps, AppState> {
     // scale factor
     options.scale_factor = this.state.scaleFactor ?? 1.0;
 
-    // scale factor
+    // preview
+    options.preview = this.state.preview;
+
+    // margin
     options.margin = this.state.margin ?? 0.0;
 
     // crop
@@ -235,6 +250,8 @@ export default class App extends React.Component<AppProps, AppState> {
       let config = {
         borderOverlay: this.state.borderOverlay,
         borderOverlayName: this.state.borderOverlayName,
+        fitMode: this.state.fitMode,
+        fitModeName: this.state.fitModeName,
         canvasScale: this.state.canvasScale,
         outputSizeName: this.state.outputSizeName,
         outputWidth: this.state.outputWidth,
@@ -242,6 +259,7 @@ export default class App extends React.Component<AppProps, AppState> {
         frameColor: this.state.frameColor,
         backgroundColor: this.state.backgroundColor,
         scaleFactor: this.state.scaleFactor,
+        preview: this.state.preview,
         margin: this.state.margin,
         cropTop: this.state.cropTop,
         cropRight: this.state.cropRight,
@@ -288,6 +306,7 @@ export default class App extends React.Component<AppProps, AppState> {
         previewCanvas.width,
         previewCanvas.height
       );
+      console.log(previewCanvas.width, previewCanvas.height);
 
       let borderData = null;
       if (this.state.borderOverlayName === "Custom") {
@@ -305,8 +324,8 @@ export default class App extends React.Component<AppProps, AppState> {
       size.width = canvas.width;
       size.height = canvas.height;
       options.output_size = size;
-      options.preview = true;
-      console.log(options);
+
+      // console.log(options);
       await this.worker.postMessage({
         borderName: this.state.borderOverlay,
         applyOptions: options.serialize(),
@@ -323,18 +342,40 @@ export default class App extends React.Component<AppProps, AppState> {
 
   exportHighRes = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     await this.setState({ exporting: true });
+
+    let borderCanvas = this.borderCanvas.current;
     let originalCanvas = this.originalCanvas.current;
     let resultCanvas = this.resultCanvas.current;
-    if (!resultCanvas || !originalCanvas) return;
+    if (!resultCanvas || !originalCanvas || !borderCanvas) return;
+
+    const borderCtx = borderCanvas.getContext("2d");
     const originalCtx = originalCanvas.getContext("2d");
     const resultCtx = resultCanvas.getContext("2d");
-    if (!resultCtx || !originalCtx) return;
+    if (!resultCtx || !originalCtx || !borderCtx) return;
+
     resultCanvas.width = this.state.outputWidth;
     resultCanvas.height = this.state.outputHeight;
     let renderID = uuidv4();
     console.time(renderID);
-    let imgData = WasmImageBorders.to_image_data(originalCanvas, originalCtx);
-    await this.worker.postMessage({ sourceImage: imgData });
+
+    let imageData = originalCtx.getImageData(
+      0,
+      0,
+      originalCanvas.width,
+      originalCanvas.height
+    );
+
+    let borderData = null;
+    if (this.state.borderOverlayName === "Custom") {
+      borderData = borderCtx.getImageData(
+        0,
+        0,
+        borderCanvas.width,
+        borderCanvas.height
+      );
+    }
+
+    await this.worker.postMessage({ imageData, borderData });
     let options = await this.getOptions();
     let size = new OutputSize();
     size.width = resultCanvas.width;
@@ -342,7 +383,9 @@ export default class App extends React.Component<AppProps, AppState> {
     options.output_size = size;
     options.preview = false;
 
+    // console.log(options);
     await this.worker.postMessage({
+      borderName: this.state.borderOverlay,
       applyOptions: options.serialize(),
       renderID,
       save: true,
@@ -552,6 +595,21 @@ export default class App extends React.Component<AppProps, AppState> {
     reader.readAsDataURL(files[0]);
   };
 
+  updateFitMode = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    let key = e.target.value as keyof typeof Mode;
+    if (key in Mode) {
+      await this.setState({
+        fitMode: Mode[key],
+        fitModeName: Mode[Mode[key]],
+      });
+    } else {
+      await this.setState({
+        fitMode: undefined,
+      });
+    }
+    await this.scheduleUpdate();
+  };
+
   updateBorderOverlay = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     let key = e.target.value as keyof typeof BuiltinBorder;
     if (key in BuiltinBorder) {
@@ -632,6 +690,11 @@ export default class App extends React.Component<AppProps, AppState> {
     await this.scheduleUpdate();
   };
 
+  updatePreview = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await this.setState({ preview: e.target.checked });
+    await this.scheduleUpdate();
+  };
+
   updateframeWidth = async (e: React.ChangeEvent<HTMLInputElement>) => {
     await this.setState({
       frameWidthTop: parseFloat(e.target.value),
@@ -696,6 +759,22 @@ export default class App extends React.Component<AppProps, AppState> {
                 accept="image/*"
               />
               <label htmlFor="imageInput">Photo</label>
+
+              <select
+                id="fitMode"
+                value={this.state.fitModeName}
+                disabled={this.state.exporting}
+                onChange={this.updateFitMode}
+              >
+                {Object.values(Mode)
+                  .filter((r) => typeof r == "string")
+                  .map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+              </select>
+              <label htmlFor="fitMode">Fit Mode</label>
 
               <select
                 id="borderOverlay"
@@ -889,6 +968,15 @@ export default class App extends React.Component<AppProps, AppState> {
                 onChange={this.updateCropLeft}
               />
               <label htmlFor="cropLeft">Crop left</label>
+
+              <input
+                id="preview"
+                type="checkbox"
+                disabled={this.state.exporting}
+                checked={this.state.preview}
+                onChange={this.updatePreview}
+              />
+              <label htmlFor="preview">insta visible</label>
 
               <button
                 disabled={this.state.rendering || this.state.exporting}

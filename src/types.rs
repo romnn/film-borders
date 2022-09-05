@@ -340,8 +340,11 @@ impl Border {
         new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
 
         // draw patches in between
-        let mut fill_height = new_border_size.height;
-        fill_height -= bottom_patch.size().height + top_patch.size().height;
+        let mut fill_height = new_border_size.height as i64;
+        fill_height -= bottom_patch.size().height as i64;
+        fill_height -= top_patch.size().height as i64;
+        let fill_height = max(1, fill_height) as u32;
+        crate::debug!(&fill_height);
 
         let fade_frac = 0.2f64;
         let fade_height = fade_frac * overlay_patch.height() as f64;
@@ -353,6 +356,7 @@ impl Border {
 
         let num_patches = fill_height as f64 / patch_safe_height as f64;
         let num_patches = num_patches.ceil() as i64;
+        assert!(num_patches > 0);
         crate::debug!(&num_patches);
 
         let patch_safe_height = fill_height as f64 / num_patches as f64;
@@ -459,7 +463,16 @@ impl Border {
         let target_content_size = target_content_size.into();
         crate::debug!(&content_size);
         crate::debug!(&target_content_size);
-        let new_content_size = content_size.scale_to_bounds(target_content_size, ResizeMode::Cover);
+
+        // scale down if larget than target content size
+        let new_content_size =
+            content_size.scale_to_bounds(target_content_size, ResizeMode::Contain);
+        crate::debug!(&new_content_size);
+
+        // scale up as little as possible to cover target content size
+        let new_content_size =
+            new_content_size.scale_to_bounds(target_content_size, ResizeMode::Cover);
+
         crate::debug!(&new_content_size);
         let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
         self.size().scale_by::<_, Round>(scale_factor.0)
@@ -1352,6 +1365,12 @@ pub enum Rotation {
     Rotate90,
     Rotate180,
     Rotate270,
+}
+
+impl Default for Rotation {
+    fn default() -> Self {
+        Self::Rotate0
+    }
 }
 
 impl std::str::FromStr for Rotation {
