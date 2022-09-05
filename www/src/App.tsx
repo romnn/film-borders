@@ -234,8 +234,8 @@ export default class App extends React.Component<AppProps, AppState> {
     options.frame_width = frameWidth;
 
     // rotation
-    options.image_rotation = this.state.imageRotation;
-    options.border_rotation = this.state.borderRotation;
+    options.image_rotation = this.state.imageRotation ?? Rotation.Rotate0;
+    options.border_rotation = this.state.borderRotation ?? Rotation.Rotate0;
     return options;
   };
 

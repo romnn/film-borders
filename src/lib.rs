@@ -252,7 +252,7 @@ mod tests {
             crop: Some(SidesPercent::uniform(0.05)),
             scale_factor: 0.95,
             frame_width: SidesPercent::uniform(0.02),
-            image_rotation: Some(Rotation::Rotate90),
+            image_rotation: Rotation::Rotate90,
             ..Default::default()
         };
     }
