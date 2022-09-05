@@ -1,8 +1,9 @@
 #[cfg(feature = "borders")]
 use super::borders;
-use super::error::{BorderError, ColorError, ParseEnumError};
+use super::error::*;
+use super::imageops::*;
 use super::utils::{Ceil, Round, RoundingMode};
-use super::{imageops, img, utils, Error};
+use super::{img, utils};
 use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -278,17 +279,15 @@ impl Border {
         let stich_direction = stich_direction.unwrap_or(Orientation::Portrait);
         border.rotate_to_orientation(stich_direction)?;
         let target_content_size = content_size.rotate_to_orientation(stich_direction);
-        crate::debug!(&border.size());
-        crate::debug!(&target_content_size);
-
-        // border is portrait now, we stich vertically
         let border_size = border.size_for(OutputSize {
             width: Some(target_content_size.width),
             height: None,
         });
-        border.rotate_to_orientation(Orientation::Portrait)?;
-        border.resize_to_fit(border_size, ResizeMode::Contain)?;
+        crate::debug!(&border_size);
+        border.resize_to_fit(border_size, ResizeMode::Cover)?;
+        crate::debug!(&border.content_size());
 
+        // border is portrait now, we stich vertically
         // todo: find optimal overlay patches somehow
         let top_patch = Rect {
             top: 0,
@@ -313,10 +312,20 @@ impl Border {
 
         // create buffer for the new border
         let border_padding = border_size - border.content_size();
-        crate::debug!(&border_padding);
         let new_border_size = target_content_size + border_padding;
         let mut new_border = img::Image::with_size(new_border_size);
         crate::debug!(&new_border.size());
+
+        #[cfg(debug_assertions)]
+        {
+            new_border.fill(Color::rgba(0, 100, 0, 255), FillMode::Set);
+            new_border.fill_rect(
+                Color::clear(),
+                border.content_rect().top_left(),
+                target_content_size,
+                FillMode::Set,
+            );
+        }
 
         // draw top patch
         let mut border_top = border.inner.clone();
@@ -330,7 +339,9 @@ impl Border {
             Point::from(new_border_size) - bottom_patch.size().into();
         new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
 
-        let fill_size = bottom_patch.top_right() - top_patch.bottom_left();
+        // draw patches in between
+        let mut fill_height = new_border_size.height;
+        fill_height -= bottom_patch.size().height + top_patch.size().height;
 
         let fade_frac = 0.2f64;
         let fade_height = fade_frac * overlay_patch.height() as f64;
@@ -340,11 +351,11 @@ impl Border {
         };
         let patch_safe_height = overlay_patch.height() - 2 * fade_size.height;
 
-        let num_patches = fill_size.y as f64 / patch_safe_height as f64;
+        let num_patches = fill_height as f64 / patch_safe_height as f64;
         let num_patches = num_patches.ceil() as i64;
         crate::debug!(&num_patches);
 
-        let patch_safe_height = fill_size.y as f64 / num_patches as f64;
+        let patch_safe_height = fill_height as f64 / num_patches as f64;
         let patch_safe_height = patch_safe_height.ceil() as u32;
         let patch_size = Size {
             width: overlay_patch.width(),
@@ -382,7 +393,7 @@ impl Border {
         options: Option<BorderOptions>,
     ) -> Result<(), BorderError> {
         let options = options.unwrap_or_default();
-        self.transparent_components = imageops::find_transparent_components(
+        self.transparent_components = find_transparent_components(
             &self.inner,
             options.alpha_threshold,
             options.transparent_component_threshold,
@@ -443,9 +454,13 @@ impl Border {
     }
 
     #[inline]
-    pub fn size_for<S: Into<OutputSize>>(&self, content: S) -> Size {
+    pub fn size_for<S: Into<OutputSize>>(&self, target_content_size: S) -> Size {
         let content_size = self.content_size();
-        let new_content_size = content_size.scale_to_bounds(content.into(), ResizeMode::Cover);
+        let target_content_size = target_content_size.into();
+        crate::debug!(&content_size);
+        crate::debug!(&target_content_size);
+        let new_content_size = content_size.scale_to_bounds(target_content_size, ResizeMode::Cover);
+        crate::debug!(&new_content_size);
         let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
         self.size().scale_by::<_, Round>(scale_factor.0)
     }
@@ -599,6 +614,10 @@ impl Color {
 
     pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { rgba: [r, g, b, a] }
+    }
+
+    pub fn clear() -> Self {
+        Self::rgba(0, 0, 0, 0)
     }
 
     pub fn black() -> Self {
@@ -825,7 +844,7 @@ impl Size {
                     width: self.width,
                     height,
                 },
-                ResizeMode::Contain,
+                mode,
             ),
             OutputSize {
                 width: Some(width),
@@ -835,7 +854,7 @@ impl Size {
                     width,
                     height: self.height,
                 },
-                ResizeMode::Contain,
+                mode,
             ),
             // all dimensions bounded
             OutputSize {
@@ -1030,7 +1049,11 @@ impl From<Point> for Size {
 impl Size {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Size::default()
+        Self::default()
+    }
+
+    pub fn wh(width: u32, height: u32) -> Self {
+        Self { width, height }
     }
 
     pub fn max(&self) -> u32 {
@@ -1349,9 +1372,10 @@ impl std::str::FromStr for Rotation {
 
 #[cfg(test)]
 mod tests {
-    use super::{Border, BorderOptions, Color, Point, Rect, Rotation};
-    use crate::error::{BorderError, Error};
+    use super::{Border, BorderOptions};
+    use crate::imageops::FillMode;
     use crate::img;
+    use crate::types::*;
     use anyhow::Result;
     use std::path::{Path, PathBuf};
 
@@ -1400,7 +1424,7 @@ mod tests {
                 x: c.right,
             };
             let size = bottom_right - top_left;
-            border.fill_rect(red, top_left, size);
+            border.fill_rect(red, top_left, size, FillMode::Blend);
         }
         border.save(Some(&output), None)?;
         Ok(())

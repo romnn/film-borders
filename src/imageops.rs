@@ -1,5 +1,5 @@
 use crate::img;
-use crate::types;
+use crate::types::*;
 use crate::utils;
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
@@ -10,8 +10,8 @@ pub fn find_transparent_components(
     image: &img::Image,
     alpha_threshold: f32,
     component_threshold: i64,
-) -> Vec<types::Rect> {
-    let mut components: Vec<types::Rect> = Vec::new();
+) -> Vec<Rect> {
+    let mut components: Vec<Rect> = Vec::new();
     let alpha_threshold: u8 = utils::clamp(alpha_threshold * 255.0, 0.0, 255.0) as u8;
     let (w, h) = image.inner.dimensions();
     for y in 0..h {
@@ -28,7 +28,7 @@ pub fn find_transparent_components(
                 if c.contains(x as i64, y as i64, component_threshold) {
                     // update component
                     updated = Some(*c);
-                    c.extend_to(types::Point {
+                    c.extend_to(Point {
                         x: x as i64,
                         y: y as i64,
                     });
@@ -52,7 +52,7 @@ pub fn find_transparent_components(
                     components.push(updated);
                 }
                 None => {
-                    components.push(types::Rect {
+                    components.push(Rect {
                         top: y as i64,
                         bottom: y as i64,
                         left: x as i64,
@@ -65,24 +65,34 @@ pub fn find_transparent_components(
     components
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum FillMode {
+    Blend,
+    Set,
+}
+
 #[inline]
-pub fn fill_rect<TL, S, C>(image: &mut img::Image, color: C, top_left: TL, size: S)
+pub fn fill_rect<TL, S, C>(image: &mut img::Image, color: C, top_left: TL, size: S, mode: FillMode)
 where
-    TL: Into<types::Point>,
-    S: Into<types::Size>,
+    TL: Into<Point>,
+    S: Into<Size>,
     C: Into<image::Rgba<u8>>,
 {
     let top_left = top_left.into();
     let color = color.into();
-    let top_left: types::Size = top_left.into();
+    let top_left: Size = top_left.into();
 
     let bottom_right = top_left + size.into();
-    let origin = types::Point::origin();
+    let origin = Point::origin();
     let bottom_right = bottom_right.clamp(origin, image.size());
 
     for x in top_left.width..bottom_right.width {
         for y in top_left.height..bottom_right.height {
-            image.inner.get_pixel_mut(x, y).blend(&color);
+            let p = image.inner.get_pixel_mut(x, y);
+            match mode {
+                FillMode::Blend => p.blend(&color),
+                FillMode::Set => *p = color,
+            }
         }
     }
 }
@@ -96,8 +106,8 @@ pub enum Axis {
 #[inline]
 pub fn fade_out<P1, P2>(image: &mut img::Image, start: P1, end: P2, axis: Axis)
 where
-    P1: Into<types::Point>,
-    P2: Into<types::Point>,
+    P1: Into<Point>,
+    P2: Into<Point>,
 {
     let start = start.into();
     let end = end.into();
@@ -108,7 +118,7 @@ where
     };
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
-    let rect = types::Rect::from_points(start, end);
+    let rect = Rect::from_points(start, end);
     let size = rect.size();
     let top_left = rect.top_left();
     let dx = max(0, top_left.x) as u32;

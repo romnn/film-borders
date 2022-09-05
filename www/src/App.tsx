@@ -3,13 +3,12 @@ import axios from "axios";
 import { Oval } from "react-loader-spinner";
 import { Buffer } from "buffer";
 import init, {
-  Crop,
+  SidesPercent,
   Options,
   OutputSize,
   Rotation,
   BuiltinBorder,
   Color,
-  Sides,
   WasmImageBorders,
 } from "filmborders";
 import "./App.sass";
@@ -27,22 +26,27 @@ type AppState = {
   outputSizeName: string;
   outputWidth: number;
   outputHeight: number;
+  frameColor: string;
   backgroundColor: string;
   scaleFactor: number;
+  margin: number;
   cropTop?: number;
   cropRight?: number;
   cropBottom?: number;
   cropLeft?: number;
-  borderWidthTop?: number;
-  borderWidthRight?: number;
-  borderWidthBottom?: number;
-  borderWidthLeft?: number;
-  rotationAngle?: Rotation;
-  rotationAngleName?: string;
+  frameWidthTop?: number;
+  frameWidthRight?: number;
+  frameWidthBottom?: number;
+  frameWidthLeft?: number;
+  imageRotation?: Rotation;
+  imageRotationName?: string;
+  borderRotation?: Rotation;
+  borderRotationName?: string;
 };
 
 const PREVIEW_MAX_RES = 250;
-const DEFAULT_BORDER_WIDTH = 10;
+const DEFAULT_BORDER_WIDTH = 0.02;
+
 const OUTPUT_SIZES_KEYS: string[] = [
   "Insta Portrait",
   "Insta Landscape",
@@ -104,28 +108,34 @@ export default class App extends React.Component<AppProps, AppState> {
       outputSizeName,
       outputWidth: size.width,
       outputHeight: size.height,
+      frameColor: "#000000",
       backgroundColor: "#ffffff",
-      scaleFactor: 0.95,
-      cropTop: 0,
-      cropRight: 0,
-      cropBottom: 0,
-      cropLeft: 0,
-      borderWidthTop: DEFAULT_BORDER_WIDTH,
-      borderWidthRight: DEFAULT_BORDER_WIDTH,
-      borderWidthBottom: DEFAULT_BORDER_WIDTH,
-      borderWidthLeft: DEFAULT_BORDER_WIDTH,
-      rotationAngle: undefined,
-      rotationAngleName: undefined,
+      scaleFactor: 1.0,
+      margin: 0.1,
+      cropTop: 0.0,
+      cropRight: 0.0,
+      cropBottom: 0.0,
+      cropLeft: 0.0,
+      frameWidthTop: DEFAULT_BORDER_WIDTH,
+      frameWidthRight: DEFAULT_BORDER_WIDTH,
+      frameWidthBottom: DEFAULT_BORDER_WIDTH,
+      frameWidthLeft: DEFAULT_BORDER_WIDTH,
+      imageRotation: undefined,
+      imageRotationName: undefined,
+      borderRotation: undefined,
+      borderRotationName: undefined,
     };
   }
 
   setWasmDefaults = async () => {
     const borderOverlay = BuiltinBorder.Border120_1;
-    const rotationAngle = Rotation.Rotate0;
+    const defaultRotation = Rotation.Rotate0;
 
     await this.setState({
-      rotationAngle,
-      rotationAngleName: Rotation[rotationAngle],
+      imageRotation: defaultRotation,
+      imageRotationName: Rotation[defaultRotation],
+      borderRotation: defaultRotation,
+      borderRotationName: Rotation[defaultRotation],
       borderOverlay,
       borderOverlayName: BuiltinBorder[borderOverlay],
     });
@@ -172,7 +182,14 @@ export default class App extends React.Component<AppProps, AppState> {
     output_size.height = this.state.outputHeight;
     options.output_size = output_size;
 
-    // background_color
+    // frame color
+    try {
+      options.frame_color = new Color(this.state.frameColor);
+    } catch (error) {
+      console.error(error);
+    }
+
+    // background color
     try {
       options.background_color = new Color(this.state.backgroundColor);
     } catch (error) {
@@ -182,24 +199,28 @@ export default class App extends React.Component<AppProps, AppState> {
     // scale factor
     options.scale_factor = this.state.scaleFactor ?? 1.0;
 
+    // scale factor
+    options.margin = this.state.margin ?? 0.0;
+
     // crop
-    let crop = new Crop();
-    crop.top = this.state.cropTop;
-    crop.right = this.state.cropRight;
-    crop.bottom = this.state.cropBottom;
-    crop.left = this.state.cropLeft;
+    let crop = new SidesPercent();
+    crop.top = this.state.cropTop ?? 0.0;
+    crop.right = this.state.cropRight ?? 0.0;
+    crop.bottom = this.state.cropBottom ?? 0.0;
+    crop.left = this.state.cropLeft ?? 0.0;
     options.crop = crop;
 
     // border width
-    let borderWidth = new Sides();
-    borderWidth.top = this.state.borderWidthTop ?? 0;
-    borderWidth.right = this.state.borderWidthRight ?? 0;
-    borderWidth.bottom = this.state.borderWidthBottom ?? 0;
-    borderWidth.left = this.state.borderWidthLeft ?? 0;
-    options.border_width = borderWidth;
+    let frameWidth = new SidesPercent();
+    frameWidth.top = this.state.frameWidthTop ?? 0.0;
+    frameWidth.right = this.state.frameWidthRight ?? 0.0;
+    frameWidth.bottom = this.state.frameWidthBottom ?? 0.0;
+    frameWidth.left = this.state.frameWidthLeft ?? 0.0;
+    options.frame_width = frameWidth;
 
-    // rotation angle
-    options.rotate_angle = this.state.rotationAngle;
+    // rotation
+    options.image_rotation = this.state.imageRotation;
+    options.border_rotation = this.state.borderRotation;
     return options;
   };
 
@@ -218,18 +239,22 @@ export default class App extends React.Component<AppProps, AppState> {
         outputSizeName: this.state.outputSizeName,
         outputWidth: this.state.outputWidth,
         outputHeight: this.state.outputHeight,
+        frameColor: this.state.frameColor,
         backgroundColor: this.state.backgroundColor,
         scaleFactor: this.state.scaleFactor,
+        margin: this.state.margin,
         cropTop: this.state.cropTop,
         cropRight: this.state.cropRight,
         cropBottom: this.state.cropBottom,
         cropLeft: this.state.cropLeft,
-        borderWidthTop: this.state.borderWidthTop,
-        borderWidthRight: this.state.borderWidthTop,
-        borderWidthBottom: this.state.borderWidthBottom,
-        borderWidthLeft: this.state.borderWidthLeft,
-        rotationAngleName: this.state.rotationAngleName,
-        rotationAngle: this.state.rotationAngle,
+        frameWidthTop: this.state.frameWidthTop,
+        frameWidthRight: this.state.frameWidthTop,
+        frameWidthBottom: this.state.frameWidthBottom,
+        frameWidthLeft: this.state.frameWidthLeft,
+        imageRotationName: this.state.imageRotationName,
+        imageRotation: this.state.imageRotation,
+        borderRotationName: this.state.borderRotationName,
+        borderRotation: this.state.borderRotation,
       };
 
       let configHash = hash(config, { algorithm: "md5", encoding: "base64" });
@@ -281,6 +306,7 @@ export default class App extends React.Component<AppProps, AppState> {
       size.height = canvas.height;
       options.output_size = size;
       options.preview = true;
+      console.log(options);
       await this.worker.postMessage({
         borderName: this.state.borderOverlay,
         applyOptions: options.serialize(),
@@ -310,7 +336,12 @@ export default class App extends React.Component<AppProps, AppState> {
     let imgData = WasmImageBorders.to_image_data(originalCanvas, originalCtx);
     await this.worker.postMessage({ sourceImage: imgData });
     let options = await this.getOptions();
+    let size = new OutputSize();
+    size.width = resultCanvas.width;
+    size.height = resultCanvas.height;
+    options.output_size = size;
     options.preview = false;
+
     await this.worker.postMessage({
       applyOptions: options.serialize(),
       renderID,
@@ -530,17 +561,27 @@ export default class App extends React.Component<AppProps, AppState> {
       });
     } else {
       await this.setState({
+        borderOverlay: undefined,
         borderOverlayName: key,
       });
     }
     await this.scheduleUpdate();
   };
 
-  updateRotationAngle = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+  updateBorderRotation = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     let key = e.target.value as keyof typeof Rotation;
     await this.setState({
-      rotationAngle: Rotation[key],
-      rotationAngleName: Rotation[Rotation[key]],
+      borderRotation: Rotation[key],
+      borderRotationName: Rotation[Rotation[key]],
+    });
+    await this.scheduleUpdate();
+  };
+
+  updateImageRotation = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    let key = e.target.value as keyof typeof Rotation;
+    await this.setState({
+      imageRotation: Rotation[key],
+      imageRotationName: Rotation[Rotation[key]],
     });
     await this.scheduleUpdate();
   };
@@ -571,8 +612,18 @@ export default class App extends React.Component<AppProps, AppState> {
     await this.scheduleUpdate();
   };
 
+  updateFrameColor = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await this.setState({ frameColor: e.target.value });
+    await this.scheduleUpdate();
+  };
+
   updateBackgroundColor = async (e: React.ChangeEvent<HTMLInputElement>) => {
     await this.setState({ backgroundColor: e.target.value });
+    await this.scheduleUpdate();
+  };
+
+  updateMargin = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await this.setState({ margin: parseFloat(e.target.value) });
     await this.scheduleUpdate();
   };
 
@@ -581,12 +632,12 @@ export default class App extends React.Component<AppProps, AppState> {
     await this.scheduleUpdate();
   };
 
-  updateBorderWidth = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  updateframeWidth = async (e: React.ChangeEvent<HTMLInputElement>) => {
     await this.setState({
-      borderWidthTop: parseFloat(e.target.value),
-      borderWidthRight: parseFloat(e.target.value),
-      borderWidthBottom: parseFloat(e.target.value),
-      borderWidthLeft: parseFloat(e.target.value),
+      frameWidthTop: parseFloat(e.target.value),
+      frameWidthRight: parseFloat(e.target.value),
+      frameWidthBottom: parseFloat(e.target.value),
+      frameWidthLeft: parseFloat(e.target.value),
     });
     await this.scheduleUpdate();
   };
@@ -662,6 +713,9 @@ export default class App extends React.Component<AppProps, AppState> {
                 <option value="Custom" key="Custom">
                   Custom
                 </option>
+                <option value="None" key="None">
+                  None
+                </option>
               </select>
               <label htmlFor="borderOverlay">Border</label>
 
@@ -718,19 +772,28 @@ export default class App extends React.Component<AppProps, AppState> {
               <label htmlFor="outputHeight">Height</label>
 
               <input
+                id="frameColor"
+                type="color"
+                disabled={this.state.exporting}
+                value={this.state.frameColor}
+                onChange={this.updateFrameColor}
+              />
+              <label htmlFor="frameColor">Frame Color</label>
+
+              <input
                 id="backgroundColor"
                 type="color"
                 disabled={this.state.exporting}
                 value={this.state.backgroundColor}
                 onChange={this.updateBackgroundColor}
               />
-              <label htmlFor="backgroundColor">Color</label>
+              <label htmlFor="backgroundColor">Canvas Color</label>
 
               <select
-                id="rotationAngle"
-                value={this.state.rotationAngleName}
+                id="borderRotation"
+                value={this.state.borderRotationName}
                 disabled={this.state.exporting}
-                onChange={this.updateRotationAngle}
+                onChange={this.updateBorderRotation}
               >
                 {Object.values(Rotation)
                   .filter((r) => typeof r == "string")
@@ -740,7 +803,23 @@ export default class App extends React.Component<AppProps, AppState> {
                     </option>
                   ))}
               </select>
-              <label htmlFor="rotationAngle">Rotation</label>
+              <label htmlFor="borderRotation">Border Rotation</label>
+
+              <select
+                id="imageRotation"
+                value={this.state.imageRotationName}
+                disabled={this.state.exporting}
+                onChange={this.updateImageRotation}
+              >
+                {Object.values(Rotation)
+                  .filter((r) => typeof r == "string")
+                  .map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+              </select>
+              <label htmlFor="imageRotation">Image Rotation</label>
 
               <input
                 id="scaleFactor"
@@ -753,17 +832,28 @@ export default class App extends React.Component<AppProps, AppState> {
               <label htmlFor="scaleFactor">Scale factor</label>
 
               <input
+                id="margin"
                 type="number"
-                id="borderWidth"
+                step="0.01"
                 disabled={this.state.exporting}
-                value={this.state.borderWidthTop}
-                onChange={this.updateBorderWidth}
+                value={this.state.margin}
+                onChange={this.updateMargin}
               />
-              <label htmlFor="borderWidth">Border width</label>
+              <label htmlFor="margin">Margin</label>
 
               <input
                 type="number"
+                id="frameWidth"
+                disabled={this.state.exporting}
+                value={this.state.frameWidthTop}
+                onChange={this.updateframeWidth}
+              />
+              <label htmlFor="frameWidth">Frame width</label>
+
+              <input
                 id="cropTop"
+                type="number"
+                step="0.01"
                 disabled={this.state.exporting}
                 value={this.state.cropTop}
                 onChange={this.updateCropTop}
@@ -771,8 +861,9 @@ export default class App extends React.Component<AppProps, AppState> {
               <label htmlFor="cropTop">Crop top</label>
 
               <input
-                type="number"
                 id="cropRight"
+                type="number"
+                step="0.01"
                 disabled={this.state.exporting}
                 value={this.state.cropRight}
                 onChange={this.updateCropRight}
@@ -780,8 +871,9 @@ export default class App extends React.Component<AppProps, AppState> {
               <label htmlFor="cropRight">Crop right</label>
 
               <input
-                type="number"
                 id="cropBottom"
+                type="number"
+                step="0.01"
                 disabled={this.state.exporting}
                 value={this.state.cropBottom}
                 onChange={this.updateCropBottom}
@@ -789,8 +881,9 @@ export default class App extends React.Component<AppProps, AppState> {
               <label htmlFor="cropBottom">Crop bottom</label>
 
               <input
-                type="number"
                 id="cropLeft"
+                type="number"
+                step="0.01"
                 disabled={this.state.exporting}
                 value={this.state.cropLeft}
                 onChange={this.updateCropLeft}

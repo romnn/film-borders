@@ -51,8 +51,11 @@ struct ApplyOpts {
     #[clap(long = "fit", help = "fitting mode")]
     mode: Option<types::Mode>,
 
-    #[clap(long = "rotate")]
-    rotation: Option<types::Rotation>,
+    #[clap(long = "rotate", aliases = &["rotate-image"])]
+    image_rotation: Option<types::Rotation>,
+
+    #[clap(long = "rotate-border")]
+    border_rotation: Option<types::Rotation>,
 
     #[clap(long = "background-color", help = "background color in HEX format")]
     background_color: Option<types::Color>,
@@ -162,7 +165,8 @@ fn main() {
                             frame_width: types::SidesPercent::uniform(
                                 cfg.frame_width.unwrap_or(0.01),
                             ),
-                            rotate_angle: Some(cfg.rotation.unwrap_or(types::Rotation::Rotate0)),
+                            image_rotation: cfg.image_rotation,
+                            border_rotation: cfg.border_rotation,
                             background_color: cfg.background_color,
                             frame_color: cfg.frame_color.unwrap_or_else(types::Color::black),
 

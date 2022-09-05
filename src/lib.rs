@@ -13,6 +13,7 @@ pub mod wasm;
 
 pub use error::Error;
 pub use image::ImageFormat;
+pub use imageops::FillMode;
 pub use img::Image;
 pub use options::*;
 pub use types::*;
@@ -54,8 +55,8 @@ impl ImageBorders {
         // prepare images
         let mut images: Vec<img::Image> = self.images.clone();
         let primary = images.get_mut(0).ok_or(Error::MissingImage)?;
-        if let Some(angle) = options.rotate_angle {
-            primary.rotate(angle);
+        if let Some(rotation) = options.image_rotation {
+            primary.rotate(rotation);
         }
         if let Some(crop_percent) = options.crop {
             let crop = crop_percent * primary.size();
@@ -67,6 +68,9 @@ impl ImageBorders {
             Some(border) => {
                 let mut border = border.into_border()?;
                 border.rotate_to_orientation(primary.orientation())?;
+                if let Some(rotation) = options.border_rotation {
+                    border.rotate(rotation)?;
+                }
                 Some(border)
             }
             None => None,
@@ -95,11 +99,16 @@ impl ImageBorders {
         let default_output_size = content_size * (1.0 / scale_factor);
 
         // set output size and do not keep aspect ratio
-        let output_size =
-            default_output_size.scale_to_bounds(options.output_size, types::ResizeMode::Fill);
+        let output_size = match options.output_size {
+            OutputSize {
+                width: Some(width),
+                height: Some(height),
+            } => Size { width, height },
+            _ => default_output_size.scale_to_bounds(options.output_size, ResizeMode::Contain),
+        };
         // bound output size but keep aspect ratio
         let output_size =
-            output_size.scale_to_bounds(options.output_size_bounds, types::ResizeMode::Contain);
+            output_size.scale_to_bounds(options.output_size_bounds, ResizeMode::Contain);
 
         // create new result image
         let mut result_image = img::Image::with_size(output_size);
@@ -110,10 +119,10 @@ impl ImageBorders {
         } else {
             Color::white()
         });
-        result_image.fill(background_color);
+        result_image.fill(background_color, FillMode::Set);
 
         let new_content_size =
-            content_size.scale_to(output_size * scale_factor, types::ResizeMode::Contain);
+            content_size.scale_to(output_size * scale_factor, ResizeMode::Contain);
         let scale = new_content_size.min_dim() as f64 / content_size.min_dim() as f64;
         let frame_width = frame_width * scale;
         let margin = margin * scale;
@@ -125,27 +134,38 @@ impl ImageBorders {
 
         #[cfg(debug_assertions)]
         result_image.fill_rect(
-            types::Color::rgba(0, 0, 255, 100),
+            Color::rgba(0, 0, 255, 100),
             content_rect.top_left(),
             content_rect.size(),
+            FillMode::Blend,
         );
 
         result_image.fill_rect(
             options.frame_color,
             (content_rect - margin).top_left(),
             (content_rect - margin).size(),
+            FillMode::Set,
         );
 
         let border_rect = content_rect - margin - frame_width;
         crate::debug!(&border_rect);
 
+        #[cfg(debug_assertions)]
+        result_image.fill_rect(
+            Color::rgba(0, 255, 0, 100),
+            border_rect.top_left(),
+            border_rect.size(),
+            FillMode::Blend,
+        );
+        let default_component = Rect::new(Point::origin(), border_rect.size());
+
         crate::debug!("overlay content");
         match options.mode {
             Mode::FitImage => {
-                let default_component = vec![border_rect];
+                let default_component = vec![default_component];
                 let components = match border {
                     Some(ref mut border) => {
-                        border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
+                        border.resize_to_fit(border_rect.size(), ResizeMode::Contain)?;
 
                         let default_image = primary.clone();
                         images.resize(border.transparent_components().len(), default_image);
@@ -164,7 +184,7 @@ impl ImageBorders {
                     image_rect = image_rect.clip_to(&border_rect);
 
                     let crop_mode = image_rect.crop_mode(&border_rect);
-                    image.resize_to_fit(image_rect.size(), types::ResizeMode::Cover, crop_mode);
+                    image.resize_to_fit(image_rect.size(), ResizeMode::Cover, crop_mode);
 
                     result_image.overlay(image.as_ref(), image_rect.top_left());
                 }
@@ -176,21 +196,17 @@ impl ImageBorders {
             Mode::FitBorder => {
                 let c = match border {
                     Some(ref mut border) => {
-                        border.resize_to_fit(border_rect.size(), types::ResizeMode::Contain)?;
+                        border.resize_to_fit(border_rect.size(), ResizeMode::Contain)?;
                         border.content_rect()
                     }
-                    None => &border_rect,
+                    None => &default_component,
                 };
 
                 let mut image_rect = *c + border_rect.top_left();
                 image_rect = image_rect.extend(3);
                 image_rect = image_rect.clip_to(&border_rect);
 
-                primary.resize_to_fit(
-                    image_rect.size(),
-                    types::ResizeMode::Cover,
-                    types::CropMode::Center,
-                );
+                primary.resize_to_fit(image_rect.size(), ResizeMode::Cover, CropMode::Center);
 
                 result_image.overlay(primary.as_ref(), image_rect.top_left());
                 if let Some(border) = border {
@@ -198,6 +214,21 @@ impl ImageBorders {
                 }
             }
         };
+
+        if options.preview {
+            let preview_size = Size {
+                width: output_size.min(),
+                height: output_size.min(),
+            };
+            let preview_rect = output_size.center(preview_size);
+            result_image.fill_rect(
+                Color::rgba(255, 0, 0, 50),
+                preview_rect.top_left(),
+                preview_rect.size(),
+                FillMode::Blend,
+            );
+        }
+
         Ok(result_image)
     }
 }
@@ -206,9 +237,10 @@ impl ImageBorders {
 mod tests {
     #[cfg(feature = "borders")]
     use super::borders::BuiltinBorder;
+    use super::types::*;
     #[cfg(feature = "borders")]
     use super::ImageFormat;
-    use super::{types, Border, BorderSource, ImageBorders, Options};
+    use super::{Border, BorderSource, ImageBorders, Options};
     use anyhow::Result;
     #[cfg(feature = "borders")]
     use std::io::Cursor;
@@ -216,15 +248,15 @@ mod tests {
 
     lazy_static::lazy_static! {
         pub static ref OPTIONS: Options = Options {
-            output_size: types::OutputSize {
+            output_size: OutputSize {
                 width: Some(750),
                 height: Some(750),
             },
-            mode: types::Mode::FitImage,
-            crop: Some(types::SidesPercent::uniform(0.05)),
+            mode: Mode::FitImage,
+            crop: Some(SidesPercent::uniform(0.05)),
             scale_factor: 0.95,
-            frame_width: types::SidesPercent::uniform(0.02),
-            rotate_angle: Some(types::Rotation::Rotate90),
+            frame_width: SidesPercent::uniform(0.02),
+            image_rotation: Some(Rotation::Rotate90),
             ..Default::default()
         };
     }

@@ -1,6 +1,6 @@
 use super::defaults;
 pub use super::imageops::*;
-use super::types;
+use super::types::*;
 use super::Error;
 use image::{
     codecs, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageFormat,
@@ -33,8 +33,8 @@ impl Image {
         self.inner.as_raw()
     }
 
-    pub fn size(&self) -> types::Size {
-        types::Size::from(&self.inner)
+    pub fn size(&self) -> Size {
+        Size::from(&self.inner)
     }
 
     pub fn new(width: u32, height: u32) -> Self {
@@ -42,7 +42,7 @@ impl Image {
         Self { inner, path: None }
     }
 
-    pub fn with_size<S: Into<types::Size>>(size: S) -> Self {
+    pub fn with_size<S: Into<Size>>(size: S) -> Self {
         let size = size.into();
         Self::new(size.width, size.height)
     }
@@ -69,33 +69,27 @@ impl Image {
         self.size().is_portrait()
     }
 
-    pub fn orientation(&self) -> types::Orientation {
+    pub fn orientation(&self) -> Orientation {
         self.size().orientation()
     }
 
-    pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C) {
-        let color = color.into();
-        for p in self.inner.pixels_mut() {
-            *p = color;
-        }
+    pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C, mode: FillMode) {
+        let size = self.size();
+        self.fill_rect(color.into(), Point::origin(), size, mode);
     }
 
-    pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S)
+    pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S, mode: FillMode)
     where
-        TL: Into<types::Point>,
-        S: Into<types::Size>,
+        TL: Into<Point>,
+        S: Into<Size>,
         C: Into<image::Rgba<u8>>,
     {
-        fill_rect(self, color.into(), top_left.into(), size.into());
+        fill_rect(self, color.into(), top_left.into(), size.into(), mode);
     }
 
-    pub fn resize_to_fit<S>(
-        &mut self,
-        container: S,
-        resize_mode: types::ResizeMode,
-        crop_mode: types::CropMode,
-    ) where
-        S: Into<types::Size>,
+    pub fn resize_to_fit<S>(&mut self, container: S, resize_mode: ResizeMode, crop_mode: CropMode)
+    where
+        S: Into<Size>,
     {
         let container = container.into();
         self.resize(container, resize_mode);
@@ -105,15 +99,15 @@ impl Image {
     #[inline]
     pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: Axis)
     where
-        P1: Into<types::Point>,
-        P2: Into<types::Point>,
+        P1: Into<Point>,
+        P2: Into<Point>,
     {
         fade_out(self, top_left.into(), bottom_right.into(), axis);
     }
 
-    pub fn resize<S>(&mut self, size: S, mode: types::ResizeMode)
+    pub fn resize<S>(&mut self, size: S, mode: ResizeMode)
     where
-        S: Into<types::Size>,
+        S: Into<Size>,
     {
         #[cfg(debug_assertions)]
         let start = chrono::Utc::now().time();
@@ -129,9 +123,9 @@ impl Image {
         );
     }
 
-    pub fn crop_to_fit<S>(&mut self, container: S, mode: types::CropMode)
+    pub fn crop_to_fit<S>(&mut self, container: S, mode: CropMode)
     where
-        S: Into<types::Size>,
+        S: Into<Size>,
     {
         let container = container.into();
         let crop = self.size().crop_to_fit(container, mode);
@@ -141,14 +135,14 @@ impl Image {
     pub fn overlay<O, P>(&mut self, overlay_image: &O, offset: P)
     where
         O: image::GenericImageView<Pixel = image::Rgba<u8>>,
-        P: Into<types::Point>,
+        P: Into<Point>,
     {
-        let offset: types::Point = offset.into();
+        let offset: Point = offset.into();
         overlay(&mut self.inner, overlay_image, offset.x, offset.y);
     }
 
-    pub fn crop(&mut self, top_left: types::Point, bottom_right: types::Point) {
-        let cropped_size: types::Size = (bottom_right - top_left).into();
+    pub fn crop(&mut self, top_left: Point, bottom_right: Point) {
+        let cropped_size: Size = (bottom_right - top_left).into();
         self.inner = crop(
             &mut self.inner,
             max(0, top_left.x) as u32,
@@ -159,7 +153,7 @@ impl Image {
         .to_image();
     }
 
-    pub fn crop_sides(&mut self, crop_sides: types::Sides) {
+    pub fn crop_sides(&mut self, crop_sides: Sides) {
         let cropped_size = self.size() - crop_sides;
         self.inner = crop(
             &mut self.inner,
@@ -171,12 +165,12 @@ impl Image {
         .to_image();
     }
 
-    pub fn rotate(&mut self, angle: types::Rotation) {
+    pub fn rotate(&mut self, angle: Rotation) {
         if let Some(rotated) = match angle {
-            types::Rotation::Rotate0 => None,
-            types::Rotation::Rotate90 => Some(rotate90(&self.inner)),
-            types::Rotation::Rotate180 => Some(rotate180(&self.inner)),
-            types::Rotation::Rotate270 => Some(rotate270(&self.inner)),
+            Rotation::Rotate0 => None,
+            Rotation::Rotate90 => Some(rotate90(&self.inner)),
+            Rotation::Rotate180 => Some(rotate180(&self.inner)),
+            Rotation::Rotate270 => Some(rotate270(&self.inner)),
         } {
             self.inner = rotated;
         }

@@ -147,7 +147,7 @@ impl WasmImageBorders {
 
         let result = self
             .inner
-            .add_border(border, &options)
+            .add_border(border, options)
             .map_err(|err| JsValue::from_str(&err.to_string()))?;
         let size = result.size();
         // convert the raw pixels back to an ImageData object
