@@ -330,7 +330,7 @@ mod tests {
         let border = BorderSource::Custom(Border::open(&border_file, None)?);
         let mut borders = ImageBorders::open(&input)?;
         let result = borders.add_border(Some(border), &OPTIONS)?;
-        result.save(Some(&output), None)?;
+        result.save_with_filename(&output, None)?;
         assert!(output.is_file());
         Ok(())
     }

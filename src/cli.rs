@@ -173,10 +173,12 @@ fn main() {
                             preview: cfg.preview,
                         };
                         filmborders::debug!(&options);
-                        match borders
-                            .add_border(border, &options)
-                            .and_then(|result| result.save(cfg.output, cfg.quality))
-                        {
+                        match borders.add_border(border, &options).and_then(|result| {
+                            match cfg.output {
+                                Some(output) => result.save_with_filename(output, cfg.quality),
+                                None => result.save(cfg.quality),
+                            }
+                        }) {
                             Ok(_) => {
                                 println!(
                                     "completed in {} msec",

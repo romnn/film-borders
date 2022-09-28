@@ -176,15 +176,13 @@ impl Image {
         }
     }
 
-    pub fn save<P: AsRef<Path>>(&self, path: Option<P>, quality: Option<u8>) -> Result<(), Error> {
-        let (default_output, _) = self.output_path(None);
-        let path = path
-            .as_ref()
-            .map(|p| p.as_ref())
-            .or(default_output.as_deref())
-            .ok_or(Error::MissingOutputFile)?;
-
-        let format = ImageFormat::from_path(&path)?;
+    pub fn save_with_filename(
+        &self,
+        path: impl AsRef<Path>,
+        quality: impl Into<Option<u8>>,
+    ) -> Result<(), Error> {
+        let path = path.as_ref();
+        let format = ImageFormat::from_path(path)?;
 
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -194,18 +192,25 @@ impl Image {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(&path)?;
+            .open(path)?;
         self.encode_to(&mut file, format, quality)
     }
 
-    pub fn encode_to<W: std::io::Write + Seek>(
+    pub fn save(&self, quality: impl Into<Option<u8>>) -> Result<(), Error> {
+        let (default_output, _) = self.output_path(None);
+        let path = default_output.ok_or(Error::MissingOutputFile)?;
+        self.save_with_filename(path, quality)
+    }
+
+    pub fn encode_to(
         &self,
-        w: &mut W,
+        w: &mut (impl std::io::Write + Seek),
         format: ImageFormat,
-        quality: Option<u8>,
+        quality: impl Into<Option<u8>>,
     ) -> Result<(), Error> {
         let data = self.inner.as_raw().as_ref();
         let color = ColorType::Rgba8;
+        let quality = quality.into();
         let width = self.inner.width();
         let height = self.inner.height();
         match format.into() {

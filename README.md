@@ -33,9 +33,17 @@ film-borders apply --help
 ```
 
 #### TODO
+- remove the apply subcommand
+- use impls where possible
+- split the types into multiple files
+- add documentation
+- make all ops checked
+- add more tests
+- add examples
 - implement scale border mode (not sophisticated)
 - update the website
-- add some more tests
+- add rendering text
+- use generic image backend
 
 #### Done
 - make border optional

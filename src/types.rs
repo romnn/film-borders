@@ -1426,10 +1426,10 @@ mod tests {
         test_parse_invalid_hex_color_3: ("#e942g5", None),
     }
 
-    fn draw_transparent_components<P: AsRef<Path>>(
+    fn draw_transparent_components(
         mut border: img::Image,
         components: &Vec<Rect>,
-        output: P,
+        output: impl AsRef<Path>,
     ) -> Result<()> {
         let alpha = (255.0f32 * 0.5).ceil() as u8;
         let red = Color::rgba(255, 0, 0, alpha);
@@ -1445,7 +1445,7 @@ mod tests {
             let size = bottom_right - top_left;
             border.fill_rect(red, top_left, size, FillMode::Blend);
         }
-        border.save(Some(&output), None)?;
+        border.save_with_filename(output.as_ref(), None)?;
         Ok(())
     }
 
