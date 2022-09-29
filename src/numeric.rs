@@ -27,8 +27,60 @@ impl RoundingMode for Floor {
         value.floor()
     }
 }
+
+use std::any::Any;
+
+pub trait NumericError: std::error::Error {
+    fn as_any(&self) -> &dyn Any;
+    fn eq(&self, other: &dyn NumericError) -> bool;
+}
+
+// impl Eq for &dyn NumericError {}
+
+// impl PartialEq for &dyn NumericError {
+//     fn eq(&self, other: &&dyn NumericError) -> bool {
+//         false
+//     }
+// }
+
+// impl Eq for dyn NumericError {}
+
+// impl PartialEq for dyn NumericError {
+//     fn eq(&self, other: &dyn NumericError) -> bool {
+//         false
+//     }
+// }
+impl Eq for Box<dyn NumericError> {}
+// impl Eq for dyn NumericError {}
+
+impl PartialEq for Box<dyn NumericError> {
+    // impl PartialEq<Self> for dyn NumericError {
+    fn eq(&self, other: &Self) -> bool {
+        NumericError::eq(self.as_ref(), other.as_ref())
+        // todo!();
+    }
+}
+
+impl PartialEq<&Self> for Box<dyn NumericError> {
+    // impl PartialEq<&Self> for dyn NumericError {
+    fn eq(&self, other: &&Self) -> bool {
+        NumericError::eq(self.as_ref(), other.as_ref())
+        // todo!();
+    }
+}
+
 #[derive(thiserror::Error, PartialEq, Eq, Debug)]
-pub enum Error {}
+// #[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("{0}")]
+    Add(Box<dyn NumericError>),
+    #[error("{0}")]
+    Sub(Box<dyn NumericError>),
+    #[error("{0}")]
+    Mul(Box<dyn NumericError>),
+    #[error("{0}")]
+    Cast(Box<dyn NumericError>),
+}
 
 pub trait NumericType: std::fmt::Display + std::fmt::Debug + 'static {}
 
@@ -49,7 +101,7 @@ impl std::fmt::Display for ArithmeticErrorKind {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, Debug)]
 pub struct ArithmeticError<Lhs, Rhs> {
     pub lhs: Lhs,
     pub rhs: Rhs,
@@ -57,8 +109,28 @@ pub struct ArithmeticError<Lhs, Rhs> {
     pub kind: ArithmeticErrorKind,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, Debug)]
 pub struct AddError<Lhs, Rhs>(pub ArithmeticError<Lhs, Rhs>);
+// where
+//     Lhs: std::fmt::Display,
+//     Rhs: std::fmt::Display;
+
+impl<Lhs, Rhs> NumericError for AddError<Lhs, Rhs>
+where
+    Lhs: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+    Rhs: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn NumericError) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => PartialEq::eq(self, other),
+            None => false,
+        }
+    }
+}
 
 impl<Lhs, Rhs> std::fmt::Display for AddError<Lhs, Rhs>
 where
@@ -74,8 +146,25 @@ where
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, Debug)]
 pub struct SubError<Lhs, Rhs>(pub ArithmeticError<Lhs, Rhs>);
+
+impl<Lhs, Rhs> NumericError for SubError<Lhs, Rhs>
+where
+    Lhs: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+    Rhs: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn NumericError) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => PartialEq::eq(self, other),
+            None => false,
+        }
+    }
+}
 
 impl<Lhs, Rhs> std::fmt::Display for SubError<Lhs, Rhs>
 where
@@ -91,8 +180,25 @@ where
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, Debug)]
 pub struct MulError<Lhs, Rhs>(pub ArithmeticError<Lhs, Rhs>);
+
+impl<Lhs, Rhs> NumericError for MulError<Lhs, Rhs>
+where
+    Lhs: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+    Rhs: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn NumericError) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => PartialEq::eq(self, other),
+            None => false,
+        }
+    }
+}
 
 impl<Lhs, Rhs> std::fmt::Display for MulError<Lhs, Rhs>
 where
@@ -108,19 +214,51 @@ where
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq)]
 pub struct CastError<Src, Target> {
     pub src: Src,
-    // pub target: Target,
     pub target: std::marker::PhantomData<Target>,
-    // pub type_name: String,
-    // pub kind: ArithmeticErrorKind,
+}
+
+impl<Src, Target> From<CastError<Src, Target>> for Error
+where
+    Src: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+    Target: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+{
+    fn from(err: CastError<Src, Target>) -> Self {
+        Error::Cast(Box::new(err))
+    }
+}
+
+impl<Src, Target> NumericError for CastError<Src, Target>
+where
+    Src: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+    Target: std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn NumericError) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => PartialEq::eq(self, other),
+            None => false,
+        }
+    }
+}
+
+impl<Src, Target> std::fmt::Debug for CastError<Src, Target>
+where
+    Src: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self,)
+    }
 }
 
 impl<Src, Target> std::fmt::Display for CastError<Src, Target>
 where
     Src: std::fmt::Display,
-    // Target: std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -145,7 +283,7 @@ where
         ArithmeticError {
             lhs: lhs.clone(),
             rhs: self.clone(),
-            type_name: std::any::type_name::<Lhs>().to_string(),
+            type_name: std::any::type_name::<T>().to_string(),
             kind: ArithmeticErrorKind::Overflow,
         }
     }
@@ -157,7 +295,7 @@ where
         ArithmeticError {
             lhs: lhs.clone(),
             rhs: self.clone(),
-            type_name: std::any::type_name::<Lhs>().to_string(),
+            type_name: std::any::type_name::<T>().to_string(),
             kind: ArithmeticErrorKind::Underflow,
         }
     }
@@ -170,35 +308,18 @@ where
 {
 }
 
-// pub trait NumCast<Target>
-// where
-//     Target: Sized,
-// {
-//     // : Sized + num::NumCast {
-//     fn from<Src>(n: Src) -> Result<Target, CastError<Src, Target>>
-//     where
-//         Src: num::ToPrimitive + Copy; // num::NumCast,
-//                                       //     T: num::NumCast;
-// }
-
 pub trait NumCast
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
-    // : Sized + num::NumCast {
     fn cast<Target>(self) -> Result<Target, CastError<Self, Target>>
     where
-        //     Src: num::ToPrimitive + Copy; // num::NumCast,
         Target: num::NumCast;
 }
 
-// impl<U> NumCast<U> for U
-impl<U> NumCast for U
-// impl<T> NumCast //  for U
+impl<Src> NumCast for Src
 where
-    // Self: num::ToPrimitive,
-    Self: Sized + num::ToPrimitive + Copy, // num::NumCast,
-                                           // U: num::NumCast,
+    Self: Sized + num::ToPrimitive + Copy,
 {
     fn cast<Target>(self) -> Result<Target, CastError<Self, Target>>
     where
@@ -209,37 +330,21 @@ where
             target: std::marker::PhantomData,
         })
     }
-    // fn from<T>(n: T) -> Result<U, CastError<T, U>>
-    // where
-    //     T: num::ToPrimitive + Copy, // num::NumCast,
-    // {
-    //     // let result: Option<Self> = num::NumCast::from(n);
-    //     // Ok(result.unwrap())
-    //     num::NumCast::from(n).ok_or(CastError {
-    //         src: n,
-    //         target: std::marker::PhantomData,
-    //     })
-
-    //     // num::cast::<T, Self>(n).ok_or(CastError {
-    //     //     src: n,
-    //     //     target: std::marker::PhantomData,
-    //     // })
-    // }
 }
 
-// pub trait NumCast<Rhs = Self>: Sized {
-//     type Output;
-
-//     fn checked_mul(&self, scalar: &Rhs) -> Result<Self::Output, MulError<Self, Rhs>>;
-// }
-
-pub trait CheckedMul<Rhs = Self>: Sized {
+pub trait CheckedMul<Rhs = Self>
+where
+    Self: Sized,
+{
     type Output;
 
     fn checked_mul(&self, scalar: &Rhs) -> Result<Self::Output, MulError<Self, Rhs>>;
 }
 
-pub trait CheckedAdd<Rhs = Self>: Sized {
+pub trait CheckedAdd<Rhs = Self>
+where
+    Self: Sized,
+{
     type Output;
 
     fn checked_add(&self, rhs: &Rhs) -> Result<Self::Output, AddError<Self, Rhs>>;
@@ -280,7 +385,10 @@ macro_rules! impl_signed_checked_add {
 // impl_unsigned_checked_add!(u32);
 impl_signed_checked_add!(i64);
 
-pub trait CheckedSub<Rhs = Self>: Sized {
+pub trait CheckedSub<Rhs = Self>
+where
+    Self: Sized,
+{
     type Output;
 
     fn checked_sub(&self, rhs: &Rhs) -> Result<Self::Output, SubError<Self, Rhs>>;
@@ -402,8 +510,23 @@ mod tests {
         assert_eq!(42.6f64.cast::<i8>().ok(), Some(42i8));
         assert!(u32::MAX.cast::<i64>().is_ok());
         assert!(i64::MAX.cast::<u64>().is_ok());
+        assert!(i128::MAX.cast::<f64>().is_ok());
+        assert!(u128::MAX.cast::<f64>().is_ok());
         assert_eq!(f32::MAX.cast::<u32>().ok(), None);
         approx::abs_diff_eq!(u32::MAX.cast::<f32>().unwrap(), 2f32.powi(32));
         approx::abs_diff_eq!(u32::MAX.cast::<f64>().unwrap(), 2f64.powi(32),);
+    }
+
+    #[test]
+    fn numeric_error_partial_eq() {
+        let add_err1: Box<dyn NumericError> = Box::new(AddError(10u32.overflows::<u32>(&10u32)));
+        let add_err2: Box<dyn NumericError> = Box::new(AddError(10u32.overflows::<u64>(&10u32)));
+        assert!(add_err1 == add_err1);
+        assert!(add_err1 != add_err2);
+
+        let sub_err1: Box<dyn NumericError> = Box::new(SubError(10u32.overflows::<u32>(&12u32)));
+        let sub_err2: Box<dyn NumericError> = Box::new(SubError(10u32.overflows::<u32>(&15u32)));
+        assert!(sub_err1 == sub_err1);
+        assert!(sub_err1 != sub_err2);
     }
 }

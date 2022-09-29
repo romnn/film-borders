@@ -2,7 +2,7 @@ use super::*;
 use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::{self, AddError, ArithmeticError, MulError, SubError};
-use crate::numeric::{ArithmeticOp, Round, RoundingMode};
+use crate::numeric::{ArithmeticOp, NumCast, Round, RoundingMode};
 use crate::{img, utils};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -51,15 +51,16 @@ impl Point {
     // }
 
     #[inline]
-    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, MulError<Self, F>>
+    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, numeric::Error>
+    // <Self, F>>
     where
         R: RoundingMode,
-        F: num::NumCast,
+        F: numeric::NumCast + std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
     {
         // match (|| {
-        // let scalar: f64 = num::NumCast::from(scalar)?;
-        // let x: f64 = num::NumCast::from(self.x)?;
-        // let y: f64 = num::NumCast::from(self.y)?;
+        let scalar = scalar.cast::<u64>()?;
+        let x = self.x.cast::<f64>()?;
+        let y = self.y.cast::<f64>()?;
         // let x = R::round(self.x as f64 * scalar) as u64;
         // let y = R::round(self.y as f64 * scalar) as u64;
         // Self {
@@ -213,7 +214,7 @@ impl std::ops::Sub for Point {
 
 impl<F> numeric::CheckedMul<F> for Point
 where
-    F: num::NumCast,
+    F: num::NumCast + std::fmt::Display,
 {
     type Output = Self;
 
@@ -265,6 +266,21 @@ mod tests {
     use super::*;
     use crate::numeric::CheckedAdd;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn point_scale_by() {
+        let p1 = Point { x: 10, y: 10 };
+        assert_eq!(p1.scale_by::<_, Round>(2), Ok(p1));
+        assert_eq!(p1.scale_by::<_, Round>(2i128), Ok(p1));
+        assert_eq!(
+            &p1.scale_by::<_, Round>(i128::MIN)
+                .err()
+                .unwrap()
+                .to_string(),
+            &format!("cannot cast {} of type i128 to u64", i128::MIN)
+        );
+        // assert_eq!(&p1.checked_add(&p2).ok().unwrap(), &Point { x: 8, y: 22 });
+    }
 
     #[test]
     fn point_checked_add() {
