@@ -5,7 +5,7 @@ use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::{self, ArithmeticOp, Round, RoundingMode};
 use crate::{img, utils};
-use num::traits::{ops, NumCast};
+use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
@@ -30,19 +30,12 @@ impl std::fmt::Display for Point {
     }
 }
 
-// impl ops::checked::CheckedAdd for Point {
-//     fn checked_add(&self, v: &Self) -> Option<Self> {
-//         let x = self.x.checked_add(v.x)?;
-//         let y = self.y.checked_add(v.y)?;
-//         Some(Self { x, y })
-//     }
-// }
-
 impl numeric::CheckedAdd for Point {
     type Output = Self;
 
     // fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::Error<Point, Point>> {
-    fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::Error> {
+    // fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::Error> {
+    fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::AddError<Self, Self>> {
         // numeric::WouldOverflowError {
         // let err = numeric::Error::Add(numeric::WouldOverflowError {
         //     left: self,
@@ -68,18 +61,28 @@ impl numeric::CheckedAdd for Point {
             // .ok_or(err)?;
             let y = numeric::CheckedAdd::checked_add(&self.y, &rhs.y)?;
             // .ok_or(err)?;
-            Ok::<point::Point, numeric::Error>(Self { x, y })
+            // Ok::<point::Point, numeric::Error>(Self { x, y })
+            // Ok::<Point, numeric::AddError>(Self { x, y })
+            Ok::<Point, _>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(numeric::Error::Add(
+            // Err(err) => Err(err),
+            Err(numeric::AddError(err)) => {
+                // numeric::Error::Add(
                 // todo: wrap the error here
-                numeric::ArithmeticError {
-                    lhs: self,
-                    rhs: rhs,
-                    ..err
-                }, // rhs.overflows::<i64>(self)
-            )),
-            // err))err), // numeric::Error::Add(err)),
+                // let err = rhs.overflows::<i64>(self);
+
+                // err.lhs = Box::new(self.clone());
+                // err.rhs = Box::new(rhs.clone());
+                // Err(numeric::AddError(err))
+                Err(numeric::AddError(numeric::ArithmeticError {
+                    lhs: *self,               // Box::new(self.clone()),
+                    rhs: *rhs,                // Box::new(rhs.clone()),
+                    type_name: err.type_name, // ..field_err
+                    kind: err.kind,
+                })) //
+                    // )
+            } // err))err), // numeric::Error::Add(err)),
         }
         // Ok(Self { x, y })
     }
@@ -220,14 +223,6 @@ impl Point {
         }
     }
 
-    // pub fn unit_vector(self) -> Vector<f64> {
-    //     let mag = self.magnitude();
-    //     Vector {
-    //         x: self.x as f64 / mag,
-    //         y: self.y as f64 / mag,
-    //     }
-    // }
-
     #[inline]
     pub fn magnitude(&self) -> f64 {
         // c**2 = a**2 + b**2
@@ -255,18 +250,50 @@ mod tests {
     fn point_checked_add() {
         let p1 = Point { x: 10, y: 20 };
         let p2 = Point { x: -2, y: 2 };
-        let result = Point { x: 8, y: 22 };
-        assert_eq!(p1.checked_add(&p2).ok(), Some(result));
+        assert_eq!(&p1.checked_add(&p2).ok().unwrap(), &Point { x: 8, y: 22 });
+    }
+
+    #[test]
+    fn point_checked_add_underflow() {
+        let p1 = Point { x: i64::MIN, y: 0 };
+        let p2 = Point { x: -1, y: 0 };
+        assert_eq!(
+            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &format!("adding {} to {} would underflow i64", &p2, &p1)
+        );
+        let p1 = Point { x: -1, y: i64::MIN };
+        let p2 = Point { x: -1, y: -1 };
+        assert_eq!(
+            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &format!("adding {} to {} would underflow i64", &p2, &p1)
+        );
+        let p1 = Point { x: -1, y: i64::MIN };
+        let p2 = Point { x: -1, y: 0 };
+        assert_eq!(
+            &p1.checked_add(&p2).ok().unwrap(),
+            &Point { x: -2, y: i64::MIN },
+        );
     }
 
     #[test]
     fn point_checked_add_overflow() {
-        let p1 = Point { x: i64::MIN, y: 0 };
+        let p1 = Point { x: i64::MAX, y: 0 };
+        let p2 = Point { x: 1, y: 0 };
+        assert_eq!(
+            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &format!("adding {} to {} would overflow i64", &p2, &p1)
+        );
+        let p1 = Point { x: 1, y: i64::MAX };
+        let p2 = Point { x: 1, y: 1 };
+        assert_eq!(
+            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &format!("adding {} to {} would overflow i64", &p2, &p1)
+        );
+        let p1 = Point { x: -1, y: i64::MAX };
         let p2 = Point { x: -1, y: 0 };
         assert_eq!(
-            // p1.checked_add(&p2).err().as_ref().map(ToString::to_string),
-            p1.checked_add(&p2).err().unwrap().to_string().as_str(),
-            ""
+            &p1.checked_add(&p2).ok().unwrap(),
+            &Point { x: -2, y: i64::MAX },
         );
     }
 

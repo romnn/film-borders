@@ -27,10 +27,9 @@ impl RoundingMode for Floor {
         value.floor()
     }
 }
-
 #[derive(thiserror::Error, PartialEq, Eq, Debug)]
 pub enum Error {
-    Add(ArithmeticError),
+    // Add(AddError),
     // #[error("failed to add: {0}")]
     // #[error("adding {right} to {left} would overflow")]
     // Add {
@@ -45,19 +44,19 @@ pub enum Error {
     // Sub(#[from] SubError<L, R>),
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Error::Add(err) => {}
-        }
-        write!(f, "")
-        // write!(f, "{}x{}", self.width, self.height)
-        // f.debug_struct("Point")
-        //     .field("x", &self.x)
-        //     .field("y", &self.y)
-        //     .finish()
-    }
-}
+// impl std::fmt::Display for Error {
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         match self {
+//             Error::Add(err) => {}
+//         }
+//         write!(f, "")
+//         // write!(f, "{}x{}", self.width, self.height)
+//         // f.debug_struct("Point")
+//         //     .field("x", &self.x)
+//         //     .field("y", &self.y)
+//         //     .finish()
+//     }
+// }
 
 // pub trait Number: num::traits::cast::AsPrimitive + Debug {}
 // pub trait NumericType: std::fmt::Display + 'static {}
@@ -67,7 +66,7 @@ pub trait NumericType: std::fmt::Display + std::fmt::Debug + 'static {}
 impl<T> NumericType for T where T: num::Num + std::fmt::Debug + std::fmt::Display + 'static {}
 
 // #[derive(thiserror::Error, Debug)]
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 // #[error("adding {right:?} to {left:?} would overflow")]
 // // pub struct WouldOverflowError<L, R> {
 pub enum ArithmeticErrorKind {
@@ -75,12 +74,55 @@ pub enum ArithmeticErrorKind {
     Underflow,
 }
 
-#[derive(Debug)]
-pub struct ArithmeticError {
-    lhs: Box<dyn NumericType>,
-    rhs: Box<dyn NumericType>,
-    type_id: std::any::TypeId,
-    kind: ArithmeticErrorKind,
+impl std::fmt::Display for ArithmeticErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ArithmeticErrorKind::Underflow => write!(f, "underflow"),
+            ArithmeticErrorKind::Overflow => write!(f, "overflow"),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+// pub struct ArithmeticError {
+pub struct ArithmeticError<Lhs, Rhs> {
+    pub lhs: Lhs,
+    pub rhs: Rhs,
+    // pub lhs: Box<dyn NumericType>,
+    // pub rhs: Box<dyn NumericType>,
+    // pub type_id: std::any::TypeId,
+    pub type_name: String,
+    pub kind: ArithmeticErrorKind,
+}
+
+// #[derive(thiserror::Error, Debug)]
+// #[error("adding {right:?} to {left:?} would overflow")]
+#[derive(PartialEq, Eq, Debug)]
+pub struct AddError<Lhs, Rhs>(pub ArithmeticError<Lhs, Rhs>);
+// pub struct AddError(pub ArithmeticError);
+
+// impl std::fmt::Display for AddError {
+impl<Lhs, Rhs> std::fmt::Display for AddError<Lhs, Rhs>
+where
+    Lhs: std::fmt::Display,
+    Rhs: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "adding {} to {} would {} {}",
+            // self.0.rhs, self.0.lhs, self.0.kind, self.0.type_id
+            self.0.rhs,
+            self.0.lhs,
+            self.0.kind,
+            self.0.type_name,
+            // std::any::type_name::<Lhs>()
+        )
+        // f.debug_struct("Add")
+        //     .field("left", &self.left)
+        //     .field("right", &self.right)
+        //     .finish()
+    }
 }
 
 // impl Debug for WouldOverflowError {
@@ -92,39 +134,41 @@ pub struct ArithmeticError {
 //     }
 // }
 
-impl Eq for ArithmeticError {}
+// impl Eq for ArithmeticError {}
 
-impl PartialEq for ArithmeticError {
-    fn eq(&self, other: &Self) -> bool {
-        false
-    }
-}
+// impl PartialEq for ArithmeticError {
+//     fn eq(&self, other: &Self) -> bool {
+//         false
+//     }
+// }
 
 pub trait ArithmeticOp<Lhs>
 where
     Self: Sized + Clone + NumericType, // Sized + Debug + Clone + 'static,
     Lhs: Sized + Clone + NumericType,
 {
-    fn overflows<T>(&self, lhs: &Lhs) -> ArithmeticError
+    fn overflows<T>(&self, lhs: &Lhs) -> ArithmeticError<Lhs, Self>
     where
         T: NumericType,
     {
         ArithmeticError {
-            lhs: Box::new(lhs.clone()),
-            rhs: Box::new(self.clone()),
-            type_id: std::any::TypeId::of::<T>(),
+            lhs: lhs.clone(),  // Box::new(lhs.clone()),
+            rhs: self.clone(), // Box::new(self.clone()),
+            type_name: std::any::type_name::<Lhs>().to_string(),
+            // std::any::TypeId::of::<T>(),
             kind: ArithmeticErrorKind::Overflow,
         }
     }
 
-    fn underflows<T>(&self, lhs: &Lhs) -> ArithmeticError
+    fn underflows<T>(&self, lhs: &Lhs) -> ArithmeticError<Lhs, Self>
     where
         T: NumericType,
     {
         ArithmeticError {
-            lhs: Box::new(lhs.clone()),
-            rhs: Box::new(self.clone()),
-            type_id: std::any::TypeId::of::<T>(),
+            lhs: lhs.clone(),  // Box::new(lhs.clone()),
+            rhs: self.clone(), // Box::new(self.clone()),
+            type_name: std::any::type_name::<Lhs>().to_string(),
+            // type_id: std::any::TypeId::of::<T>(),
             kind: ArithmeticErrorKind::Underflow,
         }
     }
@@ -159,7 +203,8 @@ pub trait CheckedAdd<Rhs = Self>: Sized {
     type Output;
 
     // fn checked_add(&self, v: &Rhs) -> Result<Self::Output, AddError<Self, Rhs>>;
-    fn checked_add(&self, rhs: &Rhs) -> Result<Self::Output, Error>;
+    // fn checked_add(&self, rhs: &Rhs) -> Result<Self::Output, Error>;
+    fn checked_add(&self, rhs: &Rhs) -> Result<Self::Output, AddError<Self, Rhs>>;
 }
 
 // trait TestTrait {
@@ -204,8 +249,11 @@ macro_rules! impl_unsigned_checked_add {
     ( $T:ty ) => {
         impl CheckedAdd for $T {
             type Output = $T;
-            fn checked_add(&self, rhs: &Self) -> Result<Self::Output, Error> {
-                num::CheckedAdd::checked_add(self, rhs).ok_or(Error::Add(rhs.overflows::<$T>(self)))
+            fn checked_add(&self, rhs: &Self) -> Result<Self::Output, AddError<Self, Self>> {
+                num::CheckedAdd::checked_add(self, rhs)
+                    .ok_or(rhs.overflows::<$T>(self))
+                    .map_err(AddError)
+                // .ok_or(Error::Add(rhs.overflows::<$T>(self)))
                 // if rhs.is_negative() {
                 //     self.checked_sub(&rhs.abs()).ok_or(rhs.underflows::<T>(self))
                 // } else {
@@ -220,13 +268,17 @@ macro_rules! impl_signed_checked_add {
     ( $T:ty ) => {
         impl CheckedAdd for $T {
             type Output = $T;
-            fn checked_add(&self, rhs: &Self) -> Result<Self::Output, Error> {
+            fn checked_add(&self, rhs: &Self) -> Result<Self::Output, AddError<$T, $T>> {
                 if rhs.is_negative() {
-                    num::CheckedSub::checked_sub(self, &rhs.abs()).ok_or(rhs.underflows::<$T>(self))
+                    num::CheckedSub::checked_sub(self, &rhs.abs())
+                        .ok_or(rhs.underflows::<$T>(self))
+                        .map_err(AddError)
                 } else {
-                    num::CheckedAdd::checked_add(self, &rhs).ok_or(rhs.overflows::<$T>(self))
+                    num::CheckedAdd::checked_add(self, &rhs)
+                        .ok_or(rhs.overflows::<$T>(self))
+                        .map_err(AddError)
                 }
-                .map_err(Error::Add)
+                // .map_err(Error::Add)
             }
         }
     };
@@ -311,6 +363,12 @@ where
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    // #[test]
+    // fn any_type_name() {
+    //     use std::any::Any;
+    //     let any: Box<dyn Any> = Box::new(i32);
+    // }
 
     #[test]
     fn option_ord() {
