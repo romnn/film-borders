@@ -1,5 +1,3 @@
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::error;
 use crate::imageops::*;
 use crate::numeric::{Ceil, Round, RoundingMode};
@@ -12,7 +10,7 @@ use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Rotation {
     Rotate0,
     Rotate90,
@@ -21,6 +19,7 @@ pub enum Rotation {
 }
 
 impl Default for Rotation {
+    #[inline]
     fn default() -> Self {
         Self::Rotate0
     }

@@ -1,7 +1,7 @@
 #![allow(warnings)]
 
 pub mod border;
-#[cfg(feature = "borders")]
+#[cfg(feature = "builtin")]
 pub mod builtin;
 pub mod debug;
 pub mod defaults;
@@ -22,6 +22,7 @@ pub use imageops::FillMode;
 pub use img::Image;
 pub use options::*;
 pub use types::*;
+// {BoundedSize, FitMode, Rotation, SidesPercent};
 
 use std::path::Path;
 
@@ -60,7 +61,7 @@ impl ImageBorders {
         // prepare images
         let mut images: Vec<img::Image> = self.images.clone();
         let primary = images.get_mut(0).ok_or(Error::MissingImage)?;
-        primary.rotate(options.image_rotation);
+        primary.rotate(&options.image_rotation);
         if let Some(crop_percent) = options.crop {
             let crop = crop_percent * primary.size();
             primary.crop_sides(crop);
@@ -71,7 +72,7 @@ impl ImageBorders {
             Some(border) => {
                 let mut border = border.into_border()?;
                 border.rotate_to_orientation(primary.orientation())?;
-                border.rotate(options.border_rotation)?;
+                border.rotate(&options.border_rotation)?;
                 Some(border)
             }
             None => None,
@@ -96,6 +97,7 @@ impl ImageBorders {
         let base = original_content_size.min_dim();
         let frame_width: Sides = options.frame_width * base;
         let margin: Sides = Sides::uniform((margin_factor * base as f32) as u32);
+        // let margin: Sides = Sides::uniform((margin_factor * f64::from(base)) as u32);
         let content_size = original_content_size + frame_width + margin;
         let default_output_size = content_size * (1.0 / scale_factor);
 
@@ -124,7 +126,7 @@ impl ImageBorders {
 
         let new_content_size =
             content_size.scale_to(output_size * scale_factor, ResizeMode::Contain);
-        let scale = new_content_size.min_dim() as f64 / content_size.min_dim() as f64;
+        let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
         let frame_width = frame_width * scale;
         let margin = margin * scale;
         crate::debug!(&frame_width);
@@ -237,14 +239,14 @@ impl ImageBorders {
 #[cfg(test)]
 mod tests {
     use super::border::{self, Border};
-    #[cfg(feature = "borders")]
+    #[cfg(feature = "builtin")]
     use super::borders::BuiltinBorder;
     use super::types::*;
-    #[cfg(feature = "borders")]
+    #[cfg(feature = "builtin")]
     use super::ImageFormat;
     use super::{ImageBorders, Options};
     use anyhow::Result;
-    #[cfg(feature = "borders")]
+    #[cfg(feature = "builtin")]
     use std::io::Cursor;
     use std::path::PathBuf;
 
@@ -266,7 +268,7 @@ mod tests {
     macro_rules! format_tests {
         ($($name:ident: $values:expr,)*) => {
             $(
-                #[cfg(feature = "borders")]
+                #[cfg(feature = "builtin")]
                 #[test]
                 fn $name() -> Result<()> {
                     let (infile, outfile, options) = $values;
@@ -311,7 +313,7 @@ mod tests {
            "samples/lowres.jpg", "testing/lowres_default.jpg", &Options::default()),
     }
 
-    #[cfg(feature = "borders")]
+    #[cfg(feature = "builtin")]
     #[test]
     fn test_read_write_in_memory() -> Result<()> {
         let bytes = include_bytes!("../samples/lowres.jpg");

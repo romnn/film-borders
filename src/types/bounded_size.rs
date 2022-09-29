@@ -1,6 +1,4 @@
 use super::*;
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::imageops::*;
 use crate::numeric::{Ceil, OptionOrd, Round, RoundingMode};
 use crate::{img, utils};
@@ -12,13 +10,14 @@ use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default, Copy, Clone)]
 pub struct BoundedSize {
     pub width: Option<u32>,
     pub height: Option<u32>,
 }
 
 impl From<Size> for BoundedSize {
+    #[inline]
     fn from(size: Size) -> Self {
         Self {
             width: Some(size.width),
@@ -28,6 +27,7 @@ impl From<Size> for BoundedSize {
 }
 
 impl BoundedSize {
+    #[inline]
     pub fn clamp_min(self, other: Self) -> Self {
         let width = OptionOrd::min(self.width, other.width);
         let height = OptionOrd::min(self.height, other.height);
@@ -38,6 +38,7 @@ impl BoundedSize {
 #[wasm_bindgen]
 impl BoundedSize {
     #[wasm_bindgen(constructor)]
+    #[inline]
     pub fn new() -> Self {
         BoundedSize::default()
     }

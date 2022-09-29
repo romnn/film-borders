@@ -1,4 +1,4 @@
-use crate::{borders, img, options, types, utils, ImageBorders};
+use crate::{border, builtin, img, options, types, utils, ImageBorders};
 use image::{DynamicImage, ImageBuffer};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
@@ -36,15 +36,15 @@ fn image_from_canvas(
 #[wasm_bindgen]
 #[derive(Debug, Default)]
 pub struct Border {
-    #[cfg(feature = "borders")]
-    builtin: Option<borders::BuiltinBorder>,
+    #[cfg(feature = "builtin")]
+    builtin: Option<builtin::Border>,
     custom: Option<ImageData>,
 }
 
 #[wasm_bindgen]
 impl Border {
     #[wasm_bindgen(constructor)]
-    pub fn new(custom: Option<ImageData>, builtin: Option<borders::BuiltinBorder>) -> Border {
+    pub fn new(custom: Option<ImageData>, builtin: Option<builtin::Border>) -> Border {
         Border { custom, builtin }
     }
 
@@ -54,7 +54,7 @@ impl Border {
             ..Default::default()
         }
     }
-    pub fn builtin(builtin: borders::BuiltinBorder) -> Border {
+    pub fn builtin(builtin: builtin::Border) -> Border {
         Border {
             builtin: Some(builtin),
             ..Default::default()
@@ -134,11 +134,11 @@ impl WasmImageBorders {
         console_log!("border: {:?}", &border);
         console_log!("options: {:?}", &options);
         let border = match border.custom {
-            None => border.builtin.map(types::BorderSource::Builtin),
+            None => border.builtin.map(border::Kind::Builtin),
             Some(data) => {
                 let image = WasmImage::from_image_data(data)?;
-                let border = types::Border::from_image(image.inner, None)
-                    .map(types::BorderSource::Custom)
+                let border = border::Border::from_image(image.inner, None)
+                    .map(border::Kind::Custom)
                     .map_err(|err| JsValue::from_str(&err.to_string()))?;
                 Some(border)
             }

@@ -165,7 +165,7 @@ impl Image {
         .to_image();
     }
 
-    pub fn rotate(&mut self, angle: Rotation) {
+    pub fn rotate(&mut self, angle: &Rotation) {
         if let Some(rotated) = match angle {
             Rotation::Rotate0 => None,
             Rotation::Rotate90 => Some(rotate90(&self.inner)),

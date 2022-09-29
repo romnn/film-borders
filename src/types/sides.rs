@@ -1,5 +1,3 @@
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::{Ceil, Round, RoundingMode};

@@ -89,6 +89,7 @@ pretty_assertions = "1"
 wasm-bindgen-test = "0.3"
 tempdir = "0.3"
 anyhow = "1"
+approx = "0"
 
 [dependencies.web-sys]
 version = "0.3"

@@ -97,17 +97,17 @@ fn main() {
             let border = if options.no_border {
                 None
             } else {
-                #[cfg(feature = "borders")]
+                #[cfg(feature = "builtin")]
                 let border = match options.border {
                     None => Ok(border::Kind::default()),
-                    Some(border) => borders::BuiltinBorder::from_str(&border)
+                    Some(border) => builtin::Border::from_str(&border)
                         .map(border::Kind::Builtin)
                         .or_else(|_| {
                             Border::open(PathBuf::from(border), None).map(border::Kind::Custom)
                         }),
                 };
 
-                #[cfg(not(feature = "borders"))]
+                #[cfg(not(feature = "builtin"))]
                 let border = options
                     .border
                     .ok_or(Error::MissingBorder)

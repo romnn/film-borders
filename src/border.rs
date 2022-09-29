@@ -1,9 +1,7 @@
-#[cfg(feature = "borders")]
-use super::builtin;
 use super::imageops::*;
+use super::numeric::{Ceil, Round, RoundingMode};
 use super::types::Orientation;
 use super::types::*;
-use super::numeric::{Ceil, Round, RoundingMode};
 use super::{img, utils};
 use num::traits::NumCast;
 use regex::Regex;
@@ -38,8 +36,8 @@ impl Default for BorderOptions {
 }
 
 pub enum Kind {
-    #[cfg(feature = "borders")]
-    Builtin(borders::BuiltinBorder),
+    #[cfg(feature = "builtin")]
+    Builtin(super::builtin::Border),
     Custom(Border),
 }
 
@@ -47,7 +45,7 @@ impl Kind {
     #[inline]
     pub fn into_border(self) -> Result<Border, super::Error> {
         match self {
-            #[cfg(feature = "borders")]
+            #[cfg(feature = "builtin")]
             Self::Builtin(builtin) => builtin.into_border(),
             Self::Custom(border) => Ok(border),
         }
@@ -57,7 +55,7 @@ impl Kind {
 impl std::fmt::Debug for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            #[cfg(feature = "borders")]
+            #[cfg(feature = "builtin")]
             Kind::Builtin(builtin) => write!(f, "Builtin({:?})", builtin),
             Kind::Custom(_) => write!(f, "Custom"),
         }
@@ -265,7 +263,7 @@ impl Border {
     }
 
     #[inline]
-    pub fn rotate(&mut self, angle: Rotation) -> Result<(), super::Error> {
+    pub fn rotate(&mut self, angle: &Rotation) -> Result<(), super::Error> {
         self.inner.rotate(angle);
         self.compute_transparent_components(self.options)?;
         Ok(())
@@ -274,7 +272,7 @@ impl Border {
     #[inline]
     pub fn rotate_to_orientation(&mut self, orientation: Orientation) -> Result<(), super::Error> {
         if self.inner.orientation() != orientation {
-            self.rotate(Rotation::Rotate90)?;
+            self.rotate(&Rotation::Rotate90)?;
         }
         Ok(())
     }
@@ -416,9 +414,9 @@ mod tests {
             alpha_threshold: 0.95,
         };
         let img = img::Image::open(&border_file)?;
-        let border = Border::from_image(img.clone(), Some(options))?;
+        let border = Border::from_image(img, Some(options))?;
 
-        for rotation in vec![
+        for rotation in &[
             Rotation::Rotate0,
             Rotation::Rotate90,
             Rotation::Rotate180,

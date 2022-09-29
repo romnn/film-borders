@@ -1,6 +1,4 @@
 use super::*;
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::{Ceil, Round, RoundingMode};
@@ -13,7 +11,7 @@ use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default, Copy, Clone)]
 pub struct Size {
     pub width: u32,
     pub height: u32,

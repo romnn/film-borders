@@ -1,10 +1,8 @@
 use super::*;
-use crate::{img, utils};
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::{Ceil, Round, RoundingMode};
+use crate::{img, utils};
 use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -12,7 +10,7 @@ use std::cmp::{max, min};
 use std::path::Path;
 use wasm_bindgen::prelude::*;
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Rect {
     pub top: i64,
     pub left: i64,
@@ -53,7 +51,7 @@ impl Rect {
 
     #[inline]
     pub fn center(&self) -> Point {
-        self.top_left() + (self.size() / 2.0f64)
+        self.top_left() + Point::from(self.size() / 2.0f64)
     }
 
     #[inline]

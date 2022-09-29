@@ -1,11 +1,9 @@
 use super::*;
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::{self, ArithmeticOp, Round, RoundingMode};
+use crate::numeric::{self, AddError, ArithmeticError, MulError, SubError};
+use crate::numeric::{ArithmeticOp, Round, RoundingMode};
 use crate::{img, utils};
-use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
@@ -13,7 +11,7 @@ use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct Point {
     pub x: i64,
     pub y: i64,
@@ -21,7 +19,97 @@ pub struct Point {
 
 impl numeric::NumericType for Point {}
 
+#[wasm_bindgen]
+impl Point {
+    #[wasm_bindgen(constructor)]
+    #[inline]
+    pub fn new() -> Self {
+        Point::default()
+    }
+
+    #[inline]
+    pub fn origin() -> Self {
+        Self { x: 0, y: 0 }
+    }
+}
+
+impl Point {
+    // #[inline]
+    // pub fn clamp<P1, P2>(self, min: P1, max: P2) -> Self
+    // where
+    //     P1: AsRef<Point>,
+    //     P2: AsRef<Point>,
+    // {
+    //     // let min: Point = min.into();
+    //     // let max: Point = max.into();
+    //     Self {
+    //         x: num::clamp(self.x, min.as_ref().x, max.as_ref().x),
+    //         // x: utils::clamp(self.x, min.x, max.x),
+    //         y: num::clamp(self.y, min.as_ref().y, max.as_ref().y),
+    //         // y: utils::clamp(self.y, min.y, max.y),
+    //     }
+    // }
+
+    #[inline]
+    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, MulError<Self, F>>
+    where
+        R: RoundingMode,
+        F: num::NumCast,
+    {
+        // match (|| {
+        // let scalar: f64 = num::NumCast::from(scalar)?;
+        // let x: f64 = num::NumCast::from(self.x)?;
+        // let y: f64 = num::NumCast::from(self.y)?;
+        // let x = R::round(self.x as f64 * scalar) as u64;
+        // let y = R::round(self.y as f64 * scalar) as u64;
+        // Self {
+        //     x: x as i64,
+        //     y: y as i64,
+        // }
+        Ok(self)
+    }
+
+    // #[inline]
+    // pub fn magnitude(&self) -> Option<f64> {
+    //     // c**2 = a**2 + b**2
+    //     let x: f64 = num::NumCast::from(self.x)?;
+    //     let y: f64 = num::NumCast::from(self.y)?;
+    //     let mag = (x.powi(2) + y.powi(2)).sqrt();
+    //     if mag.is_nan() {
+    //         None
+    //     } else {
+    //         Some(mag)
+    //     }
+    // }
+
+    // #[inline]
+    // pub fn abs(self) -> Self {
+    //     Self {
+    //         x: self.x.abs(),
+    //         y: self.y.abs(),
+    //     }
+    // }
+}
+
+impl Default for Point {
+    #[inline]
+    fn default() -> Self {
+        Self::origin()
+    }
+}
+
+impl From<Size> for Point {
+    #[inline]
+    fn from(size: Size) -> Self {
+        Self {
+            x: i64::from(size.width),
+            y: i64::from(size.height),
+        }
+    }
+}
+
 impl std::fmt::Display for Point {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Point")
             .field("x", &self.x)
@@ -33,58 +121,21 @@ impl std::fmt::Display for Point {
 impl numeric::CheckedAdd for Point {
     type Output = Self;
 
-    // fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::Error<Point, Point>> {
-    // fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::Error> {
-    fn checked_add(&self, rhs: &Point) -> Result<Point, numeric::AddError<Self, Self>> {
-        // numeric::WouldOverflowError {
-        // let err = numeric::Error::Add(numeric::WouldOverflowError {
-        //     left: self,
-        //     right: rhs,
-        // });
-        // let test: Option<Point> = (|| {
-        //     let x = self.x.checked_add(rhs.x)?; // .ok_or(err)?;
-        //     let y = self.y.checked_add(rhs.y)?; // .ok_or(err)?;
-        //     Some(Self { x, y })
-        // })();
+    #[inline]
+    fn checked_add(&self, rhs: &Point) -> Result<Point, AddError<Self, Self>> {
         match (|| {
-            // let x = if rhs.x < 0 {
-            //     self.x
-            //         .checked_sub(rhs.x.abs())
-            //         .ok_or(rhs.underflows::<i64>(self))
-            // } else {
-            //     self.x.checked_add(rhs.x).ok_or(rhs.overflows::<i64>(self))
-            // }?;
-            // let y = self.y;
-            let x = self.x;
-            // let y = CheckedAdd:checked_add(self.y.checked_add(rhs.y)?; // .ok_or(err)?;
             let x = numeric::CheckedAdd::checked_add(&self.x, &rhs.x)?;
-            // .ok_or(err)?;
             let y = numeric::CheckedAdd::checked_add(&self.y, &rhs.y)?;
-            // .ok_or(err)?;
-            // Ok::<point::Point, numeric::Error>(Self { x, y })
-            // Ok::<Point, numeric::AddError>(Self { x, y })
             Ok::<Point, _>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            // Err(err) => Err(err),
-            Err(numeric::AddError(err)) => {
-                // numeric::Error::Add(
-                // todo: wrap the error here
-                // let err = rhs.overflows::<i64>(self);
-
-                // err.lhs = Box::new(self.clone());
-                // err.rhs = Box::new(rhs.clone());
-                // Err(numeric::AddError(err))
-                Err(numeric::AddError(numeric::ArithmeticError {
-                    lhs: *self,               // Box::new(self.clone()),
-                    rhs: *rhs,                // Box::new(rhs.clone()),
-                    type_name: err.type_name, // ..field_err
-                    kind: err.kind,
-                })) //
-                    // )
-            } // err))err), // numeric::Error::Add(err)),
+            Err(AddError(err)) => Err(AddError(ArithmeticError {
+                lhs: *self,
+                rhs: *rhs,
+                type_name: err.type_name,
+                kind: err.kind,
+            })),
         }
-        // Ok(Self { x, y })
     }
 }
 
@@ -99,11 +150,31 @@ impl std::ops::Add for Point {
     }
 }
 
-impl ops::checked::CheckedSub for Point {
-    fn checked_sub(&self, v: &Self) -> Option<Self> {
-        let x = self.x.checked_sub(v.x)?;
-        let y = self.y.checked_sub(v.y)?;
-        Some(Self { x, y })
+// impl ops::checked::CheckedSub for Point {
+//     fn checked_sub(&self, v: &Self) -> Option<Self> {
+//         let x = self.x.checked_sub(v.x)?;
+//         let y = self.y.checked_sub(v.y)?;
+//         Some(Self { x, y })
+//     }
+// }
+impl numeric::CheckedSub for Point {
+    type Output = Self;
+
+    #[inline]
+    fn checked_sub(&self, rhs: &Point) -> Result<Point, SubError<Self, Self>> {
+        match (|| {
+            let x = numeric::CheckedSub::checked_sub(&self.x, &rhs.x)?;
+            let y = numeric::CheckedSub::checked_sub(&self.y, &rhs.y)?;
+            Ok::<Point, _>(Self { x, y })
+        })() {
+            Ok(point) => Ok(point),
+            Err(SubError(err)) => Err(SubError(ArithmeticError {
+                lhs: *self,
+                rhs: *rhs,
+                type_name: err.type_name,
+                kind: err.kind,
+            })),
+        }
     }
 }
 
@@ -129,114 +200,63 @@ impl std::ops::Sub for Point {
 //     }
 // }
 
-impl std::ops::Add<Size> for Point {
-    type Output = Self;
+// impl std::ops::Add<Size> for Point {
+//     type Output = Self;
 
-    fn add(self, size: Size) -> Self::Output {
-        Point {
-            x: self.x + size.width as i64,
-            y: self.y + size.height as i64,
-        }
-    }
-}
+//     fn add(self, size: Size) -> Self::Output {
+//         Point {
+//             x: self.x + size.width as i64,
+//             y: self.y + size.height as i64,
+//         }
+//     }
+// }
 
-impl<F> std::ops::Mul<F> for Point
+impl<F> numeric::CheckedMul<F> for Point
 where
-    F: NumCast,
+    F: num::NumCast,
 {
     type Output = Self;
 
-    fn mul(self, scalar: F) -> Self::Output {
-        self.scale_by::<_, Round>(scalar)
+    #[inline]
+    fn checked_mul(&self, scalar: &F) -> Result<Point, MulError<Self, F>> {
+        Ok(*self)
+        // self.scale_by::<_, Round>(scalar)
+        // match (|| {
+        //     let x = numeric::CheckedSub::checked_sub(&self.x, &rhs.x)?;
+        //     let y = numeric::CheckedSub::checked_sub(&self.y, &rhs.y)?;
+        //     Ok::<Point, _>(Self { x, y })
+        // })() {
+        //     Ok(point) => Ok(point),
+        //     Err(SubError(err)) => Err(SubError(ArithmeticError {
+        //         lhs: *self,
+        //         rhs: *rhs,
+        //         type_name: err.type_name,
+        //         kind: err.kind,
+        //     })),
+        // }
     }
 }
 
+// impl<F> std::ops::Mul<F> for Point
+// where
+//     F: num::NumCast + std::fmt::Debug,
+// {
+//     type Output = Self;
+
+//     fn mul(self, scalar: F) -> Self::Output {
+//         self.scale_by::<_, Round>(scalar).unwrap()
+//     }
+// }
+
 impl<F> std::ops::Div<F> for Point
 where
-    F: NumCast,
+    F: num::NumCast,
 {
     type Output = Self;
 
     fn div(self, scalar: F) -> Self::Output {
-        let scalar: f64 = NumCast::from(scalar).unwrap();
-        self.scale_by::<_, Round>(1.0 / scalar)
-    }
-}
-
-impl From<Size> for Point {
-    fn from(size: Size) -> Self {
-        Self {
-            x: size.width as i64,
-            y: size.height as i64,
-        }
-    }
-}
-
-#[wasm_bindgen]
-impl Point {
-    #[wasm_bindgen(constructor)]
-    #[inline]
-    pub fn new() -> Self {
-        Point::default()
-    }
-
-    #[inline]
-    pub fn origin() -> Self {
-        Self { x: 0, y: 0 }
-    }
-}
-
-impl Default for Point {
-    #[inline]
-    fn default() -> Self {
-        Self::origin()
-    }
-}
-
-impl Point {
-    #[inline]
-    pub fn clamp<P1, P2>(self, min: P1, max: P2) -> Self
-    where
-        P1: Into<Point>,
-        P2: Into<Point>,
-    {
-        let min: Point = min.into();
-        let max: Point = max.into();
-        Self {
-            x: utils::clamp(self.x, min.x, max.x),
-            y: utils::clamp(self.y, min.y, max.y),
-        }
-    }
-
-    #[inline]
-    pub fn scale_by<F, R>(self, scalar: F) -> Self
-    where
-        R: RoundingMode,
-        F: NumCast,
-    {
-        let scalar: f64 = NumCast::from(scalar).unwrap();
-        let x = R::round(self.x as f64 * scalar) as u64;
-        let y = R::round(self.y as f64 * scalar) as u64;
-        Self {
-            x: x as i64,
-            y: y as i64,
-        }
-    }
-
-    #[inline]
-    pub fn magnitude(&self) -> f64 {
-        // c**2 = a**2 + b**2
-        let x = (self.x as f64).powi(2);
-        let y = (self.y as f64).powi(2);
-        (x + y).sqrt()
-    }
-
-    #[inline]
-    pub fn abs(self) -> Self {
-        Self {
-            x: self.x.abs(),
-            y: self.y.abs(),
-        }
+        let scalar: f64 = num::NumCast::from(scalar).unwrap();
+        self.scale_by::<_, Round>(1.0 / scalar).unwrap()
     }
 }
 

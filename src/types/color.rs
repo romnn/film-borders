@@ -1,5 +1,3 @@
-#[cfg(feature = "borders")]
-use crate::borders;
 use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::{Ceil, Round, RoundingMode};
@@ -41,7 +39,7 @@ fn hex_to_color(hex: &str) -> Result<Color, Error> {
     let hex = hex.to_ascii_lowercase();
     let components = HEX_REGEX
         .captures(&hex)
-        .ok_or_else(|| Error::InvalidHex(hex.to_owned()))?;
+        .ok_or_else(|| Error::InvalidHex(hex.clone()))?;
     let r = from_hex!(components.name("r"))?;
     let g = from_hex!(components.name("g"))?;
     let b = from_hex!(components.name("b"))?;
@@ -49,7 +47,7 @@ fn hex_to_color(hex: &str) -> Result<Color, Error> {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Copy, Clone)]
 pub struct Color {
     rgba: [u8; 4],
 }
