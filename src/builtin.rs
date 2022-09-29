@@ -35,7 +35,7 @@ impl BuiltinBorder {
     pub fn into_border(self) -> Result<types::Border, Error> {
         match self {
             Self::Border120_1 => {
-                let data = include_bytes!("border.png");
+                let data = include_bytes!("../borders/border.png");
                 let img = img::Image::from_reader(io::Cursor::new(&data))?;
                 types::Border::from_image(img, None)
             }

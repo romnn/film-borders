@@ -5,11 +5,11 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Options {
-    pub output_size: OutputSize,
-    pub output_size_bounds: OutputSize,
+    pub output_size: BoundedSize,
+    pub output_size_bounds: BoundedSize,
     pub scale_factor: f32,
     pub margin: f32,
-    pub mode: Mode,
+    pub mode: FitMode,
     pub crop: Option<SidesPercent>,
     pub frame_width: SidesPercent,
     pub image_rotation: Rotation,
@@ -22,11 +22,11 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            output_size: OutputSize::default(),
-            output_size_bounds: OutputSize::default(),
+            output_size: BoundedSize::default(),
+            output_size_bounds: BoundedSize::default(),
             margin: 0.0,
             scale_factor: 1.0,
-            mode: Mode::default(),
+            mode: FitMode::default(),
             crop: None,
             frame_width: SidesPercent::default(),
             image_rotation: Rotation::default(),

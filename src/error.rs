@@ -15,28 +15,10 @@ pub enum Error {
     Image(#[from] image::error::ImageError),
 
     #[error("border error: {0}")]
-    Border(#[from] BorderError),
+    Border(#[from] super::border::Error),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum BorderError {
-    #[error("border must contain at least one transparent area, found {0:?}")]
-    BadTransparency(Vec<Rect>),
-
-    #[error("invalid border: {0}")]
-    Invalid(String),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ColorError {
-    #[error("invalid hex color: `{0}`")]
-    InvalidHex(String),
-
-    #[error("hex color is missing component")]
-    MissingComponent,
 }
 
 #[derive(thiserror::Error, Debug)]

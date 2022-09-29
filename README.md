@@ -33,8 +33,9 @@ film-borders apply --help
 ```
 
 #### TODO
-- remove the apply subcommand
 - use impls where possible
+- inline everything
+- add benchmarks
 - split the types into multiple files
 - add documentation
 - make all ops checked
@@ -46,6 +47,7 @@ film-borders apply --help
 - use generic image backend
 
 #### Done
+- remove the apply subcommand
 - make border optional
 - allow custom border images (cli, lib and web)
 - make nice ui components

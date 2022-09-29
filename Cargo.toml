@@ -54,9 +54,9 @@ path = "src/cli.rs"
 
 [features]
 default = []
-borders = []
+builtin = []
 wasm = [
-  "borders",
+  "builtin",
   "console_error_panic_hook",
   "chrono/wasmbind"
 ]
@@ -85,6 +85,7 @@ num = "0.4"
 approx = "0.5"
 
 [dev-dependencies]
+pretty_assertions = "1"
 wasm-bindgen-test = "0.3"
 tempdir = "0.3"
 anyhow = "1"

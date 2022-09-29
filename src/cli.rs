@@ -1,14 +1,21 @@
 use chrono::Utc;
 use clap::Parser;
-#[cfg(feature = "borders")]
-use filmborders::borders;
-use filmborders::{img, types, Error, ImageBorders, Options};
+use filmborders::border::{self, Border};
+#[cfg(feature = "builtin")]
+use filmborders::builtin;
+use filmborders::{img, types, Error, ImageBorders};
 use std::path::PathBuf;
-#[cfg(feature = "borders")]
+#[cfg(feature = "builtin")]
 use std::str::FromStr;
 
 #[derive(Parser, Debug, Clone)]
-struct ApplyOpts {
+#[clap(
+    name = "film-borders",
+    version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"),
+    about = "add film borders to an image",
+    author = "romnn <contact@romnn.com>",
+)]
+struct Options {
     #[clap(short = 'i', long = "image")]
     images: Vec<PathBuf>,
 
@@ -49,7 +56,7 @@ struct ApplyOpts {
     frame_width: Option<f32>,
 
     #[clap(long = "fit", help = "fitting mode")]
-    mode: Option<types::Mode>,
+    mode: Option<types::FitMode>,
 
     #[clap(long = "rotate", aliases = &["rotate-image"])]
     image_rotation: Option<types::Rotation>,
@@ -71,126 +78,97 @@ struct ApplyOpts {
 
     #[clap(long = "quality", help = "output image quality (1-100)")]
     quality: Option<u8>,
-}
 
-#[derive(Parser, Debug, Clone)]
-#[clap(
-    name = "film-borders",
-    version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"),
-    about = "add film borders to an image",
-    author = "romnn <contact@romnn.com>",
-    arg_required_else_help = true
-)]
-enum Command {
-    #[clap(name = "apply")]
-    Apply(ApplyOpts),
-}
-
-#[derive(Parser, Debug, Clone)]
-#[clap(about = "apply film borders to an image")]
-pub struct Opts {
     #[clap(short = 'v', parse(from_occurrences))]
     verbosity: u8,
-
-    #[clap(subcommand)]
-    commands: Option<Command>,
 }
 
 fn main() {
-    let opts: Opts = Opts::parse();
-    if let Some(subcommand) = opts.commands {
-        let start = Utc::now().time();
-        match subcommand {
-            Command::Apply(cfg) => {
-                filmborders::debug!(&cfg);
+    let options = Options::parse();
+    let start = Utc::now().time();
+    let images = options
+        .images
+        .iter()
+        .map(img::Image::open)
+        .collect::<Result<Vec<img::Image>, Error>>();
 
-                let images = cfg
-                    .images
-                    .iter()
-                    .map(img::Image::open)
-                    .collect::<Result<Vec<img::Image>, Error>>();
+    match images.and_then(ImageBorders::new) {
+        Ok(mut borders) => {
+            let border = if options.no_border {
+                None
+            } else {
+                #[cfg(feature = "borders")]
+                let border = match options.border {
+                    None => Ok(border::Kind::default()),
+                    Some(border) => borders::BuiltinBorder::from_str(&border)
+                        .map(border::Kind::Builtin)
+                        .or_else(|_| {
+                            Border::open(PathBuf::from(border), None).map(border::Kind::Custom)
+                        }),
+                };
 
-                match images.and_then(ImageBorders::new) {
-                    Ok(mut borders) => {
-                        let border = if cfg.no_border {
-                            None
-                        } else {
-                            #[cfg(feature = "borders")]
-                            let border = match cfg.border {
-                                None => Ok(types::BorderSource::default()),
-                                Some(border) => borders::BuiltinBorder::from_str(&border)
-                                    .map(types::BorderSource::Builtin)
-                                    .or_else(|_| {
-                                        types::Border::open(PathBuf::from(border), None)
-                                            .map(types::BorderSource::Custom)
-                                    }),
-                            };
+                #[cfg(not(feature = "borders"))]
+                let border = options
+                    .border
+                    .ok_or(Error::MissingBorder)
+                    .and_then(|border| {
+                        Border::open(PathBuf::from(border), None)
+                            .map(border::Kind::Custom)
+                            .map_err(Into::into)
+                    });
 
-                            #[cfg(not(feature = "borders"))]
-                            let border =
-                                cfg.border.ok_or(Error::MissingBorder).and_then(|border| {
-                                    types::Border::open(PathBuf::from(border), None)
-                                        .map(types::BorderSource::Custom)
-                                        .map_err(Into::into)
-                                });
-
-                            let border = match border {
-                                Ok(border) => border,
-                                Err(err) => {
-                                    eprintln!("failed to read border: {:?}", err);
-                                    return;
-                                }
-                            };
-                            Some(border)
-                        };
-
-                        let options = Options {
-                            output_size: types::OutputSize {
-                                width: cfg.output_width,
-                                height: cfg.output_height,
-                            },
-                            output_size_bounds: types::OutputSize {
-                                width: cfg.max_output_width,
-                                height: cfg.max_output_height,
-                            },
-                            mode: cfg.mode.unwrap_or_default(),
-                            crop: Some(types::SidesPercent {
-                                top: cfg.crop_top.unwrap_or(0.0),
-                                right: cfg.crop_right.unwrap_or(0.0),
-                                bottom: cfg.crop_bottom.unwrap_or(0.0),
-                                left: cfg.crop_left.unwrap_or(0.0),
-                            }),
-                            scale_factor: cfg.scale_factor.unwrap_or(1.0),
-                            margin: cfg.margin.unwrap_or(0.05),
-                            frame_width: types::SidesPercent::uniform(
-                                cfg.frame_width.unwrap_or(0.01),
-                            ),
-                            image_rotation: cfg.image_rotation.unwrap_or_default(),
-                            border_rotation: cfg.border_rotation.unwrap_or_default(),
-                            background_color: cfg.background_color,
-                            frame_color: cfg.frame_color.unwrap_or_else(types::Color::black),
-
-                            preview: cfg.preview,
-                        };
-                        filmborders::debug!(&options);
-                        match borders.add_border(border, &options).and_then(|result| {
-                            match cfg.output {
-                                Some(output) => result.save_with_filename(output, cfg.quality),
-                                None => result.save(cfg.quality),
-                            }
-                        }) {
-                            Ok(_) => {
-                                println!(
-                                    "completed in {} msec",
-                                    (Utc::now().time() - start).num_milliseconds()
-                                )
-                            }
-                            Err(err) => eprintln!("{}", err),
-                        };
+                let border = match border {
+                    Ok(border) => border,
+                    Err(err) => {
+                        eprintln!("failed to read border: {:?}", err);
+                        return;
                     }
-                    Err(err) => eprintln!("{}", err),
+                };
+                Some(border)
+            };
+
+            let border_options = filmborders::Options {
+                output_size: types::BoundedSize {
+                    width: options.output_width,
+                    height: options.output_height,
+                },
+                output_size_bounds: types::BoundedSize {
+                    width: options.max_output_width,
+                    height: options.max_output_height,
+                },
+                mode: options.mode.unwrap_or_default(),
+                crop: Some(types::SidesPercent {
+                    top: options.crop_top.unwrap_or(0.0),
+                    right: options.crop_right.unwrap_or(0.0),
+                    bottom: options.crop_bottom.unwrap_or(0.0),
+                    left: options.crop_left.unwrap_or(0.0),
+                }),
+                scale_factor: options.scale_factor.unwrap_or(1.0),
+                margin: options.margin.unwrap_or(0.05),
+                frame_width: types::SidesPercent::uniform(options.frame_width.unwrap_or(0.01)),
+                image_rotation: options.image_rotation.unwrap_or_default(),
+                border_rotation: options.border_rotation.unwrap_or_default(),
+                background_color: options.background_color,
+                frame_color: options.frame_color.unwrap_or_else(types::Color::black),
+
+                preview: options.preview,
+            };
+            filmborders::debug!(&border_options);
+            match borders
+                .add_border(border, &border_options)
+                .and_then(|result| match options.output {
+                    Some(output) => result.save_with_filename(output, options.quality),
+                    None => result.save(options.quality),
+                }) {
+                Ok(_) => {
+                    println!(
+                        "completed in {} msec",
+                        (Utc::now().time() - start).num_milliseconds()
+                    )
                 }
-            }
+                Err(err) => eprintln!("{}", err),
+            };
         }
+        Err(err) => eprintln!("{}", err),
     }
 }

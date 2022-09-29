@@ -1,16 +1,21 @@
+#![allow(warnings)]
+
+pub mod border;
 #[cfg(feature = "borders")]
-pub mod borders;
+pub mod builtin;
 pub mod debug;
 pub mod defaults;
 pub mod error;
 pub mod imageops;
 pub mod img;
+mod numeric;
 pub mod options;
 pub mod types;
 pub mod utils;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+pub use border::Border;
 pub use error::Error;
 pub use image::ImageFormat;
 pub use imageops::FillMode;
@@ -49,7 +54,7 @@ impl ImageBorders {
 
     pub fn add_border(
         &mut self,
-        border: Option<BorderSource>,
+        border: Option<border::Kind>,
         options: &Options,
     ) -> Result<img::Image, Error> {
         // prepare images
@@ -74,8 +79,8 @@ impl ImageBorders {
 
         let original_content_size = match border {
             Some(ref mut border) => match options.mode {
-                Mode::FitImage => border.size_for(primary.size()),
-                Mode::FitBorder => {
+                FitMode::Image => border.size_for(primary.size()),
+                FitMode::Border => {
                     // create a new custom border
                     *border = Border::new(border.clone(), primary.size(), None)?;
                     border.size()
@@ -96,7 +101,7 @@ impl ImageBorders {
 
         // set output size and do not keep aspect ratio
         let output_size = match options.output_size {
-            OutputSize {
+            BoundedSize {
                 width: Some(width),
                 height: Some(height),
             } => Size { width, height },
@@ -157,7 +162,7 @@ impl ImageBorders {
 
         crate::debug!("overlay content");
         match options.mode {
-            Mode::FitImage => {
+            FitMode::Image => {
                 let default_component = vec![default_component];
                 let components = match border {
                     Some(ref mut border) => {
@@ -189,7 +194,7 @@ impl ImageBorders {
                     result_image.overlay(border.as_ref(), border_rect.top_left());
                 }
             }
-            Mode::FitBorder => {
+            FitMode::Border => {
                 let c = match border {
                     Some(ref mut border) => {
                         border.resize_to_fit(border_rect.size(), ResizeMode::Contain)?;
@@ -231,12 +236,13 @@ impl ImageBorders {
 
 #[cfg(test)]
 mod tests {
+    use super::border::{self, Border};
     #[cfg(feature = "borders")]
     use super::borders::BuiltinBorder;
     use super::types::*;
     #[cfg(feature = "borders")]
     use super::ImageFormat;
-    use super::{Border, BorderSource, ImageBorders, Options};
+    use super::{ImageBorders, Options};
     use anyhow::Result;
     #[cfg(feature = "borders")]
     use std::io::Cursor;
@@ -244,11 +250,11 @@ mod tests {
 
     lazy_static::lazy_static! {
         pub static ref OPTIONS: Options = Options {
-            output_size: OutputSize {
+            output_size: BoundedSize {
                 width: Some(750),
                 height: Some(750),
             },
-            mode: Mode::FitImage,
+            mode: FitMode::Image,
             crop: Some(SidesPercent::uniform(0.05)),
             scale_factor: 0.95,
             frame_width: SidesPercent::uniform(0.02),
@@ -269,7 +275,7 @@ mod tests {
                     let output = repo.join(&outfile);
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
-                    let border = BorderSource::Builtin(BuiltinBorder::Border120_1);
+                    let border = border::Kind::Builtin(BuiltinBorder::Border120_1);
                     let result = borders.add_border(Some(border), options)?;
                     result.save(Some(&output), None)?;
                     assert!(output.is_file());
@@ -311,7 +317,7 @@ mod tests {
         let bytes = include_bytes!("../samples/lowres.jpg");
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
-        let border = BorderSource::Builtin(BuiltinBorder::Border120_1);
+        let border = border::Kind::Builtin(BuiltinBorder::Border120_1);
         let result = borders.add_border(Some(border), &OPTIONS)?;
         let mut output = Cursor::new(Vec::new());
         result.encode_to(&mut output, ImageFormat::Png, None)?;
@@ -327,7 +333,7 @@ mod tests {
         let output = repo.join("testing/lowres_custom_border.jpg");
         assert!(input.is_file());
         assert!(border_file.is_file());
-        let border = BorderSource::Custom(Border::open(&border_file, None)?);
+        let border = border::Kind::Custom(Border::open(&border_file, None)?);
         let mut borders = ImageBorders::open(&input)?;
         let result = borders.add_border(Some(border), &OPTIONS)?;
         result.save_with_filename(&output, None)?;
