@@ -25,7 +25,7 @@ pub use img::Image;
 pub use options::*;
 pub use types::*;
 
-use numeric::ops::{CheckedAdd, CheckedMul};
+use numeric::ops::{CheckedAdd, CheckedMul, CheckedSub};
 use std::path::Path;
 
 pub struct ImageBorders {
@@ -153,12 +153,16 @@ impl ImageBorders {
 
         result_image.fill_rect(
             options.frame_color,
-            (content_rect - margin).top_left(),
-            (content_rect - margin).size(),
+            (content_rect.checked_sub(margin).unwrap()).top_left(),
+            (content_rect.checked_sub(margin).unwrap()).size(),
             FillMode::Set,
         );
 
-        let border_rect = content_rect - margin - frame_width;
+        let border_rect = content_rect
+            .checked_sub(margin)
+            .unwrap()
+            .checked_sub(frame_width)
+            .unwrap();
         crate::debug!(&border_rect);
 
         #[cfg(debug_assertions)]
@@ -190,7 +194,7 @@ impl ImageBorders {
 
                 for (c, image) in components {
                     crate::debug!("drawing {:?}", &c);
-                    let mut image_rect = *c + border_rect.top_left();
+                    let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
                     image_rect = image_rect.extend(3);
                     image_rect = image_rect.clip_to(&border_rect);
 
@@ -213,7 +217,7 @@ impl ImageBorders {
                     None => &default_component,
                 };
 
-                let mut image_rect = *c + border_rect.top_left();
+                let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
                 image_rect = image_rect.extend(3);
                 image_rect = image_rect.clip_to(&border_rect);
 

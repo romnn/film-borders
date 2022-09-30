@@ -147,30 +147,6 @@ impl Size {
         let width = R::round(width).cast::<u32>()?;
         let height = R::round(height).cast::<u32>()?;
         Ok(Self { width, height })
-
-        // let scalar: f64 = num::NumCast::from(scalar).unwrap();
-        // let width = max(R::round(self.width as f64 * scalar) as u64, 1);
-        // let height = max(R::round(self.height as f64 * scalar) as u64, 1);
-        // if width > u32::MAX as u64 {
-        //     let ratio = u32::MAX as f64 / self.width as f64;
-        //     let height = max((self.height as f64 * ratio).round() as u32, 1);
-        //     Self {
-        //         width: u32::MAX,
-        //         height,
-        //     }
-        // } else if height > u32::MAX as u64 {
-        //     let ratio = u32::MAX as f64 / self.height as f64;
-        //     let width = max((self.width as f64 * ratio).round() as u32, 1);
-        //     Self {
-        //         width,
-        //         height: u32::MAX,
-        //     }
-        // } else {
-        //     Self {
-        //         width: width as u32,
-        //         height: height as u32,
-        //     }
-        // }
     }
 
     #[inline]
@@ -266,13 +242,6 @@ impl Size {
             bottom: bottom_right.height,
             right: bottom_right.width,
         }
-
-        // Sides {
-        //     top: top_left.height,
-        //     left: top_left.width,
-        //     bottom: bottom_right.height,
-        //     right: bottom_right.width,
-        // }
     }
 }
 
@@ -381,31 +350,6 @@ where
     }
 }
 
-// impl<F> std::ops::Mul<F> for Size
-// where
-//     F: num::NumCast,
-// {
-//     type Output = Self;
-
-//     #[inline]
-//     fn mul(self, scalar: F) -> Self::Output {
-//         self.scale_by::<_, Round>(scalar).unwrap()
-//     }
-// }
-
-// impl<F> std::ops::Div<F> for Size
-// where
-//     F: num::NumCast,
-// {
-//     type Output = Self;
-
-//     #[inline]
-//     fn div(self, scalar: F) -> Self::Output {
-//         let scalar: f64 = num::NumCast::from(scalar).unwrap();
-//         self.scale_by::<_, Round>(1.0 / scalar).unwrap()
-//     }
-// }
-
 impl CheckedSub<Sides> for Size {
     type Output = Self;
     type Error = ops::SubError<Self, Sides>;
@@ -427,20 +371,6 @@ impl CheckedSub<Sides> for Size {
         }
     }
 }
-
-// impl std::ops::Sub<Sides> for Size {
-//     type Output = Self;
-
-//     #[inline]
-//     fn sub(self, sides: Sides) -> Self::Output {
-//         let width = self.width as i64 - sides.width() as i64;
-//         let height = self.height as i64 - sides.height() as i64;
-//         Size {
-//             width: utils::clamp(width, 0, u32::MAX as i64) as u32,
-//             height: utils::clamp(height, 0, u32::MAX as i64) as u32,
-//         }
-//     }
-// }
 
 impl CheckedAdd<Sides> for Size {
     type Output = Self;
@@ -464,34 +394,6 @@ impl CheckedAdd<Sides> for Size {
     }
 }
 
-// impl std::ops::Add<Sides> for Size {
-//     type Output = Self;
-
-//     #[inline]
-//     fn add(self, sides: Sides) -> Self::Output {
-//         let width = self.width as i64 + sides.width() as i64;
-//         let height = self.height as i64 + sides.height() as i64;
-//         Size {
-//             width: utils::clamp(width, 0, u32::MAX as i64) as u32,
-//             height: utils::clamp(height, 0, u32::MAX as i64) as u32,
-//         }
-//     }
-// }
-
-// impl std::ops::Add<Point> for Size {
-//     type Output = Self;
-
-//     #[inline]
-//     fn add(self, p: Point) -> Self::Output {
-//         let width = utils::clamp(self.width as i64 + p.x, 0, u32::MAX as i64);
-//         let height = utils::clamp(self.height as i64 + p.y, 0, u32::MAX as i64);
-//         Size {
-//             width: width as u32,
-//             height: height as u32,
-//         }
-//     }
-// }
-
 impl CheckedAdd for Size {
     type Output = Self;
     type Error = ops::AddError<Self, Self>;
@@ -514,39 +416,6 @@ impl CheckedAdd for Size {
     }
 }
 
-// impl std::ops::Add for Size {
-//     type Output = Self;
-
-//     #[inline]
-//     fn add(self, rhs: Self) -> Self::Output {
-//         Size {
-//             width: self.width + rhs.width,
-//             height: self.height + rhs.height,
-//         }
-//     }
-// }
-
-// impl CheckedAdd<Sides> for Size {
-//     type Output = Self;
-
-//     #[inline]
-//     fn checked_add(self, rhs: Sides) -> Result<Self::Output, ops::AddError<Self, Sides>> {
-//         match (|| {
-//             let width = CheckedAdd::checked_add(self.width, rhs.width())?;
-//             let height = CheckedAdd::checked_add(self.height, rhs.height())?;
-//             Ok(Self { width, height })
-//         })() {
-//             Ok(size) => Ok(size),
-//             Err(ops::AddError(err)) => Err(ops::AddError(numeric::ArithmeticError {
-//                 lhs: self,
-//                 rhs: rhs,
-//                 container_type_name: err.container_type_name,
-//                 kind: err.kind,
-//             })),
-//         }
-//     }
-// }
-
 impl CheckedSub for Size {
     type Output = Self;
     type Error = ops::SubError<Self, Self>;
@@ -568,15 +437,3 @@ impl CheckedSub for Size {
         }
     }
 }
-
-// impl std::ops::Sub for Size {
-//     type Output = Self;
-
-//     #[inline]
-//     fn sub(self, rhs: Self) -> Self::Output {
-//         Size {
-//             width: self.width - rhs.width,
-//             height: self.height - rhs.height,
-//         }
-//     }
-// }

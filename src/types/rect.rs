@@ -1,10 +1,9 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::ops::{CheckedAdd, CheckedDiv, CheckedSub};
-use crate::numeric::{Ceil, Round, RoundingMode};
+use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedSub};
+use crate::numeric::{self, error, Ceil, Round};
 use crate::{img, utils};
-use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
@@ -20,6 +19,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    #[inline]
     pub fn new(top_left: Point, size: Size) -> Self {
         let bottom_right = top_left.checked_add(Point::from(size)).unwrap();
         Self {
@@ -30,6 +30,7 @@ impl Rect {
         }
     }
 
+    #[inline]
     pub fn from_points(p1: Point, p2: Point) -> Self {
         Self {
             top: min(p1.y, p2.y),
@@ -125,7 +126,7 @@ impl Rect {
 
     #[inline]
     pub fn extend(self, value: u32) -> Self {
-        self + Sides::uniform(value)
+        self.checked_add(Sides::uniform(value)).unwrap()
     }
 
     #[inline]
@@ -153,63 +154,131 @@ impl Rect {
     }
 }
 
-impl From<Size> for Rect {
-    fn from(size: Size) -> Self {
-        Self {
-            top: 0,
-            bottom: size.height as i64,
-            left: 0,
-            right: size.width as i64,
-        }
-    }
-}
-
-impl From<Sides> for Rect {
-    fn from(sides: Sides) -> Self {
-        Self {
-            top: sides.top as i64,
-            bottom: sides.bottom as i64,
-            left: sides.left as i64,
-            right: sides.right as i64,
-        }
-    }
-}
-
-impl std::ops::Add<Point> for Rect {
+impl CheckedAdd<Point> for Rect {
     type Output = Self;
+    type Error = ops::AddError<Self, Point>;
 
-    fn add(self, point: Point) -> Self::Output {
-        Self {
-            top: self.top + point.y,
-            left: self.left + point.x,
-            bottom: self.bottom + point.y,
-            right: self.right + point.x,
+    #[inline]
+    fn checked_add(self, rhs: Point) -> Result<Self::Output, Self::Error> {
+        match (|| {
+            let top = CheckedAdd::checked_add(self.top, rhs.y)?;
+            let left = CheckedAdd::checked_add(self.left, rhs.x)?;
+            let bottom = CheckedAdd::checked_add(self.bottom, rhs.y)?;
+            let right = CheckedAdd::checked_add(self.right, rhs.x)?;
+            Ok::<Self, ops::AddError<i64, i64>>(Self {
+                top,
+                left,
+                bottom,
+                right,
+            })
+        })() {
+            Ok(rect) => Ok(rect),
+            Err(err) => Err(ops::AddError(error::ArithmeticError {
+                lhs: self,
+                rhs: rhs,
+                kind: None,
+                cause: Some(Box::new(err)),
+            })),
         }
     }
 }
 
-impl std::ops::Sub<Sides> for Rect {
+// impl std::ops::Add<Point> for Rect {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, point: Point) -> Self::Output {
+//         Self {
+//             top: self.top + point.y,
+//             left: self.left + point.x,
+//             bottom: self.bottom + point.y,
+//             right: self.right + point.x,
+//         }
+//     }
+// }
+
+impl CheckedSub<Sides> for Rect {
     type Output = Self;
+    type Error = ops::SubError<Self, Sides>;
 
-    fn sub(self, sides: Sides) -> Self::Output {
-        Self {
-            top: self.top + sides.top as i64,
-            left: self.left + sides.left as i64,
-            bottom: self.bottom - sides.bottom as i64,
-            right: self.right - sides.right as i64,
+    #[inline]
+    fn checked_sub(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
+        match (|| {
+            let top = CheckedAdd::checked_add(self.top, i64::from(rhs.top))?;
+            let left = CheckedAdd::checked_add(self.left, i64::from(rhs.left))?;
+            let bottom = CheckedSub::checked_sub(self.bottom, i64::from(rhs.bottom))?;
+            let right = CheckedSub::checked_sub(self.right, i64::from(rhs.right))?;
+            Ok::<Self, numeric::Error>(Self {
+                top,
+                left,
+                bottom,
+                right,
+            })
+        })() {
+            Ok(rect) => Ok(rect),
+            Err(numeric::Error(err)) => Err(ops::SubError(error::ArithmeticError {
+                lhs: self,
+                rhs: rhs,
+                kind: None,
+                cause: Some(err),
+            })),
         }
     }
 }
 
-impl std::ops::Add<Sides> for Rect {
+// impl std::ops::Sub<Sides> for Rect {
+//     type Output = Self;
+
+//     #[inline]
+//     fn sub(self, sides: Sides) -> Self::Output {
+//         Self {
+//             top: self.top + sides.top as i64,
+//             left: self.left + sides.left as i64,
+//             bottom: self.bottom - sides.bottom as i64,
+//             right: self.right - sides.right as i64,
+//         }
+//     }
+// }
+
+impl CheckedAdd<Sides> for Rect {
     type Output = Self;
+    type Error = ops::AddError<Self, Sides>;
 
-    fn add(self, sides: Sides) -> Self::Output {
-        Self {
-            top: self.top - sides.top as i64,
-            left: self.left - sides.left as i64,
-            bottom: self.bottom + sides.bottom as i64,
-            right: self.right + sides.right as i64,
+    #[inline]
+    fn checked_add(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
+        match (|| {
+            let top = CheckedSub::checked_sub(self.top, i64::from(rhs.top))?;
+            let left = CheckedSub::checked_sub(self.left, i64::from(rhs.left))?;
+            let bottom = CheckedAdd::checked_add(self.bottom, i64::from(rhs.bottom))?;
+            let right = CheckedAdd::checked_add(self.right, i64::from(rhs.right))?;
+            Ok::<Self, numeric::Error>(Self {
+                top,
+                left,
+                bottom,
+                right,
+            })
+        })() {
+            Ok(rect) => Ok(rect),
+            Err(numeric::Error(err)) => Err(ops::AddError(error::ArithmeticError {
+                lhs: self,
+                rhs: rhs,
+                kind: None,
+                cause: Some(err),
+            })),
         }
     }
 }
+
+// impl std::ops::Add<Sides> for Rect {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, sides: Sides) -> Self::Output {
+//         Self {
+//             top: self.top - sides.top as i64,
+//             left: self.left - sides.left as i64,
+//             bottom: self.bottom + sides.bottom as i64,
+//             right: self.right + sides.right as i64,
+//         }
+//     }
+// }
