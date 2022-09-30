@@ -23,6 +23,7 @@ pub use image::ImageFormat;
 pub use imageops::FillMode;
 pub use img::Image;
 pub use options::*;
+pub use sides::{abs::Sides, percent::Sides as SidesPercent};
 pub use types::*;
 
 use numeric::ops::{CheckedAdd, CheckedMul, CheckedSub};
@@ -65,7 +66,7 @@ impl ImageBorders {
         let primary = images.get_mut(0).ok_or(Error::MissingImage)?;
         primary.rotate(&options.image_rotation);
         if let Some(crop_percent) = options.crop {
-            let crop = crop_percent * primary.size();
+            let crop = crop_percent.checked_mul(primary.size()).unwrap();
             primary.crop_sides(crop);
         };
 
@@ -97,7 +98,7 @@ impl ImageBorders {
         let margin_factor = options.margin.max(0.0);
 
         let base = original_content_size.min_dim();
-        let frame_width: Sides = options.frame_width * base;
+        let frame_width: Sides = options.frame_width.checked_mul(base).unwrap();
         let margin: Sides = Sides::uniform((margin_factor * base as f32) as u32);
         // let margin: Sides = Sides::uniform((margin_factor * f64::from(base)) as u32);
         let content_size = original_content_size
@@ -135,8 +136,8 @@ impl ImageBorders {
             ResizeMode::Contain,
         );
         let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
-        let frame_width = frame_width * scale;
-        let margin = margin * scale;
+        let frame_width = frame_width.checked_mul(scale).unwrap();
+        let margin = margin.checked_mul(scale).unwrap();
         crate::debug!(&frame_width);
         crate::debug!(&margin);
 
@@ -269,9 +270,9 @@ mod tests {
                 height: Some(750),
             },
             mode: FitMode::Image,
-            crop: Some(SidesPercent::uniform(0.05)),
+            crop: Some(sides::percent::Sides::uniform(0.05)),
             scale_factor: 0.95,
-            frame_width: SidesPercent::uniform(0.02),
+            frame_width: sides::percent::Sides::uniform(0.02),
             image_rotation: Rotation::Rotate90,
             ..Default::default()
         };

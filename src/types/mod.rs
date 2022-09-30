@@ -11,7 +11,6 @@ pub use color::Color;
 pub use point::Point;
 pub use rect::Rect;
 pub use rotation::Rotation;
-pub use sides::{Sides, SidesPercent};
 pub use size::Size;
 
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,4 @@
+use super::sides::{abs::Sides, percent::Sides as SidesPercent};
 use super::*;
 use crate::error::*;
 use crate::imageops::*;

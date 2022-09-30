@@ -1,3 +1,4 @@
+use super::sides::{abs::Sides, percent::Sides as SidesPercent};
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
@@ -183,20 +184,6 @@ impl CheckedAdd<Point> for Rect {
     }
 }
 
-// impl std::ops::Add<Point> for Rect {
-//     type Output = Self;
-
-//     #[inline]
-//     fn add(self, point: Point) -> Self::Output {
-//         Self {
-//             top: self.top + point.y,
-//             left: self.left + point.x,
-//             bottom: self.bottom + point.y,
-//             right: self.right + point.x,
-//         }
-//     }
-// }
-
 impl CheckedSub<Sides> for Rect {
     type Output = Self;
     type Error = ops::SubError<Self, Sides>;
@@ -226,20 +213,6 @@ impl CheckedSub<Sides> for Rect {
     }
 }
 
-// impl std::ops::Sub<Sides> for Rect {
-//     type Output = Self;
-
-//     #[inline]
-//     fn sub(self, sides: Sides) -> Self::Output {
-//         Self {
-//             top: self.top + sides.top as i64,
-//             left: self.left + sides.left as i64,
-//             bottom: self.bottom - sides.bottom as i64,
-//             right: self.right - sides.right as i64,
-//         }
-//     }
-// }
-
 impl CheckedAdd<Sides> for Rect {
     type Output = Self;
     type Error = ops::AddError<Self, Sides>;
@@ -268,17 +241,3 @@ impl CheckedAdd<Sides> for Rect {
         }
     }
 }
-
-// impl std::ops::Add<Sides> for Rect {
-//     type Output = Self;
-
-//     #[inline]
-//     fn add(self, sides: Sides) -> Self::Output {
-//         Self {
-//             top: self.top - sides.top as i64,
-//             left: self.left - sides.left as i64,
-//             bottom: self.bottom + sides.bottom as i64,
-//             right: self.right + sides.right as i64,
-//         }
-//     }
-// }

@@ -1,6 +1,7 @@
 use super::defaults;
 pub use super::imageops::*;
 use super::numeric::ops::CheckedSub;
+use super::sides::{abs::Sides, percent::Sides as SidesPercent};
 use super::types::*;
 use super::Error;
 use image::{

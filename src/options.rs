@@ -1,3 +1,4 @@
+use super::sides::{abs::Sides, percent::Sides as SidesPercent};
 use super::types::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

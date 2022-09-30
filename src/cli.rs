@@ -137,7 +137,7 @@ fn main() {
                     height: options.max_output_height,
                 },
                 mode: options.mode.unwrap_or_default(),
-                crop: Some(types::SidesPercent {
+                crop: Some(types::sides::percent::Sides {
                     top: options.crop_top.unwrap_or(0.0),
                     right: options.crop_right.unwrap_or(0.0),
                     bottom: options.crop_bottom.unwrap_or(0.0),
@@ -145,7 +145,9 @@ fn main() {
                 }),
                 scale_factor: options.scale_factor.unwrap_or(1.0),
                 margin: options.margin.unwrap_or(0.05),
-                frame_width: types::SidesPercent::uniform(options.frame_width.unwrap_or(0.01)),
+                frame_width: types::sides::percent::Sides::uniform(
+                    options.frame_width.unwrap_or(0.01),
+                ),
                 image_rotation: options.image_rotation.unwrap_or_default(),
                 border_rotation: options.border_rotation.unwrap_or_default(),
                 background_color: options.background_color,
