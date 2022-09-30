@@ -137,8 +137,8 @@ impl Border {
         };
 
         // create buffer for the new border
-        let border_padding = border_size - border.content_size();
-        let new_border_size = target_content_size + border_padding;
+        let border_padding = border_size.checked_sub(border.content_size()).unwrap();
+        let new_border_size = target_content_size.checked_add(border_padding).unwrap();
         let mut new_border = img::Image::with_size(new_border_size);
         crate::debug!(&new_border.size());
 
@@ -311,7 +311,7 @@ impl Border {
 
         crate::debug!(&new_content_size);
         let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
-        self.size().scale_by::<_, Round>(scale_factor.0)
+        self.size().scale_by::<_, Round>(scale_factor.0).unwrap()
     }
 
     #[inline]

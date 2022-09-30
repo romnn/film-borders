@@ -1,6 +1,7 @@
-use crate::img;
-use crate::types::*;
-use crate::utils;
+use super::img;
+use super::numeric::ops::CheckedAdd;
+use super::types::*;
+use super::utils;
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
 use std::cmp::{max, min};
@@ -82,7 +83,7 @@ where
     let color = color.into();
     let top_left: Size = top_left.try_into().unwrap();
 
-    let bottom_right = top_left + size.into();
+    let bottom_right = top_left.checked_add(size.into()).unwrap();
     let bottom_right = bottom_right.clamp((0, 0), image.size());
 
     for x in top_left.width..bottom_right.width {

@@ -25,7 +25,7 @@ pub use img::Image;
 pub use options::*;
 pub use types::*;
 
-use numeric::ops::CheckedAdd;
+use numeric::ops::{CheckedAdd, CheckedMul};
 use std::path::Path;
 
 pub struct ImageBorders {
@@ -105,7 +105,7 @@ impl ImageBorders {
             .unwrap()
             .checked_add(margin)
             .unwrap();
-        let default_output_size = content_size * (1.0 / scale_factor);
+        let default_output_size = content_size.checked_mul(1.0 / scale_factor).unwrap();
 
         // set output size and do not keep aspect ratio
         let output_size = match options.output_size {
@@ -130,8 +130,10 @@ impl ImageBorders {
         });
         result_image.fill(background_color, FillMode::Set);
 
-        let new_content_size =
-            content_size.scale_to(output_size * scale_factor, ResizeMode::Contain);
+        let new_content_size = content_size.scale_to(
+            output_size.checked_mul(scale_factor).unwrap(),
+            ResizeMode::Contain,
+        );
         let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
         let frame_width = frame_width * scale;
         let margin = margin * scale;

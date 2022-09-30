@@ -2,7 +2,7 @@ use super::*;
 use crate::error::*;
 use crate::imageops::*;
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
-use crate::numeric::{self, ArithmeticError, ArithmeticOp, NumCast, Round, RoundingMode};
+use crate::numeric::{self, error, ArithmeticOp, NumCast, Round};
 use crate::{img, utils};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ impl Point {
     #[inline]
     pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, numeric::Error>
     where
-        R: RoundingMode,
+        R: numeric::RoundingMode,
         F: numeric::NumCast + numeric::NumericType,
     {
         let scalar = scalar.cast::<f64>()?;
@@ -90,7 +90,7 @@ impl CheckedAdd for Point {
             Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::AddError(ArithmeticError {
+            Err(err) => Err(ops::AddError(error::ArithmeticError {
                 lhs: self,
                 rhs: rhs,
                 kind: None,
@@ -99,17 +99,6 @@ impl CheckedAdd for Point {
         }
     }
 }
-
-// impl std::ops::Add for Point {
-//     type Output = Self;
-
-//     fn add(self, rhs: Point) -> Self::Output {
-//         Point {
-//             x: self.x + rhs.x,
-//             y: self.y + rhs.y,
-//         }
-//     }
-// }
 
 impl CheckedSub for Point {
     type Output = Self;
@@ -123,7 +112,7 @@ impl CheckedSub for Point {
             Ok::<Self, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::SubError(ArithmeticError {
+            Err(err) => Err(ops::SubError(error::ArithmeticError {
                 lhs: self,
                 rhs: rhs,
                 kind: None,
@@ -133,17 +122,6 @@ impl CheckedSub for Point {
     }
 }
 
-// impl std::ops::Sub for Point {
-//     type Output = Self;
-
-//     fn sub(self, rhs: Point) -> Self::Output {
-//         Point {
-//             x: self.x - rhs.x,
-//             y: self.y - rhs.y,
-//         }
-//     }
-// }
-
 impl<F> CheckedMul<F> for Point
 where
     F: numeric::NumCast + numeric::NumericType,
@@ -152,19 +130,10 @@ where
     type Error = ops::MulError<Self, F>;
 
     #[inline]
-    fn checked_mul(self, scalar: F) -> Result<Point, Self::Error> {
-        match (|| {
-            let scalar = scalar.cast::<f64>()?;
-            let x = self.x.cast::<f64>()?;
-            let y = self.y.cast::<f64>()?;
-            let x = CheckedMul::checked_mul(x, scalar)?;
-            let y = CheckedMul::checked_mul(y, scalar)?;
-            let x = x.cast::<i64>()?;
-            let y = y.cast::<i64>()?;
-            Ok::<Self, numeric::Error>(Self { x, y })
-        })() {
+    fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
+        match self.scale_by::<_, Round>(scalar) {
             Ok(point) => Ok(point),
-            Err(numeric::Error(err)) => Err(ops::MulError(ArithmeticError {
+            Err(numeric::Error(err)) => Err(ops::MulError(error::ArithmeticError {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
@@ -176,49 +145,26 @@ where
 
 impl<F> CheckedDiv<F> for Point
 where
-    F: numeric::NumCast + numeric::NumericType + num::traits::Inv,
+    F: numeric::NumCast + numeric::NumericType + num::traits::Inv<Output = F>,
 {
     type Output = Self;
     type Error = ops::DivError<Self, F>;
-    // type Error = numeric::Error;
 
     #[inline]
-    fn checked_div(self, scalar: F) -> Result<Point, Self::Error> {
-        match (|| {
-            let scalar = scalar.cast::<f64>()?;
-            let x = self.x.cast::<f64>()?;
-            let y = self.y.cast::<f64>()?;
-            let x = CheckedDiv::checked_div(x, scalar)?;
-            let y = CheckedDiv::checked_div(y, scalar)?;
-            let x = x.cast::<i64>()?;
-            let y = y.cast::<i64>()?;
-            Ok::<Self, numeric::Error>(Self { x, y })
-        })() {
+    fn checked_div(self, scalar: F) -> Result<Self::Output, Self::Error> {
+        use num::traits::Inv;
+        let inverse = scalar.inv();
+        match self.scale_by::<_, Round>(inverse) {
             Ok(point) => Ok(point),
-            Err(numeric::Error(err)) => Err(ops::DivError(ArithmeticError {
+            Err(numeric::Error(err)) => Err(ops::DivError(error::ArithmeticError {
                 lhs: self,
-                rhs: scalar,
+                rhs: inverse,
                 kind: None,
                 cause: Some(err),
             })),
         }
-        // use num::traits::Inv;
-        // let inverse = scalar.cast::<f64>()?.inv();
-        // self.scale_by::<_, Round>(inverse)
     }
 }
-
-// impl<F> std::ops::Div<F> for Point
-// where
-//     F: num::NumCast,
-// {
-//     type Output = Self;
-
-//     fn div(self, scalar: F) -> Self::Output {
-//         let scalar: f64 = num::NumCast::from(scalar).unwrap();
-//         self.scale_by::<_, Round>(1.0 / scalar).unwrap()
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

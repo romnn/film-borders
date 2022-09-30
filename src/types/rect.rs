@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::ops::{CheckedAdd, CheckedSub};
+use crate::numeric::ops::{CheckedAdd, CheckedDiv, CheckedSub};
 use crate::numeric::{Ceil, Round, RoundingMode};
 use crate::{img, utils};
 use num::traits::NumCast;
@@ -53,7 +53,7 @@ impl Rect {
     #[inline]
     pub fn center(&self) -> Point {
         self.top_left()
-            .checked_add(Point::from(self.size() / 2.0))
+            .checked_add(Point::from(self.size()).checked_div(2.0).unwrap())
             .unwrap()
     }
 
