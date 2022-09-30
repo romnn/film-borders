@@ -34,62 +34,23 @@ impl Point {
 }
 
 impl Point {
-    // #[inline]
-    // pub fn clamp<P1, P2>(self, min: P1, max: P2) -> Self
-    // where
-    //     P1: AsRef<Point>,
-    //     P2: AsRef<Point>,
-    // {
-    //     // let min: Point = min.into();
-    //     // let max: Point = max.into();
-    //     Self {
-    //         x: num::clamp(self.x, min.as_ref().x, max.as_ref().x),
-    //         // x: utils::clamp(self.x, min.x, max.x),
-    //         y: num::clamp(self.y, min.as_ref().y, max.as_ref().y),
-    //         // y: utils::clamp(self.y, min.y, max.y),
-    //     }
-    // }
-
     #[inline]
     pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, numeric::Error>
-    // <Self, F>>
     where
         R: RoundingMode,
-        F: numeric::NumCast + std::fmt::Display + std::fmt::Debug + PartialEq + 'static,
+        F: numeric::NumCast + numeric::NumericType,
     {
-        // match (|| {
-        let scalar = scalar.cast::<u64>()?;
+        let scalar = scalar.cast::<f64>()?;
         let x = self.x.cast::<f64>()?;
         let y = self.y.cast::<f64>()?;
-        // let x = R::round(self.x as f64 * scalar) as u64;
-        // let y = R::round(self.y as f64 * scalar) as u64;
-        // Self {
-        //     x: x as i64,
-        //     y: y as i64,
-        // }
-        Ok(self)
+        // float multiplication is safe but can result in nans
+        let x = x * scalar;
+        let y = y * scalar;
+        // any nans will be detected when casting back
+        let x = R::round(x).cast::<i64>()?;
+        let y = R::round(y).cast::<i64>()?;
+        Ok(Self { x, y })
     }
-
-    // #[inline]
-    // pub fn magnitude(&self) -> Option<f64> {
-    //     // c**2 = a**2 + b**2
-    //     let x: f64 = num::NumCast::from(self.x)?;
-    //     let y: f64 = num::NumCast::from(self.y)?;
-    //     let mag = (x.powi(2) + y.powi(2)).sqrt();
-    //     if mag.is_nan() {
-    //         None
-    //     } else {
-    //         Some(mag)
-    //     }
-    // }
-
-    // #[inline]
-    // pub fn abs(self) -> Self {
-    //     Self {
-    //         x: self.x.abs(),
-    //         y: self.y.abs(),
-    //     }
-    // }
 }
 
 impl Default for Point {
@@ -151,13 +112,6 @@ impl std::ops::Add for Point {
     }
 }
 
-// impl ops::checked::CheckedSub for Point {
-//     fn checked_sub(&self, v: &Self) -> Option<Self> {
-//         let x = self.x.checked_sub(v.x)?;
-//         let y = self.y.checked_sub(v.y)?;
-//         Some(Self { x, y })
-//     }
-// }
 impl numeric::CheckedSub for Point {
     type Output = Self;
 
@@ -190,64 +144,33 @@ impl std::ops::Sub for Point {
     }
 }
 
-// impl numeric::CheckedAdd<Size> for Point {
-//     type Output = Point;
-//     fn checked_add(&self, size: &Size) -> Result<Point, numeric::AddError<Point, Size>> {
-//         // let width: i64 = NumCast::from(size.width)?;
-//         // let height: i64 = NumCast::from(size.height)?;
-//         let x = self.x.checked_add(width)?;
-//         let y = self.y.checked_add(height)?;
-//         Some(Self { x, y })
-//     }
-// }
-
-// impl std::ops::Add<Size> for Point {
-//     type Output = Self;
-
-//     fn add(self, size: Size) -> Self::Output {
-//         Point {
-//             x: self.x + size.width as i64,
-//             y: self.y + size.height as i64,
-//         }
-//     }
-// }
-
 impl<F> numeric::CheckedMul<F> for Point
 where
-    F: num::NumCast + std::fmt::Display,
+    F: numeric::NumCast + numeric::NumericType,
 {
     type Output = Self;
+    type Error = numeric::Error;
 
     #[inline]
-    fn checked_mul(&self, scalar: &F) -> Result<Point, MulError<Self, F>> {
-        Ok(*self)
-        // self.scale_by::<_, Round>(scalar)
-        // match (|| {
-        //     let x = numeric::CheckedSub::checked_sub(&self.x, &rhs.x)?;
-        //     let y = numeric::CheckedSub::checked_sub(&self.y, &rhs.y)?;
-        //     Ok::<Point, _>(Self { x, y })
-        // })() {
-        //     Ok(point) => Ok(point),
-        //     Err(SubError(err)) => Err(SubError(ArithmeticError {
-        //         lhs: *self,
-        //         rhs: *rhs,
-        //         type_name: err.type_name,
-        //         kind: err.kind,
-        //     })),
-        // }
+    fn checked_mul(&self, scalar: F) -> Result<Point, Self::Error> {
+        self.scale_by::<_, Round>(scalar)
     }
 }
 
-// impl<F> std::ops::Mul<F> for Point
-// where
-//     F: num::NumCast + std::fmt::Debug,
-// {
-//     type Output = Self;
+impl<F> numeric::CheckedDiv<F> for Point
+where
+    F: numeric::NumCast + numeric::NumericType + num::traits::Inv,
+{
+    type Output = Self;
+    type Error = numeric::Error;
 
-//     fn mul(self, scalar: F) -> Self::Output {
-//         self.scale_by::<_, Round>(scalar).unwrap()
-//     }
-// }
+    #[inline]
+    fn checked_div(&self, scalar: F) -> Result<Point, Self::Error> {
+        use num::traits::Inv;
+        let inverse = scalar.cast::<f64>()?.inv();
+        self.scale_by::<_, Round>(inverse)
+    }
+}
 
 impl<F> std::ops::Div<F> for Point
 where
@@ -263,23 +186,36 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::numeric::CheckedAdd;
+    use super::Point;
+    use crate::numeric::{Ceil, CheckedAdd, Floor, Round};
     use pretty_assertions::assert_eq;
+    use regex::Regex;
 
     #[test]
-    fn point_scale_by() {
+    fn scale_by() {
         let p1 = Point { x: 10, y: 10 };
-        assert_eq!(p1.scale_by::<_, Round>(2), Ok(p1));
-        assert_eq!(p1.scale_by::<_, Round>(2i128), Ok(p1));
-        assert_eq!(
-            &p1.scale_by::<_, Round>(i128::MIN)
-                .err()
-                .unwrap()
-                .to_string(),
-            &format!("cannot cast {} of type i128 to u64", i128::MIN)
-        );
-        // assert_eq!(&p1.checked_add(&p2).ok().unwrap(), &Point { x: 8, y: 22 });
+        assert_eq!(p1.scale_by::<_, Round>(0), Ok(Point { x: 0, y: 0 }));
+        assert_eq!(p1.scale_by::<_, Round>(2), Ok(Point { x: 20, y: 20 }));
+        assert_eq!(p1.scale_by::<_, Round>(-2), Ok(Point { x: -20, y: -20 }));
+        assert_eq!(p1.scale_by::<_, Round>(2i128), Ok(Point { x: 20, y: 20 }));
+        assert_eq!(p1.scale_by::<_, Round>(1.5), Ok(Point { x: 15, y: 15 }));
+        assert!(Regex::new(r"^cannot cast -?\d* of type f64 to i64$")
+            .unwrap()
+            .is_match(
+                &p1.scale_by::<_, Round>(i128::MIN)
+                    .err()
+                    .unwrap()
+                    .to_string()
+            ));
+        assert!(Regex::new(r"^cannot cast -?\d* of type f64 to i64$")
+            .unwrap()
+            .is_match(&p1.scale_by::<_, Round>(u64::MAX).err().unwrap().to_string()));
+        assert!(p1.scale_by::<_, Round>(u32::MAX).is_ok());
+
+        let p1 = Point { x: 1, y: 1 };
+        assert_eq!(p1.scale_by::<_, Round>(1.5), Ok(Point { x: 2, y: 2 }));
+        assert_eq!(p1.scale_by::<_, Ceil>(1.5), Ok(Point { x: 2, y: 2 }));
+        assert_eq!(p1.scale_by::<_, Floor>(1.5), Ok(Point { x: 1, y: 1 }));
     }
 
     #[test]

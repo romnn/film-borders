@@ -22,7 +22,6 @@ pub use imageops::FillMode;
 pub use img::Image;
 pub use options::*;
 pub use types::*;
-// {BoundedSize, FitMode, Rotation, SidesPercent};
 
 use std::path::Path;
 
@@ -240,7 +239,7 @@ impl ImageBorders {
 mod tests {
     use super::border::{self, Border};
     #[cfg(feature = "builtin")]
-    use super::borders::BuiltinBorder;
+    use super::builtin;
     use super::types::*;
     #[cfg(feature = "builtin")]
     use super::ImageFormat;
@@ -277,9 +276,9 @@ mod tests {
                     let output = repo.join(&outfile);
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
-                    let border = border::Kind::Builtin(BuiltinBorder::Border120_1);
+                    let border = border::Kind::Builtin(builtin::Border::Border120_1);
                     let result = borders.add_border(Some(border), options)?;
-                    result.save(Some(&output), None)?;
+                    result.save_with_filename(&output, None)?;
                     assert!(output.is_file());
                     Ok(())
                 }
@@ -319,7 +318,7 @@ mod tests {
         let bytes = include_bytes!("../samples/lowres.jpg");
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
-        let border = border::Kind::Builtin(BuiltinBorder::Border120_1);
+        let border = border::Kind::Builtin(builtin::Border::Border120_1);
         let result = borders.add_border(Some(border), &OPTIONS)?;
         let mut output = Cursor::new(Vec::new());
         result.encode_to(&mut output, ImageFormat::Png, None)?;
