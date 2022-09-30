@@ -105,7 +105,7 @@ where
         self.0
             .cause
             .as_deref()
-            .map(|cause: &dyn error::NumericError| cause.as_error())
+            .map(error::AsError::as_error)
     }
 }
 
@@ -122,7 +122,7 @@ where
                 self.0.lhs,
                 self.0.rhs,
                 kind,
-                std::any::type_name::<Lhs>().to_string(),
+                std::any::type_name::<Lhs>(),
             ),
             None => write!(f, "cannot multiply {} by {}", self.0.lhs, self.0.rhs,),
         }

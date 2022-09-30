@@ -81,7 +81,7 @@ where
         self.0
             .cause
             .as_deref()
-            .map(|cause: &dyn error::NumericError| cause.as_error())
+            .map(error::AsError::as_error)
     }
 }
 
@@ -98,7 +98,7 @@ where
                 self.0.rhs,
                 self.0.lhs,
                 kind,
-                std::any::type_name::<Lhs>().to_string(),
+                std::any::type_name::<Lhs>(),
             ),
             None => write!(f, "cannot subtract {} from {}", self.0.rhs, self.0.lhs),
         }

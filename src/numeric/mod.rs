@@ -32,7 +32,7 @@ where
 
     fn overflows(self, lhs: Lhs) -> error::ArithmeticError<Lhs, Self> {
         error::ArithmeticError {
-            lhs: lhs,
+            lhs,
             rhs: self,
             kind: Some(error::ArithmeticErrorKind::Overflow),
             cause: None,
@@ -41,7 +41,7 @@ where
 
     fn underflows(self, lhs: Lhs) -> error::ArithmeticError<Lhs, Self> {
         error::ArithmeticError {
-            lhs: lhs,
+            lhs,
             rhs: self,
             kind: Some(error::ArithmeticErrorKind::Underflow),
             cause: None,

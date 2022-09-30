@@ -1,15 +1,8 @@
-use super::defaults;
-pub use super::imageops::*;
 use super::numeric::ops::CheckedSub;
-use super::sides::{abs::Sides, percent::Sides as SidesPercent};
-use super::types::*;
-use super::Error;
-use image::{
-    codecs, io::Reader as ImageReader, ColorType, DynamicImage, ImageEncoder, ImageFormat,
-    ImageOutputFormat, RgbaImage,
-};
-
-use std::cmp::max;
+use super::types::{sides::abs::Sides, Point, Size};
+use super::{defaults, imageops, Error};
+pub use image::ImageFormat;
+use image::{io::Reader as ImageReader, RgbaImage};
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
@@ -21,45 +14,60 @@ pub struct Image {
 }
 
 impl AsRef<image::RgbaImage> for Image {
+    #[inline]
     fn as_ref(&self) -> &image::RgbaImage {
         &self.inner
     }
 }
 
 impl Image {
+    #[inline]
+    #[must_use]
     pub fn data(&self) -> RgbaImage {
         self.inner.clone()
     }
 
+    #[inline]
+    #[must_use]
     pub fn as_raw(&self) -> &[u8] {
         self.inner.as_raw()
     }
 
+    #[inline]
+    #[must_use]
     pub fn size(&self) -> Size {
         Size::from(&self.inner)
     }
 
+    #[inline]
+    #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
         let inner = RgbaImage::new(width, height);
         Self { inner, path: None }
     }
 
+    #[inline]
+    #[must_use]
     pub fn with_size<S: Into<Size>>(size: S) -> Self {
         let size = size.into();
         Self::new(size.width, size.height)
     }
 
-    pub fn from_image(image: DynamicImage) -> Self {
+    #[inline]
+    #[must_use]
+    pub fn from_image(image: &image::DynamicImage) -> Self {
         let inner = image.to_rgba8();
         Self { inner, path: None }
     }
 
+    #[inline]
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
         let reader = ImageReader::new(reader).with_guessed_format()?;
         let inner = reader.decode()?.to_rgba8();
         Ok(Self { inner, path: None })
     }
 
+    #[inline]
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = fs::OpenOptions::new().read(true).open(&path)?;
         let mut img = Self::from_reader(BufReader::new(&file))?;
@@ -67,30 +75,41 @@ impl Image {
         Ok(img)
     }
 
+    #[inline]
+    #[must_use]
     pub fn is_portrait(&self) -> bool {
         self.size().is_portrait()
     }
 
-    pub fn orientation(&self) -> Orientation {
+    #[inline]
+    #[must_use]
+    pub fn orientation(&self) -> super::Orientation {
         self.size().orientation()
     }
 
-    pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C, mode: FillMode) {
+    #[inline]
+    pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C, mode: imageops::FillMode) {
         let size = self.size();
         self.fill_rect(color.into(), Point::origin(), size, mode);
     }
 
-    pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S, mode: FillMode)
+    #[inline]
+    pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S, mode: imageops::FillMode)
     where
         TL: Into<Point>,
         S: Into<Size>,
         C: Into<image::Rgba<u8>>,
     {
-        fill_rect(self, color.into(), top_left.into(), size.into(), mode);
+        imageops::fill_rect(self, color.into(), top_left.into(), size.into(), mode);
     }
 
-    pub fn resize_to_fit<S>(&mut self, container: S, resize_mode: ResizeMode, crop_mode: CropMode)
-    where
+    #[inline]
+    pub fn resize_to_fit<S>(
+        &mut self,
+        container: S,
+        resize_mode: super::ResizeMode,
+        crop_mode: super::CropMode,
+    ) where
         S: Into<Size>,
     {
         let container = container.into();
@@ -99,15 +118,16 @@ impl Image {
     }
 
     #[inline]
-    pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: Axis)
+    pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: super::types::Axis)
     where
         P1: Into<Point>,
         P2: Into<Point>,
     {
-        fade_out(self, top_left.into(), bottom_right.into(), axis);
+        imageops::fade_out(self, top_left.into(), bottom_right.into(), axis);
     }
 
-    pub fn resize<S>(&mut self, size: S, mode: ResizeMode)
+    #[inline]
+    pub fn resize<S>(&mut self, size: S, mode: super::ResizeMode)
     where
         S: Into<Size>,
     {
@@ -115,7 +135,7 @@ impl Image {
         let start = chrono::Utc::now().time();
 
         let size = self.size().scale_to(size.into(), mode);
-        self.inner = resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
+        self.inner = imageops::resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
 
         #[cfg(debug_assertions)]
         crate::debug!(
@@ -125,7 +145,8 @@ impl Image {
         );
     }
 
-    pub fn crop_to_fit<S>(&mut self, container: S, mode: CropMode)
+    #[inline]
+    pub fn crop_to_fit<S>(&mut self, container: S, mode: super::CropMode)
     where
         S: Into<Size>,
     {
@@ -134,30 +155,34 @@ impl Image {
         self.crop_sides(crop);
     }
 
+    #[inline]
     pub fn overlay<O, P>(&mut self, overlay_image: &O, offset: P)
     where
         O: image::GenericImageView<Pixel = image::Rgba<u8>>,
         P: Into<Point>,
     {
         let offset: Point = offset.into();
-        overlay(&mut self.inner, overlay_image, offset.x, offset.y);
+        imageops::overlay(&mut self.inner, overlay_image, offset.x, offset.y);
     }
 
+    #[inline]
     pub fn crop(&mut self, top_left: Point, bottom_right: Point) {
         let cropped_size = Size::try_from(bottom_right.checked_sub(top_left).unwrap()).unwrap();
-        self.inner = crop(
+        let top_left: Size = Size::try_from(top_left).unwrap();
+        self.inner = imageops::crop(
             &mut self.inner,
-            max(0, top_left.x) as u32,
-            max(0, top_left.y) as u32,
+            top_left.width,
+            top_left.height,
             cropped_size.width,
             cropped_size.height,
         )
         .to_image();
     }
 
+    #[inline]
     pub fn crop_sides(&mut self, crop_sides: Sides) {
         let cropped_size = self.size().checked_sub(crop_sides).unwrap();
-        self.inner = crop(
+        self.inner = imageops::crop(
             &mut self.inner,
             crop_sides.left,
             crop_sides.top,
@@ -167,17 +192,20 @@ impl Image {
         .to_image();
     }
 
-    pub fn rotate(&mut self, angle: &Rotation) {
+    #[inline]
+    pub fn rotate(&mut self, angle: &super::Rotation) {
+        use super::Rotation;
         if let Some(rotated) = match angle {
             Rotation::Rotate0 => None,
-            Rotation::Rotate90 => Some(rotate90(&self.inner)),
-            Rotation::Rotate180 => Some(rotate180(&self.inner)),
-            Rotation::Rotate270 => Some(rotate270(&self.inner)),
+            Rotation::Rotate90 => Some(imageops::rotate90(&self.inner)),
+            Rotation::Rotate180 => Some(imageops::rotate180(&self.inner)),
+            Rotation::Rotate270 => Some(imageops::rotate270(&self.inner)),
         } {
             self.inner = rotated;
         }
     }
 
+    #[inline]
     pub fn save_with_filename(
         &self,
         path: impl AsRef<Path>,
@@ -198,20 +226,24 @@ impl Image {
         self.encode_to(&mut file, format, quality)
     }
 
+    #[inline]
     pub fn save(&self, quality: impl Into<Option<u8>>) -> Result<(), Error> {
         let (default_output, _) = self.output_path(None);
         let path = default_output.ok_or(Error::MissingOutputFile)?;
         self.save_with_filename(path, quality)
     }
 
+    #[inline]
     pub fn encode_to(
         &self,
         w: &mut (impl std::io::Write + Seek),
         format: ImageFormat,
         quality: impl Into<Option<u8>>,
     ) -> Result<(), Error> {
+        use image::{codecs, ImageEncoder, ImageOutputFormat};
+
         let data = self.inner.as_raw().as_ref();
-        let color = ColorType::Rgba8;
+        let color = image::ColorType::Rgba8;
         let quality = quality.into();
         let width = self.inner.width();
         let height = self.inner.height();
@@ -259,6 +291,7 @@ impl Image {
         Ok(())
     }
 
+    #[inline]
     fn output_path(&self, format: Option<ImageFormat>) -> (Option<PathBuf>, Option<ImageFormat>) {
         let source_format = self
             .path
@@ -282,8 +315,7 @@ impl Image {
 
 #[cfg(test)]
 mod tests {
-    use super::Image;
-    use crate::ImageFormat;
+    use super::{Image, ImageFormat};
     use image::RgbaImage;
 
     macro_rules! output_path_tests {

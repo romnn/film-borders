@@ -1,4 +1,9 @@
-#![allow(warnings)]
+// #![allow(warnings)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unsafe_derive_deserialize)]
+#![allow(clippy::module_name_repetitions)]
 
 pub mod border;
 #[cfg(feature = "builtin")]
@@ -26,6 +31,7 @@ pub use options::*;
 pub use sides::{abs::Sides, percent::Sides as SidesPercent};
 pub use types::*;
 
+use numeric::cast::NumCast;
 use numeric::ops::{CheckedAdd, CheckedMul, CheckedSub};
 use std::path::Path;
 
@@ -34,6 +40,7 @@ pub struct ImageBorders {
 }
 
 impl ImageBorders {
+    #[inline]
     pub fn new(images: Vec<img::Image>) -> Result<ImageBorders, Error> {
         if images.is_empty() {
             Err(Error::MissingImage)
@@ -42,20 +49,37 @@ impl ImageBorders {
         }
     }
 
+    #[inline]
+    #[must_use]
     pub fn single(img: img::Image) -> ImageBorders {
         ImageBorders { images: vec![img] }
     }
 
+    #[inline]
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
         let img = Image::from_reader(reader)?;
         Ok(Self::single(img))
     }
 
+    #[inline]
+    /// Open image at file path
+    ///
+    /// # Errors
+    ///
+    /// If the image can not be opened, an error is returned
+    ///
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let img = Image::open(path)?;
         Ok(Self::single(img))
     }
 
+    #[inline]
+    /// Add (optional) border to image
+    ///
+    /// # Errors
+    ///
+    /// If the border can not be added, an error is returned.
+    ///
     pub fn add_border(
         &mut self,
         border: Option<border::Kind>,
@@ -95,12 +119,13 @@ impl ImageBorders {
         crate::debug!("image with border size: {}", &original_content_size);
 
         let scale_factor = utils::clamp(options.scale_factor, 0.0, 1.0);
-        let margin_factor = options.margin.max(0.0);
+        let margin_factor = f64::from(options.margin).max(0.0);
 
         let base = original_content_size.min_dim();
         let frame_width: Sides = options.frame_width.checked_mul(base).unwrap();
-        let margin: Sides = Sides::uniform((margin_factor * base as f32) as u32);
-        // let margin: Sides = Sides::uniform((margin_factor * f64::from(base)) as u32);
+        let margin = (margin_factor * f64::from(base)).cast::<u32>().unwrap();
+        let margin: Sides = Sides::uniform(margin);
+
         let content_size = original_content_size
             .checked_add(frame_width)
             .unwrap()
@@ -253,10 +278,9 @@ impl ImageBorders {
 mod tests {
     use super::border::{self, Border};
     #[cfg(feature = "builtin")]
-    use super::builtin;
-    use super::types::*;
-    #[cfg(feature = "builtin")]
     use super::ImageFormat;
+    #[cfg(feature = "builtin")]
+    use super::{builtin, types};
     use super::{ImageBorders, Options};
     use anyhow::Result;
     #[cfg(feature = "builtin")]
@@ -265,15 +289,15 @@ mod tests {
 
     lazy_static::lazy_static! {
         pub static ref OPTIONS: Options = Options {
-            output_size: BoundedSize {
+            output_size: types::BoundedSize {
                 width: Some(750),
                 height: Some(750),
             },
-            mode: FitMode::Image,
-            crop: Some(sides::percent::Sides::uniform(0.05)),
+            mode: types::FitMode::Image,
+            crop: Some(types::sides::percent::Sides::uniform(0.05)),
             scale_factor: 0.95,
-            frame_width: sides::percent::Sides::uniform(0.02),
-            image_rotation: Rotation::Rotate90,
+            frame_width: types::sides::percent::Sides::uniform(0.02),
+            image_rotation: types::Rotation::Rotate90,
             ..Default::default()
         };
     }

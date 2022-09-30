@@ -35,16 +35,6 @@ pub struct CastError<Src, Target> {
     pub cause: Option<Box<dyn error::NumericError + 'static>>,
 }
 
-// impl<Src, Target> From<CastError<Src, Target>> for error::Error
-// where
-//     Src: NumericType,
-//     Target: NumericType,
-// {
-//     fn from(err: CastError<Src, Target>) -> Self {
-//         error::Error::Cast(Box::new(err))
-//     }
-// }
-
 impl<Src, Target> error::NumericError for CastError<Src, Target>
 where
     Src: NumericType,
@@ -67,9 +57,7 @@ where
     Src: Debug + Display,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause
-            .as_deref()
-            .map(|cause: &dyn error::NumericError| cause.as_error())
+        self.cause.as_deref().map(error::AsError::as_error)
     }
 }
 
@@ -95,8 +83,8 @@ where
             f,
             "cannot cast {} of type {} to {}",
             self.src,
-            std::any::type_name::<Src>().to_string(),
-            std::any::type_name::<Target>().to_string(),
+            std::any::type_name::<Src>(),
+            std::any::type_name::<Target>(),
         )
     }
 }
@@ -104,6 +92,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::assert_abs_diff_eq;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -145,7 +134,16 @@ mod tests {
         assert!(i128::MAX.cast::<f64>().is_ok());
         assert!(u128::MAX.cast::<f64>().is_ok());
         assert_eq!(f32::MAX.cast::<u32>().ok(), None);
-        approx::abs_diff_eq!(u32::MAX.cast::<f32>().unwrap(), 2f32.powi(32));
-        approx::abs_diff_eq!(u32::MAX.cast::<f64>().unwrap(), 2f64.powi(32),);
+
+        assert_abs_diff_eq!(
+            u32::MAX.cast::<f32>().unwrap(),
+            2f32.powi(32),
+            epsilon = 2.0
+        );
+        assert_abs_diff_eq!(
+            u32::MAX.cast::<f64>().unwrap(),
+            2f64.powi(32),
+            epsilon = 2.0
+        );
     }
 }

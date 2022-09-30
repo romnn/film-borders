@@ -131,6 +131,6 @@ mod tests {
     #[test]
     fn numeric_error_is_std_error() {
         let err: &dyn NumericError = &ops::AddError(10u32.overflows(10u32));
-        let std_err: &dyn std::error::Error = &err;
+        let _: &dyn std::error::Error = &err;
     }
 }

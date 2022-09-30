@@ -1,12 +1,6 @@
-use super::*;
-use crate::imageops::*;
-use crate::numeric::{Ceil, OptionOrd, Round, RoundingMode};
-use crate::{img, utils};
-use num::traits::NumCast;
-use regex::Regex;
+use super::Size;
+use crate::numeric::OptionOrd;
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -28,6 +22,7 @@ impl From<Size> for BoundedSize {
 
 impl BoundedSize {
     #[inline]
+    #[must_use]
     pub fn clamp_min(self, other: Self) -> Self {
         let width = OptionOrd::min(self.width, other.width);
         let height = OptionOrd::min(self.height, other.height);
@@ -39,6 +34,7 @@ impl BoundedSize {
 impl BoundedSize {
     #[wasm_bindgen(constructor)]
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         BoundedSize::default()
     }

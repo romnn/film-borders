@@ -1,5 +1,3 @@
-use super::types::Rect;
-use std::fmt;
 use std::fmt::Write;
 
 pub trait Report {
@@ -12,13 +10,13 @@ where
 {
     fn report(&self) -> String {
         let mut buf = String::new();
-        write!(buf, "ERROR: {}", self.to_string());
+        writeln!(buf, "ERROR: {}", self).ok();
         if let Some(cause) = self.source() {
-            write!(buf, "\n");
-            write!(buf, "Caused by:\n");
+            writeln!(buf).ok();
+            writeln!(buf, "Caused by:").ok();
             let causes = std::iter::successors(Some(cause), |e| e.source());
             for (i, e) in causes.enumerate() {
-                write!(buf, "   {}: {}\n", i, e);
+                writeln!(buf, "   {}: {}", i, e).ok();
             }
         }
         buf

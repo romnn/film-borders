@@ -33,6 +33,8 @@ film-borders apply --help
 ```
 
 #### TODO
+- lint
+- write a clamp trait
 - add single simple benchmark
 - get out the benchmark data as json or so
 - make a performance tracker via github actions

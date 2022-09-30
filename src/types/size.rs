@@ -1,14 +1,9 @@
-use super::sides::{abs::Sides, percent::Sides as SidesPercent};
-use super::*;
-use crate::error::*;
-use crate::imageops::*;
+use super::sides::abs::Sides;
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
 use crate::numeric::{self, error, Ceil, NumCast, Round};
-use crate::{img, utils};
-use regex::Regex;
+use crate::utils;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -24,21 +19,25 @@ impl numeric::NumericType for Size {}
 impl Size {
     #[wasm_bindgen(constructor)]
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     #[inline]
+    #[must_use]
     pub fn wh(width: u32, height: u32) -> Self {
         Self { width, height }
     }
 
     #[inline]
+    #[must_use]
     pub fn max(&self) -> u32 {
         max(self.width, self.height)
     }
 
     #[inline]
+    #[must_use]
     pub fn min(&self) -> u32 {
         min(self.width, self.height)
     }
@@ -46,34 +45,46 @@ impl Size {
 
 impl Size {
     #[inline]
-    pub fn scale_factor<S: Into<Size>>(&self, container: S, mode: ResizeMode) -> (f64, f64) {
+    pub fn scale_factor<S: Into<Size>>(&self, container: S, mode: super::ResizeMode) -> (f64, f64) {
+        use super::ResizeMode;
         let container = container.into();
-        let wratio = container.width as f64 / self.width as f64;
-        let hratio = container.height as f64 / self.height as f64;
+        let width_ratio = f64::from(container.width) / f64::from(self.width);
+        let height_ratio = f64::from(container.height) / f64::from(self.height);
         match mode {
-            ResizeMode::Fill => (wratio, hratio),
-            ResizeMode::Cover => (f64::max(wratio, hratio), f64::max(wratio, hratio)),
-            ResizeMode::Contain => (f64::min(wratio, hratio), f64::min(wratio, hratio)),
+            ResizeMode::Fill => (width_ratio, height_ratio),
+            ResizeMode::Cover => (
+                f64::max(width_ratio, height_ratio),
+                f64::max(width_ratio, height_ratio),
+            ),
+            ResizeMode::Contain => (
+                f64::min(width_ratio, height_ratio),
+                f64::min(width_ratio, height_ratio),
+            ),
         }
     }
 
     #[inline]
+    #[must_use]
     pub fn min_dim(&self) -> u32 {
         min(self.width, self.height)
     }
 
     #[inline]
+    #[must_use]
     pub fn aspect_ratio(&self) -> f64 {
-        self.width as f64 / self.height as f64
+        f64::from(self.width) / f64::from(self.height)
     }
 
     #[inline]
+    #[must_use]
     pub fn is_portrait(&self) -> bool {
-        self.orientation() == Orientation::Portrait
+        self.orientation() == super::Orientation::Portrait
     }
 
     #[inline]
-    pub fn orientation(&self) -> Orientation {
+    #[must_use]
+    pub fn orientation(&self) -> super::Orientation {
+        use super::Orientation;
         if self.width <= self.height {
             Orientation::Portrait
         } else {
@@ -82,7 +93,9 @@ impl Size {
     }
 
     #[inline]
-    pub fn rotate(self, angle: Rotation) -> Self {
+    #[must_use]
+    pub fn rotate(self, angle: super::Rotation) -> Self {
+        use super::Rotation;
         match angle {
             Rotation::Rotate0 | Rotation::Rotate180 => self,
             Rotation::Rotate90 | Rotation::Rotate270 => Self {
@@ -93,25 +106,28 @@ impl Size {
     }
 
     #[inline]
-    pub fn rotate_to_orientation(self, orientation: Orientation) -> Size {
-        self.rotate(if self.orientation() != orientation {
-            Rotation::Rotate90
-        } else {
+    #[must_use]
+    pub fn rotate_to_orientation(self, orientation: super::Orientation) -> Size {
+        use super::Rotation;
+        self.rotate(if self.orientation() == orientation {
             Rotation::Rotate0
+        } else {
+            Rotation::Rotate90
         })
     }
 
     #[inline]
-    pub fn center(self, size: Self) -> Rect {
-        let container: Point = self.into();
-        let size: Point = size.into();
+    #[must_use]
+    pub fn center(self, size: Self) -> super::Rect {
+        let container: super::Point = self.into();
+        let size: super::Point = size.into();
         let top_left = container
             .checked_sub(size)
             .unwrap()
             .checked_div(2.0)
             .unwrap();
         let bottom_right = top_left.checked_add(size).unwrap();
-        Rect {
+        super::Rect {
             top: top_left.y,
             left: top_left.x,
             bottom: bottom_right.y,
@@ -120,6 +136,7 @@ impl Size {
     }
 
     #[inline]
+    #[must_use]
     pub fn clamp<S1, S2>(self, min: S1, max: S2) -> Self
     where
         S1: Into<Size>,
@@ -151,15 +168,16 @@ impl Size {
     }
 
     #[inline]
-    pub fn scale_to_bounds(self, bounds: BoundedSize, mode: ResizeMode) -> Self {
+    #[must_use]
+    pub fn scale_to_bounds(self, bounds: super::BoundedSize, mode: super::ResizeMode) -> Self {
         match bounds {
             // unbounded
-            BoundedSize {
+            super::BoundedSize {
                 width: None,
                 height: None,
             } => self,
             // single dimension is bounded
-            BoundedSize {
+            super::BoundedSize {
                 width: None,
                 height: Some(height),
             } => self.scale_to(
@@ -169,7 +187,7 @@ impl Size {
                 },
                 mode,
             ),
-            BoundedSize {
+            super::BoundedSize {
                 width: Some(width),
                 height: None,
             } => self.scale_to(
@@ -180,7 +198,7 @@ impl Size {
                 mode,
             ),
             // all dimensions bounded
-            BoundedSize {
+            super::BoundedSize {
                 width: Some(width),
                 height: Some(height),
             } => self.scale_to(Size { width, height }, mode),
@@ -188,19 +206,21 @@ impl Size {
     }
 
     #[inline]
-    pub fn scale_to<S: Into<Size>>(self, container: S, mode: ResizeMode) -> Self {
+    #[must_use]
+    pub fn scale_to<S: Into<Size>>(self, container: S, mode: super::ResizeMode) -> Self {
         let container = container.into();
-        match mode {
-            ResizeMode::Fill => container,
-            _ => {
-                let scale = self.scale_factor(container, mode);
-                self.scale_by::<_, Ceil>(scale.0).unwrap()
-            }
+        if mode == super::ResizeMode::Fill {
+            container
+        } else {
+            let scale = self.scale_factor(container, mode);
+            self.scale_by::<_, Ceil>(scale.0).unwrap()
         }
     }
 
     #[inline]
-    pub fn crop_to_fit(&self, container: Size, mode: CropMode) -> Sides {
+    #[must_use]
+    pub fn crop_to_fit(&self, container: Size, mode: super::CropMode) -> Sides {
+        use super::{CropMode, Point};
         // avoid underflow if container is larger than self
         let container = container.clamp((0, 0), *self);
 
@@ -212,7 +232,9 @@ impl Size {
         let top_left: Point = match mode {
             CropMode::Custom { x, y } => center_top_left.checked_add(Point { x, y }).unwrap(),
             CropMode::Right => Point {
-                x: self.width as i64 - container.width as i64,
+                x: i64::from(self.width)
+                    .checked_sub(i64::from(container.width))
+                    .unwrap(),
                 ..center_top_left
             },
             CropMode::Left => Point {
@@ -220,7 +242,9 @@ impl Size {
                 ..center_top_left
             },
             CropMode::Bottom => Point {
-                y: self.height as i64 - container.height as i64,
+                y: i64::from(self.height)
+                    .checked_sub(i64::from(container.height))
+                    .unwrap(),
                 ..center_top_left
             },
             CropMode::Top => Point {
@@ -287,11 +311,11 @@ impl From<(u32, u32)> for Size {
     }
 }
 
-impl TryFrom<Point> for Size {
-    type Error = numeric::CastError<Point, Size>;
+impl TryFrom<super::Point> for Size {
+    type Error = numeric::CastError<super::Point, Size>;
 
     #[inline]
-    fn try_from(point: Point) -> Result<Self, Self::Error> {
+    fn try_from(point: super::Point) -> Result<Self, Self::Error> {
         match (|| {
             let width = point.x.cast::<u32>()?;
             let height = point.y.cast::<u32>()?;
@@ -337,7 +361,6 @@ where
 
     #[inline]
     fn checked_div(self, scalar: F) -> Result<Self::Output, Self::Error> {
-        use num::traits::Inv;
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(size) => Ok(size),
@@ -365,7 +388,7 @@ impl CheckedSub<Sides> for Size {
             Ok(size) => Ok(size),
             Err(err) => Err(ops::SubError(numeric::ArithmeticError {
                 lhs: self,
-                rhs: rhs,
+                rhs,
                 kind: None,
                 cause: Some(Box::new(err)),
             })),
@@ -387,7 +410,7 @@ impl CheckedAdd<Sides> for Size {
             Ok(size) => Ok(size),
             Err(err) => Err(ops::AddError(numeric::ArithmeticError {
                 lhs: self,
-                rhs: rhs,
+                rhs,
                 kind: None,
                 cause: Some(Box::new(err)),
             })),
@@ -409,7 +432,7 @@ impl CheckedAdd for Size {
             Ok(size) => Ok(size),
             Err(err) => Err(ops::AddError(error::ArithmeticError {
                 lhs: self,
-                rhs: rhs,
+                rhs,
                 kind: None,
                 cause: Some(Box::new(err)),
             })),
@@ -431,7 +454,7 @@ impl CheckedSub for Size {
             Ok(size) => Ok(size),
             Err(err) => Err(ops::SubError(error::ArithmeticError {
                 lhs: self,
-                rhs: rhs,
+                rhs,
                 kind: None,
                 cause: Some(Box::new(err)),
             })),

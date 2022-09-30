@@ -1,4 +1,4 @@
-use super::img::FilterType;
+use super::imageops::FilterType;
 
 pub static JPEG_QUALITY: u8 = 70; // 1-100
 pub static FILTER_TYPE: FilterType = FilterType::Lanczos3;

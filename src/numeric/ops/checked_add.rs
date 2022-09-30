@@ -77,10 +77,7 @@ where
     Rhs: Display + Debug,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0
-            .cause
-            .as_deref()
-            .map(|cause: &dyn error::NumericError| cause.as_error())
+        self.0.cause.as_deref().map(error::AsError::as_error)
     }
 }
 
@@ -97,7 +94,7 @@ where
                 self.0.rhs,
                 self.0.lhs,
                 kind,
-                std::any::type_name::<Lhs>().to_string(),
+                std::any::type_name::<Lhs>(),
             ),
             None => write!(f, "cannot add {} to {}", self.0.rhs, self.0.lhs,),
         }

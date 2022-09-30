@@ -1,19 +1,22 @@
 use super::img;
-use super::numeric::ops::CheckedAdd;
-use super::types::*;
-use super::utils;
+use super::numeric::{cast::NumCast, ops::CheckedAdd};
+use super::types::{Point, Rect, Size};
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
-use std::cmp::{max, min};
 
 #[inline]
+#[must_use]
 pub fn find_transparent_components(
     image: &img::Image,
     alpha_threshold: f32,
     component_threshold: i64,
 ) -> Vec<Rect> {
     let mut components: Vec<Rect> = Vec::new();
-    let alpha_threshold: u8 = utils::clamp(alpha_threshold * 255.0, 0.0, 255.0) as u8;
+    let alpha_threshold: u8 = (alpha_threshold * 255.0)
+        .clamp(0.0, 255.0)
+        .cast::<u8>()
+        .unwrap();
+
     let (w, h) = image.inner.dimensions();
     for y in 0..h {
         for x in 0..w {
@@ -25,13 +28,13 @@ pub fn find_transparent_components(
 
             let mut updated = None;
             // check if this is a new component
-            for c in components.iter_mut() {
-                if c.contains(x as i64, y as i64, component_threshold) {
+            for c in &mut components {
+                if c.contains(i64::from(x), i64::from(y), component_threshold) {
                     // update component
                     updated = Some(*c);
                     c.extend_to(Point {
-                        x: x as i64,
-                        y: y as i64,
+                        x: i64::from(x),
+                        y: i64::from(y),
                     });
                     break;
                 }
@@ -54,10 +57,10 @@ pub fn find_transparent_components(
                 }
                 None => {
                     components.push(Rect {
-                        top: y as i64,
-                        bottom: y as i64,
-                        left: x as i64,
-                        right: x as i64,
+                        top: i64::from(y),
+                        left: i64::from(x),
+                        bottom: i64::from(y),
+                        right: i64::from(x),
                     });
                 }
             }
@@ -97,18 +100,14 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Axis {
-    X,
-    Y,
-}
-
 #[inline]
-pub fn fade_out<P1, P2>(image: &mut img::Image, start: P1, end: P2, axis: Axis)
+pub fn fade_out<P1, P2>(image: &mut img::Image, start: P1, end: P2, axis: super::Axis)
 where
     P1: Into<Point>,
     P2: Into<Point>,
 {
+    use super::Axis;
+
     let start = start.into();
     let end = end.into();
 
@@ -120,18 +119,18 @@ where
 
     let rect = Rect::from_points(start, end);
     let size = rect.size();
-    let top_left = rect.top_left();
-    let dx = max(0, top_left.x) as u32;
-    let dy = max(0, top_left.y) as u32;
+    let top_left = Size::try_from(rect.top_left()).unwrap();
+    let dx = top_left.width;
+    let dy = top_left.height;
 
     let (w, h) = match axis {
         Axis::X => (size.height, size.width),
         Axis::Y => (size.width, size.height),
     };
     for y in 0..h {
-        let mut frac = y as f32 / h as f32;
+        let mut frac = f64::from(y) / f64::from(h);
         frac = (switch_direction - frac).abs();
-        let alpha = (255.0 * frac) as u8;
+        let alpha = (255.0 * frac).cast::<u8>().unwrap();
 
         for x in 0..w {
             let (x, y) = match axis {
@@ -140,7 +139,7 @@ where
             };
 
             let channels = image.inner.get_pixel_mut(dx + x, dy + y).channels_mut();
-            channels[3] = min(channels[3], alpha);
+            channels[3] = channels[3].min(alpha);
         }
     }
 }

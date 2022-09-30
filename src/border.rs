@@ -1,20 +1,14 @@
-use super::imageops::*;
+use super::img;
 use super::numeric::ops::{CheckedAdd, CheckedSub};
-use super::numeric::{Ceil, Round, RoundingMode};
-use super::types::Orientation;
-use super::types::*;
-use super::{img, utils};
-use num::traits::NumCast;
-use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
+use super::numeric::Round;
+use super::types::{Point, Size};
+use std::cmp::max;
 use std::path::Path;
-use wasm_bindgen::prelude::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("border must contain at least one transparent area, found {0:?}")]
-    BadTransparency(Vec<Rect>),
+    BadTransparency(Vec<super::Rect>),
 
     #[error("invalid border: {0}")]
     Invalid(String),
@@ -67,7 +61,7 @@ impl std::fmt::Debug for Kind {
 pub struct Border {
     inner: img::Image,
     options: Option<BorderOptions>,
-    transparent_components: Vec<Rect>,
+    transparent_components: Vec<super::Rect>,
 }
 
 impl Border {
@@ -88,11 +82,17 @@ impl Border {
     }
 
     #[inline]
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_lossless)]
     pub fn new(
         mut border: Self,
         content_size: Size,
-        stich_direction: Option<Orientation>,
+        stich_direction: Option<super::Orientation>,
     ) -> Result<Self, super::Error> {
+        use super::{BoundedSize, Orientation, Rect, ResizeMode};
+
         let comps = border.transparent_components().len();
         if comps != 1 {
             return Err(Error::Invalid(format!(
@@ -144,9 +144,10 @@ impl Border {
 
         #[cfg(debug_assertions)]
         {
-            new_border.fill(Color::rgba(0, 100, 0, 255), FillMode::Set);
+            use super::imageops::FillMode;
+            new_border.fill(super::Color::rgba(0, 100, 0, 255), FillMode::Set);
             new_border.fill_rect(
-                Color::clear(),
+                super::Color::clear(),
                 border.content_rect().top_left(),
                 target_content_size,
                 FillMode::Set,
@@ -175,9 +176,10 @@ impl Border {
 
         let fade_frac = 0.2f64;
         let fade_height = fade_frac * overlay_patch.height() as f64;
+        let fade_height = fade_height.ceil() as u32;
         let fade_size = Size {
             width: overlay_patch.width(),
-            height: fade_height.ceil() as u32,
+            height: fade_height,
         };
         let patch_safe_height = overlay_patch.height() - 2 * fade_size.height;
 
@@ -195,8 +197,8 @@ impl Border {
 
         for i in 0..num_patches {
             let mut border_overlay_patch = border.inner.clone();
-            border_overlay_patch.crop_to_fit(patch_size, CropMode::Center);
-            let axis = img::Axis::Y;
+            border_overlay_patch.crop_to_fit(patch_size, super::CropMode::Center);
+            let axis = super::Axis::Y;
             border_overlay_patch.fade_out(fade_size, Point::origin(), axis);
             border_overlay_patch.fade_out(
                 Point::from(patch_size)
@@ -205,11 +207,18 @@ impl Border {
                 patch_size,
                 axis,
             );
+            let patch_offset_y = i
+                .checked_mul(
+                    i64::from(patch_safe_height)
+                        .checked_sub(i64::from(fade_height))
+                        .unwrap(),
+                )
+                .unwrap();
             let patch_top_left = top_patch
                 .bottom_left()
                 .checked_add(Point {
                     x: 0,
-                    y: i * patch_safe_height as i64 - fade_height as i64,
+                    y: patch_offset_y,
                 })
                 .unwrap();
             new_border.overlay(border_overlay_patch.as_ref(), patch_top_left);
@@ -227,6 +236,8 @@ impl Border {
         &mut self,
         options: Option<BorderOptions>,
     ) -> Result<(), Error> {
+        use super::imageops::find_transparent_components;
+
         let options = options.unwrap_or_default();
         self.transparent_components = find_transparent_components(
             &self.inner,
@@ -260,41 +271,49 @@ impl Border {
     pub fn resize_to_fit(
         &mut self,
         container: Size,
-        resize_mode: ResizeMode,
+        resize_mode: super::ResizeMode,
     ) -> Result<(), super::Error> {
         self.inner
-            .resize_to_fit(container, resize_mode, CropMode::Center);
+            .resize_to_fit(container, resize_mode, super::CropMode::Center);
         self.compute_transparent_components(self.options)?;
         Ok(())
     }
 
     #[inline]
-    pub fn rotate(&mut self, angle: &Rotation) -> Result<(), super::Error> {
+    pub fn rotate(&mut self, angle: &super::Rotation) -> Result<(), super::Error> {
         self.inner.rotate(angle);
         self.compute_transparent_components(self.options)?;
         Ok(())
     }
 
     #[inline]
-    pub fn rotate_to_orientation(&mut self, orientation: Orientation) -> Result<(), super::Error> {
+    pub fn rotate_to_orientation(
+        &mut self,
+        orientation: super::Orientation,
+    ) -> Result<(), super::Error> {
         if self.inner.orientation() != orientation {
-            self.rotate(&Rotation::Rotate90)?;
+            self.rotate(&super::Rotation::Rotate90)?;
         }
         Ok(())
     }
 
     #[inline]
-    pub fn content_rect(&self) -> &Rect {
+    #[must_use]
+    pub fn content_rect(&self) -> &super::Rect {
         self.transparent_components.first().unwrap()
     }
 
     #[inline]
+    #[must_use]
     pub fn content_size(&self) -> Size {
         self.content_rect().size()
     }
 
     #[inline]
-    pub fn size_for<S: Into<BoundedSize>>(&self, target_content_size: S) -> Size {
+    #[must_use]
+    pub fn size_for<S: Into<super::BoundedSize>>(&self, target_content_size: S) -> Size {
+        use super::ResizeMode;
+
         let content_size = self.content_size();
         let target_content_size = target_content_size.into();
         crate::debug!(&content_size);
@@ -315,17 +334,20 @@ impl Border {
     }
 
     #[inline]
-    pub fn transparent_components(&self) -> &Vec<Rect> {
+    #[must_use]
+    pub fn transparent_components(&self) -> &Vec<super::Rect> {
         &self.transparent_components
     }
 
     #[inline]
+    #[must_use]
     pub fn size(&self) -> Size {
         self.inner.size()
     }
 
     #[inline]
-    pub fn orientation(&self) -> Orientation {
+    #[must_use]
+    pub fn orientation(&self) -> super::Orientation {
         self.size().orientation()
     }
 }
@@ -339,19 +361,18 @@ impl AsRef<image::RgbaImage> for Border {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::imageops::FillMode;
-    use crate::img;
-    use crate::types::*;
+    use crate::{img, types};
     use anyhow::Result;
     use std::path::{Path, PathBuf};
 
     fn draw_transparent_components(
         mut border: img::Image,
-        components: &Vec<Rect>,
+        components: &Vec<types::Rect>,
         output: impl AsRef<Path>,
     ) -> Result<()> {
-        let alpha = (255.0f32 * 0.5).ceil() as u8;
-        let red = Color::rgba(255, 0, 0, alpha);
+        use crate::imageops::FillMode;
+
+        let red = types::Color::rgba(255, 0, 0, 125);
         for c in components {
             let top_left = Point {
                 y: c.top,
@@ -417,6 +438,8 @@ mod tests {
 
     #[test]
     fn test_transparent_areas_3_rotate() -> Result<()> {
+        use types::Rotation;
+
         let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
         let border_file = repo.join("samples/borders/border_3_areas_vertical.png");
         let options = BorderOptions {
@@ -438,7 +461,7 @@ mod tests {
                 "testing/border_3_areas_vertical_{:?}.png",
                 rotation
             ));
-            let components = rotated.transparent_components().to_vec();
+            let components = rotated.transparent_components().clone();
             println!("sorted components: {:?}", &components);
             draw_transparent_components(rotated.inner, &components, &output)?;
             assert_eq!(components.len(), 3);

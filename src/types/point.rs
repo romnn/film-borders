@@ -1,13 +1,7 @@
-use super::*;
-use crate::error::*;
-use crate::imageops::*;
+use super::Size;
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
-use crate::numeric::{self, error, ArithmeticOp, NumCast, Round};
-use crate::{img, utils};
-use regex::Regex;
+use crate::numeric::{self, error, NumCast, Round};
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -23,11 +17,13 @@ impl numeric::NumericType for Point {}
 impl Point {
     #[wasm_bindgen(constructor)]
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Point::default()
     }
 
     #[inline]
+    #[must_use]
     pub fn origin() -> Self {
         Self { x: 0, y: 0 }
     }
@@ -92,7 +88,7 @@ impl CheckedAdd for Point {
             Ok(point) => Ok(point),
             Err(err) => Err(ops::AddError(error::ArithmeticError {
                 lhs: self,
-                rhs: rhs,
+                rhs,
                 kind: None,
                 cause: Some(Box::new(err)),
             })),
@@ -114,7 +110,7 @@ impl CheckedSub for Point {
             Ok(point) => Ok(point),
             Err(err) => Err(ops::SubError(error::ArithmeticError {
                 lhs: self,
-                rhs: rhs,
+                rhs,
                 kind: None,
                 cause: Some(Box::new(err)),
             })),
@@ -152,7 +148,6 @@ where
 
     #[inline]
     fn checked_div(self, scalar: F) -> Result<Self::Output, Self::Error> {
-        use num::traits::Inv;
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(point) => Ok(point),
@@ -174,7 +169,6 @@ mod tests {
     use crate::numeric::{Ceil, Floor, Round};
     use crate::test::assert_matches_regex;
     use pretty_assertions::assert_eq;
-    use regex::Regex;
 
     #[test]
     fn scale_by() {

@@ -1,7 +1,7 @@
 pub mod percent {
     use crate::numeric::ops::{self, CheckedMul};
     use crate::numeric::{self, cast::NumCast, error};
-    use crate::types::{Point, Size};
+    use crate::types::Size;
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
@@ -10,19 +10,21 @@ pub mod percent {
     pub struct Sides {
         pub top: f32,
         pub left: f32,
-        pub right: f32,
         pub bottom: f32,
+        pub right: f32,
     }
 
     #[wasm_bindgen]
     impl Sides {
         #[wasm_bindgen(constructor)]
         #[inline]
+        #[must_use]
         pub fn new() -> Self {
             Self::default()
         }
 
         #[inline]
+        #[must_use]
         pub fn uniform(side: f32) -> Self {
             Self {
                 top: side,
@@ -106,20 +108,21 @@ pub mod percent {
 }
 
 pub mod abs {
-    use crate::numeric::ops::{self, CheckedAdd, CheckedMul};
+    use crate::numeric::ops::{self, CheckedMul};
     use crate::numeric::{self, cast::NumCast, error};
-    use crate::types::{Point, Size};
+    use crate::types::Point;
 
     #[derive(Debug, Default, Copy, Clone)]
     pub struct Sides {
         pub top: u32,
         pub left: u32,
-        pub right: u32,
         pub bottom: u32,
+        pub right: u32,
     }
 
     impl Sides {
         #[inline]
+        #[must_use]
         pub fn uniform(side: u32) -> Self {
             Self {
                 top: side,
@@ -130,28 +133,32 @@ pub mod abs {
         }
 
         #[inline]
+        #[must_use]
         pub fn height(&self) -> u32 {
             self.top + self.bottom
         }
 
         #[inline]
+        #[must_use]
         pub fn width(&self) -> u32 {
             self.left + self.right
         }
 
         #[inline]
+        #[must_use]
         pub fn top_left(&self) -> Point {
             Point {
-                x: self.left as i64,
-                y: self.top as i64,
+                x: i64::from(self.left),
+                y: i64::from(self.top),
             }
         }
 
         #[inline]
+        #[must_use]
         pub fn bottom_right(&self) -> Point {
             Point {
-                x: self.right as i64,
-                y: self.bottom as i64,
+                x: i64::from(self.right),
+                y: i64::from(self.bottom),
             }
         }
     }

@@ -39,6 +39,12 @@ pub enum Orientation {
     Landscape,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Axis {
+    X,
+    Y,
+}
+
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum FitMode {

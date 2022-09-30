@@ -166,7 +166,7 @@ fn main() {
                     println!(
                         "completed in {} msec",
                         (Utc::now().time() - start).num_milliseconds()
-                    )
+                    );
                 }
                 Err(err) => eprintln!("{}", err),
             };

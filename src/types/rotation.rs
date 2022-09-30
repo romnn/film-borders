@@ -1,12 +1,5 @@
 use crate::error;
-use crate::imageops::*;
-use crate::numeric::{Ceil, Round, RoundingMode};
-use crate::{img, utils};
-use num::traits::NumCast;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

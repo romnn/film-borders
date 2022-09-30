@@ -1,12 +1,5 @@
-use crate::error::*;
-use crate::imageops::*;
-use crate::numeric::{Ceil, Round, RoundingMode};
-use crate::{img, utils};
-use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
-use std::path::Path;
 use wasm_bindgen::prelude::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -57,11 +50,13 @@ impl Color {
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen(constructor)]
     #[inline]
+    #[must_use]
     pub fn hex(hex: &str) -> Result<Color, JsValue> {
         hex_to_color(hex).map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
     #[inline]
+    #[must_use]
     pub fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self {
             rgba: [r, g, b, 255],
@@ -69,26 +64,31 @@ impl Color {
     }
 
     #[inline]
+    #[must_use]
     pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { rgba: [r, g, b, a] }
     }
 
     #[inline]
+    #[must_use]
     pub fn clear() -> Self {
         Self::rgba(0, 0, 0, 0)
     }
 
     #[inline]
+    #[must_use]
     pub fn black() -> Self {
         Self::rgba(0, 0, 0, 255)
     }
 
     #[inline]
+    #[must_use]
     pub fn white() -> Self {
         Self::rgba(255, 255, 255, 255)
     }
 
     #[inline]
+    #[must_use]
     pub fn gray() -> Self {
         Self::rgba(200, 200, 200, 255)
     }
@@ -121,11 +121,6 @@ impl Color {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::imageops::FillMode;
-    use crate::img;
-    use crate::types::*;
-    use anyhow::Result;
-    use std::path::{Path, PathBuf};
 
     macro_rules! color_hex_tests {
         ($($name:ident: $values:expr,)*) => {

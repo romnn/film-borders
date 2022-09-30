@@ -1,6 +1,5 @@
-use super::error;
-use super::types;
 use super::border;
+use super::error;
 use super::{img, Error};
 use std::io;
 use wasm_bindgen::prelude::*;
@@ -24,8 +23,7 @@ impl std::str::FromStr for Border {
     fn from_str(s: &str) -> Result<Border, Self::Err> {
         let s = s.to_ascii_lowercase();
         match s.as_str() {
-            "120mm" => Ok(Border::Border120_1),
-            "120mm1" => Ok(Border::Border120_1),
+            "120mm" | "120mm1" => Ok(Border::Border120_1),
             _ => Err(error::ParseEnumError::Unknown(s.to_string())),
         }
     }
