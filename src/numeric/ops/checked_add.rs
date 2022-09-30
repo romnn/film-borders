@@ -1,4 +1,4 @@
-use super::{error, ArithmeticOp, NumericType};
+use crate::numeric::{error, ArithmeticOp, NumericType};
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
@@ -8,15 +8,15 @@ where
 {
     type Output;
 
-    fn checked_add(&self, rhs: &Rhs) -> Result<Self::Output, AddError<Self, Rhs>>;
+    fn checked_add(self, rhs: Rhs) -> Result<Self::Output, AddError<Self, Rhs>>;
 }
 
 macro_rules! impl_unsigned_checked_add {
     ( $T:ty ) => {
         impl CheckedAdd for $T {
             type Output = $T;
-            fn checked_add(&self, rhs: &Self) -> Result<Self::Output, AddError<Self, Self>> {
-                num::CheckedAdd::checked_add(self, rhs)
+            fn checked_add(self, rhs: Self) -> Result<Self::Output, AddError<Self, Self>> {
+                num::CheckedAdd::checked_add(&self, &rhs)
                     .ok_or(rhs.overflows::<$T>(self))
                     .map_err(AddError)
             }
@@ -28,13 +28,13 @@ macro_rules! impl_signed_checked_add {
     ( $T:ty ) => {
         impl CheckedAdd for $T {
             type Output = $T;
-            fn checked_add(&self, rhs: &Self) -> Result<Self::Output, AddError<$T, $T>> {
+            fn checked_add(self, rhs: Self) -> Result<Self::Output, AddError<$T, $T>> {
                 if rhs.is_negative() {
-                    num::CheckedSub::checked_sub(self, &rhs.abs())
+                    num::CheckedSub::checked_sub(&self, &rhs.abs())
                         .ok_or(rhs.underflows::<$T>(self))
                         .map_err(AddError)
                 } else {
-                    num::CheckedAdd::checked_add(self, &rhs)
+                    num::CheckedAdd::checked_add(&self, &rhs)
                         .ok_or(rhs.overflows::<$T>(self))
                         .map_err(AddError)
                 }
