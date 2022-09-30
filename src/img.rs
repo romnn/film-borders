@@ -143,7 +143,7 @@ impl Image {
     }
 
     pub fn crop(&mut self, top_left: Point, bottom_right: Point) {
-        let cropped_size = Size::from(bottom_right.checked_sub(top_left).unwrap());
+        let cropped_size = Size::try_from(bottom_right.checked_sub(top_left).unwrap()).unwrap();
         self.inner = crop(
             &mut self.inner,
             max(0, top_left.x) as u32,
@@ -155,7 +155,7 @@ impl Image {
     }
 
     pub fn crop_sides(&mut self, crop_sides: Sides) {
-        let cropped_size = self.size() - crop_sides;
+        let cropped_size = self.size().checked_sub(crop_sides).unwrap();
         self.inner = crop(
             &mut self.inner,
             crop_sides.left,

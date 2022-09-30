@@ -1,10 +1,9 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::ops::{CheckedSub, CheckedAdd, CheckedDiv};
-use crate::numeric::{Ceil, Round, RoundingMode};
+use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedSub};
+use crate::numeric::{self, Ceil, NumCast, Round, RoundingMode};
 use crate::{img, utils};
-use num::traits::NumCast;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
@@ -18,44 +17,34 @@ pub struct Size {
     pub height: u32,
 }
 
-impl<'a, P, Container> From<&'a image::ImageBuffer<P, Container>> for Size
-where
-    P: image::Pixel,
-    Container: std::ops::Deref<Target = [P::Subpixel]>,
-{
-    fn from(image: &'a image::ImageBuffer<P, Container>) -> Self {
-        Self {
-            width: image.width(),
-            height: image.height(),
-        }
-    }
-}
+impl numeric::NumericType for Size {}
 
-impl std::fmt::Display for Size {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}x{}", self.width, self.height)
+#[wasm_bindgen]
+impl Size {
+    #[wasm_bindgen(constructor)]
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
     }
-}
 
-impl From<BoundedSize> for Size {
-    fn from(size: BoundedSize) -> Self {
-        Self {
-            width: size.width.unwrap_or(0),
-            height: size.height.unwrap_or(0),
-        }
+    #[inline]
+    pub fn wh(width: u32, height: u32) -> Self {
+        Self { width, height }
     }
-}
 
-impl<'a> From<&'a image::DynamicImage> for Size {
-    fn from(image: &'a image::DynamicImage) -> Self {
-        Self {
-            width: image.width(),
-            height: image.height(),
-        }
+    #[inline]
+    pub fn max(&self) -> u32 {
+        max(self.width, self.height)
+    }
+
+    #[inline]
+    pub fn min(&self) -> u32 {
+        min(self.width, self.height)
     }
 }
 
 impl Size {
+    #[inline]
     pub fn scale_factor<S: Into<Size>>(&self, container: S, mode: ResizeMode) -> (f64, f64) {
         let container = container.into();
         let wratio = container.width as f64 / self.width as f64;
@@ -111,6 +100,7 @@ impl Size {
         })
     }
 
+    #[inline]
     pub fn center(self, size: Self) -> Rect {
         let container: Point = self.into();
         let size: Point = size.into();
@@ -128,6 +118,7 @@ impl Size {
         }
     }
 
+    #[inline]
     pub fn clamp<S1, S2>(self, min: S1, max: S2) -> Self
     where
         S1: Into<Size>,
@@ -141,12 +132,13 @@ impl Size {
         }
     }
 
+    #[inline]
     pub fn scale_by<F, R>(self, scalar: F) -> Self
     where
         R: RoundingMode,
-        F: NumCast,
+        F: num::NumCast,
     {
-        let scalar: f64 = NumCast::from(scalar).unwrap();
+        let scalar: f64 = num::NumCast::from(scalar).unwrap();
         let width = max(R::round(self.width as f64 * scalar) as u64, 1);
         let height = max(R::round(self.height as f64 * scalar) as u64, 1);
         if width > u32::MAX as u64 {
@@ -171,6 +163,7 @@ impl Size {
         }
     }
 
+    #[inline]
     pub fn scale_to_bounds(self, bounds: BoundedSize, mode: ResizeMode) -> Self {
         match bounds {
             // unbounded
@@ -207,6 +200,7 @@ impl Size {
         }
     }
 
+    #[inline]
     pub fn scale_to<S: Into<Size>>(self, container: S, mode: ResizeMode) -> Self {
         let container = container.into();
         match mode {
@@ -218,9 +212,10 @@ impl Size {
         }
     }
 
+    #[inline]
     pub fn crop_to_fit(&self, container: Size, mode: CropMode) -> Sides {
         // avoid underflow if container is larger than self
-        let container = container.clamp(Point::origin(), *self);
+        let container = container.clamp((0, 0), *self);
 
         assert!(self.width >= container.width);
         assert!(self.height >= container.height);
@@ -248,11 +243,11 @@ impl Size {
             CropMode::Center => center_top_left,
         };
         // this could go wrong but we are careful
-        let top_left: Size = top_left.into();
-        let top_left = top_left.clamp(Point::origin(), *self - container);
+        let top_left: Size = top_left.try_into().unwrap();
+        let top_left = top_left.clamp((0, 0), *self - container);
 
         let bottom_right = top_left + container;
-        let bottom_right = bottom_right.clamp(Point::origin(), *self);
+        let bottom_right = bottom_right.clamp((0, 0), *self);
         let bottom_right = *self - bottom_right;
 
         Sides {
@@ -261,116 +256,49 @@ impl Size {
             bottom: bottom_right.height,
             right: bottom_right.width,
         }
+
+        // Sides {
+        //     top: top_left.height,
+        //     left: top_left.width,
+        //     bottom: bottom_right.height,
+        //     right: bottom_right.width,
+        // }
     }
 }
 
-impl std::ops::Sub<u32> for Size {
-    type Output = Self;
-
-    fn sub(self, scalar: u32) -> Self::Output {
-        Self {
-            width: self.width - scalar,
-            height: self.height - scalar,
-        }
+impl std::fmt::Display for Size {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}x{}", self.width, self.height)
     }
 }
 
-impl std::ops::Add<u32> for Size {
-    type Output = Self;
-
-    fn add(self, scalar: u32) -> Self::Output {
-        Self {
-            width: self.width + scalar,
-            height: self.height + scalar,
-        }
-    }
-}
-
-impl<F> std::ops::Mul<F> for Size
+impl<'a, P, Container> From<&'a image::ImageBuffer<P, Container>> for Size
 where
-    F: NumCast,
+    P: image::Pixel,
+    Container: std::ops::Deref<Target = [P::Subpixel]>,
 {
-    type Output = Self;
-
-    fn mul(self, scalar: F) -> Self::Output {
-        self.scale_by::<_, Round>(scalar)
-    }
-}
-
-impl<F> std::ops::Div<F> for Size
-where
-    F: NumCast,
-{
-    type Output = Self;
-
-    fn div(self, scalar: F) -> Self::Output {
-        let scalar: f64 = NumCast::from(scalar).unwrap();
-        self.scale_by::<_, Round>(1.0 / scalar)
-    }
-}
-
-impl std::ops::Sub<Sides> for Size {
-    type Output = Self;
-
-    fn sub(self, sides: Sides) -> Self::Output {
-        let width = self.width as i64 - sides.width() as i64;
-        let height = self.height as i64 - sides.height() as i64;
-        Size {
-            width: utils::clamp(width, 0, u32::MAX as i64) as u32,
-            height: utils::clamp(height, 0, u32::MAX as i64) as u32,
+    #[inline]
+    fn from(image: &'a image::ImageBuffer<P, Container>) -> Self {
+        Self {
+            width: image.width(),
+            height: image.height(),
         }
     }
 }
 
-impl std::ops::Add<Sides> for Size {
-    type Output = Self;
-
-    fn add(self, sides: Sides) -> Self::Output {
-        let width = self.width as i64 + sides.width() as i64;
-        let height = self.height as i64 + sides.height() as i64;
-        Size {
-            width: utils::clamp(width, 0, u32::MAX as i64) as u32,
-            height: utils::clamp(height, 0, u32::MAX as i64) as u32,
-        }
-    }
-}
-
-impl std::ops::Add<Point> for Size {
-    type Output = Self;
-
-    fn add(self, p: Point) -> Self::Output {
-        let width = utils::clamp(self.width as i64 + p.x, 0, u32::MAX as i64);
-        let height = utils::clamp(self.height as i64 + p.y, 0, u32::MAX as i64);
-        Size {
-            width: width as u32,
-            height: height as u32,
-        }
-    }
-}
-
-impl std::ops::Add for Size {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Size {
-            width: self.width + rhs.width,
-            height: self.height + rhs.height,
-        }
-    }
-}
-
-impl std::ops::Sub for Size {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Size {
-            width: self.width - rhs.width,
-            height: self.height - rhs.height,
+impl<'a> From<&'a image::DynamicImage> for Size {
+    #[inline]
+    fn from(image: &'a image::DynamicImage) -> Self {
+        Self {
+            width: image.width(),
+            height: image.height(),
         }
     }
 }
 
 impl From<Sides> for Size {
+    #[inline]
     fn from(sides: Sides) -> Self {
         Self {
             width: sides.left + sides.right,
@@ -379,31 +307,216 @@ impl From<Sides> for Size {
     }
 }
 
-impl From<Point> for Size {
-    fn from(point: Point) -> Self {
+impl From<(u32, u32)> for Size {
+    #[inline]
+    fn from(size: (u32, u32)) -> Self {
         Self {
-            width: utils::clamp(point.x, 0, u32::MAX as i64) as u32,
-            height: utils::clamp(point.y, 0, u32::MAX as i64) as u32,
+            width: size.0,
+            height: size.1,
         }
     }
 }
 
-#[wasm_bindgen]
-impl Size {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self::default()
-    }
+impl TryFrom<Point> for Size {
+    type Error = numeric::CastError<Point>;
 
-    pub fn wh(width: u32, height: u32) -> Self {
-        Self { width, height }
+    #[inline]
+    fn try_from(point: Point) -> Result<Self, Self::Error> {
+        match (|| {
+            let width = point.x.cast::<u32>()?;
+            let height = point.y.cast::<u32>()?;
+            Ok::<Size, numeric::CastError<_>>(Self { width, height })
+        })() {
+            Ok(size) => Ok(size),
+            Err(err) => Err(numeric::CastError {
+                src: point,
+                container_type_name: err.container_type_name,
+            }),
+        }
     }
+}
 
-    pub fn max(&self) -> u32 {
-        max(self.width, self.height)
+// impl std::ops::Sub<u32> for Size {
+//     type Output = Self;
+
+//     #[inline]
+//     fn sub(self, scalar: u32) -> Self::Output {
+//         Self {
+//             width: self.width - scalar,
+//             height: self.height - scalar,
+//         }
+//     }
+// }
+
+// impl std::ops::Add<u32> for Size {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, scalar: u32) -> Self::Output {
+//         Self {
+//             width: self.width + scalar,
+//             height: self.height + scalar,
+//         }
+//     }
+// }
+
+impl<F> std::ops::Mul<F> for Size
+where
+    F: num::NumCast,
+{
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, scalar: F) -> Self::Output {
+        self.scale_by::<_, Round>(scalar)
     }
+}
 
-    pub fn min(&self) -> u32 {
-        min(self.width, self.height)
+impl<F> std::ops::Div<F> for Size
+where
+    F: num::NumCast,
+{
+    type Output = Self;
+
+    #[inline]
+    fn div(self, scalar: F) -> Self::Output {
+        let scalar: f64 = num::NumCast::from(scalar).unwrap();
+        self.scale_by::<_, Round>(1.0 / scalar)
+    }
+}
+
+impl CheckedSub<Sides> for Size {
+    type Output = Self;
+
+    #[inline]
+    fn checked_sub(self, rhs: Sides) -> Result<Self::Output, ops::SubError<Self, Sides>> {
+        match (|| {
+            let width = CheckedSub::checked_sub(self.width, rhs.width())?;
+            let height = CheckedSub::checked_sub(self.height, rhs.height())?;
+            Ok::<Size, ops::SubError<u32, u32>>(Self { width, height })
+        })() {
+            Ok(size) => Ok(size),
+            // Err(err @ ops::SubError(ref cause)) => Err(ops::SubError(numeric::ArithmeticError {
+            Err(err) => Err(ops::SubError(numeric::ArithmeticError {
+                lhs: self,
+                rhs: rhs,
+                // container_type_name: err.container_type_name,
+                kind: err.0.kind,
+                cause: Some(Box::new(err)),
+            })),
+        }
+    }
+}
+
+// impl std::ops::Sub<Sides> for Size {
+//     type Output = Self;
+
+//     #[inline]
+//     fn sub(self, sides: Sides) -> Self::Output {
+//         let width = self.width as i64 - sides.width() as i64;
+//         let height = self.height as i64 - sides.height() as i64;
+//         Size {
+//             width: utils::clamp(width, 0, u32::MAX as i64) as u32,
+//             height: utils::clamp(height, 0, u32::MAX as i64) as u32,
+//         }
+//     }
+// }
+
+impl CheckedAdd<Sides> for Size {
+    type Output = Self;
+    type Error = ops::AddError<Self, Sides>;
+
+    #[inline]
+    fn checked_add(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
+        match (|| {
+            let width = CheckedAdd::checked_add(self.width, rhs.width())?;
+            let height = CheckedAdd::checked_add(self.height, rhs.height())?;
+            Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
+        })() {
+            Ok(size) => Ok(size),
+            // Err(err @ ops::AddError(ref cause)) => {
+            Err(err) => {
+                Err(ops::AddError(numeric::ArithmeticError {
+                    lhs: self,
+                    rhs: rhs,
+                    // container_type_name: err.container_type_name,
+                    kind: None, // err.0.kind,
+                    cause: Some(Box::new(err)),
+                }))
+            }
+        }
+    }
+}
+
+// impl std::ops::Add<Sides> for Size {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, sides: Sides) -> Self::Output {
+//         let width = self.width as i64 + sides.width() as i64;
+//         let height = self.height as i64 + sides.height() as i64;
+//         Size {
+//             width: utils::clamp(width, 0, u32::MAX as i64) as u32,
+//             height: utils::clamp(height, 0, u32::MAX as i64) as u32,
+//         }
+//     }
+// }
+
+// impl std::ops::Add<Point> for Size {
+//     type Output = Self;
+
+//     #[inline]
+//     fn add(self, p: Point) -> Self::Output {
+//         let width = utils::clamp(self.width as i64 + p.x, 0, u32::MAX as i64);
+//         let height = utils::clamp(self.height as i64 + p.y, 0, u32::MAX as i64);
+//         Size {
+//             width: width as u32,
+//             height: height as u32,
+//         }
+//     }
+// }
+
+impl std::ops::Add for Size {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        Size {
+            width: self.width + rhs.width,
+            height: self.height + rhs.height,
+        }
+    }
+}
+
+// impl CheckedAdd<Sides> for Size {
+//     type Output = Self;
+
+//     #[inline]
+//     fn checked_add(self, rhs: Sides) -> Result<Self::Output, ops::AddError<Self, Sides>> {
+//         match (|| {
+//             let width = CheckedAdd::checked_add(self.width, rhs.width())?;
+//             let height = CheckedAdd::checked_add(self.height, rhs.height())?;
+//             Ok(Self { width, height })
+//         })() {
+//             Ok(size) => Ok(size),
+//             Err(ops::AddError(err)) => Err(ops::AddError(numeric::ArithmeticError {
+//                 lhs: self,
+//                 rhs: rhs,
+//                 container_type_name: err.container_type_name,
+//                 kind: err.kind,
+//             })),
+//         }
+//     }
+// }
+
+impl std::ops::Sub for Size {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        Size {
+            width: self.width - rhs.width,
+            height: self.height - rhs.height,
+        }
     }
 }

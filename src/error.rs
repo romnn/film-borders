@@ -1,4 +1,30 @@
 use super::types::Rect;
+use std::fmt;
+use std::fmt::Write;
+
+pub trait Report {
+    fn report(&self) -> String;
+}
+
+impl<E> Report for E
+where
+    E: std::error::Error,
+{
+    fn report(&self) -> String {
+        dbg!(self);
+        dbg!(self.source());
+        let mut buf = String::new();
+        write!(buf, "ERROR: {}", self.to_string());
+        if let Some(cause) = self.source() {
+            write!(buf, "\n");
+            write!(buf, "Caused by:\n");
+            for (i, e) in std::iter::successors(Some(cause), |e| e.source()).enumerate() {
+                write!(buf, "   {}: {}\n", i, e);
+            }
+        }
+        buf
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

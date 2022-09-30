@@ -1,13 +1,15 @@
 pub mod cast;
+pub mod clamp;
 pub mod error;
 pub mod ops;
 pub mod option_ord;
-pub mod rounding;
+pub mod round;
 
 pub use cast::{CastError, NumCast};
+// pub use clamp::{Clamp, ClampMax, ClampMin};
 pub use error::{ArithmeticError, Error};
 pub use option_ord::OptionOrd;
-pub use rounding::{Ceil, Floor, Round, RoundingMode};
+pub use round::{Ceil, Floor, Round, RoundingMode};
 use std::fmt::{Debug, Display};
 
 pub trait NumericType: Display + Debug + PartialEq + 'static {}
@@ -26,8 +28,9 @@ where
         error::ArithmeticError {
             lhs: lhs,
             rhs: self,
-            type_name: std::any::type_name::<T>().to_string(),
-            kind: error::ArithmeticErrorKind::Overflow,
+            // container_type_name: std::any::type_name::<T>().to_string(),
+            kind: Some(error::ArithmeticErrorKind::Overflow),
+            cause: None,
         }
     }
 
@@ -38,8 +41,9 @@ where
         error::ArithmeticError {
             lhs: lhs,
             rhs: self,
-            type_name: std::any::type_name::<T>().to_string(),
-            kind: error::ArithmeticErrorKind::Underflow,
+            // container_type_name: std::any::type_name::<T>().to_string(),
+            kind: Some(error::ArithmeticErrorKind::Underflow),
+            cause: None,
         }
     }
 }

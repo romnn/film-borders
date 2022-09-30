@@ -34,6 +34,10 @@ where
         self
     }
 
+    // fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+    //     self
+    // }
+
     fn eq(&self, other: &dyn error::NumericError) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
@@ -48,10 +52,17 @@ where
     Rhs: Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "multiplying {} by {} would {} {}",
-            self.0.lhs, self.0.rhs, self.0.kind, self.0.type_name,
-        )
+        match self.0.kind {
+            Some(kind) => write!(
+                f,
+                "multiplying {} by {} would {} {}",
+                self.0.lhs,
+                self.0.rhs,
+                kind,
+                std::any::type_name::<Lhs>().to_string(),
+                // self.0.container_type_name,
+            ),
+            None => write!(f, "cannot multiply {} by {}", self.0.lhs, self.0.rhs,),
+        }
     }
 }

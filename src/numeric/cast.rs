@@ -7,7 +7,7 @@ pub trait NumCast
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
-    fn cast<Target>(self) -> Result<Target, CastError<Self, Target>>
+    fn cast<Target>(self) -> Result<Target, CastError<Self>>
     where
         Target: num::NumCast;
 }
@@ -16,41 +16,45 @@ impl<Src> NumCast for Src
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
-    fn cast<Target>(self) -> Result<Target, CastError<Self, Target>>
+    fn cast<Target>(self) -> Result<Target, CastError<Self>>
     where
         Target: num::NumCast,
     {
         num::NumCast::from(self).ok_or(CastError {
             src: self,
-            target: PhantomData,
+            container_type_name: std::any::type_name::<Target>().to_string(),
+            // target: PhantomData,
         })
     }
 }
 
 #[derive(thiserror::Error, PartialEq, Eq)]
-pub struct CastError<Src, Target> {
+pub struct CastError<Src> {
     pub src: Src,
-    pub target: PhantomData<Target>,
+    pub container_type_name: String,
+    // pub target: PhantomData<Target>,
 }
 
-impl<Src, Target> From<CastError<Src, Target>> for error::Error
+impl<Src> From<CastError<Src>> for error::Error
 where
     Src: NumericType,
-    Target: NumericType,
 {
-    fn from(err: CastError<Src, Target>) -> Self {
+    fn from(err: CastError<Src>) -> Self {
         error::Error::Cast(Box::new(err))
     }
 }
 
-impl<Src, Target> error::NumericError for CastError<Src, Target>
+impl<Src> error::NumericError for CastError<Src>
 where
     Src: NumericType,
-    Target: NumericType,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    // fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+    //     self
+    // }
 
     fn eq(&self, other: &dyn error::NumericError) -> bool {
         match other.as_any().downcast_ref::<Self>() {
@@ -60,7 +64,7 @@ where
     }
 }
 
-impl<Src, Target> Debug for CastError<Src, Target>
+impl<Src> Debug for CastError<Src>
 where
     Src: Display,
 {
@@ -69,7 +73,7 @@ where
     }
 }
 
-impl<Src, Target> Display for CastError<Src, Target>
+impl<Src> Display for CastError<Src>
 where
     Src: Display,
 {
@@ -79,7 +83,7 @@ where
             "cannot cast {} of type {} to {}",
             self.src,
             std::any::type_name::<Src>().to_string(),
-            std::any::type_name::<Target>().to_string(),
+            self.container_type_name,
         )
     }
 }

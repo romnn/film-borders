@@ -24,6 +24,8 @@ macro_rules! impl_unsigned_checked_sub {
     };
 }
 
+impl_unsigned_checked_sub!(u32);
+
 macro_rules! impl_signed_checked_sub {
     ( $T:ty ) => {
         impl CheckedSub for $T {
@@ -43,7 +45,6 @@ macro_rules! impl_signed_checked_sub {
     };
 }
 
-// impl_unsigned_checked_sub!(u32);
 impl_signed_checked_sub!(i64);
 
 #[derive(thiserror::Error, PartialEq, Eq, Debug)]
@@ -58,6 +59,12 @@ where
         error::Error::Sub(Box::new(err))
     }
 }
+
+// impl<Lhs, Rhs> error::AsError for SubError<Lhs, Rhs> {
+//     fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+//         self
+//     }
+// }
 
 impl<Lhs, Rhs> error::NumericError for SubError<Lhs, Rhs>
 where
@@ -82,10 +89,17 @@ where
     Rhs: Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "subtracting {} from {} would {} {}",
-            self.0.rhs, self.0.lhs, self.0.kind, self.0.type_name,
-        )
+        match self.0.kind {
+            Some(kind) => write!(
+                f,
+                "subtracting {} from {} would {} {}",
+                self.0.rhs,
+                self.0.lhs,
+                kind,
+                std::any::type_name::<Lhs>().to_string(),
+                // self.0.container_type_name,
+            ),
+            None => write!(f, "cannot subtract {} from {}", self.0.rhs, self.0.lhs),
+        }
     }
 }

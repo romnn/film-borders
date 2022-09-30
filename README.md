@@ -33,9 +33,19 @@ film-borders apply --help
 ```
 
 #### TODO
+- add single simple benchmark
+- get out the benchmark data as json or so
+- make a performance tracker via github actions
+- add a full suite of integration tests that check against expected output
+  - should test: different file formats
+  - should test: all border fill modes
+  - should test: with single image and multiple images
+  - should test: different sets of border configurations
+- add backtraces to all error types
+
 - use impls where possible
 - inline everything
-- add benchmarks
+- add more benchmarks
 - split the types into multiple files
 - add documentation
 - make all ops checked

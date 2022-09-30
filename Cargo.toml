@@ -44,13 +44,16 @@ strip = false
 opt-level = 3
 lto = true
 
-
 [lib]
 crate-type = ["cdylib", "lib"]
 
 [[bin]]
 name = "film-borders"
 path = "src/cli.rs"
+
+[[bench]]
+name = "benches"
+harness = false
 
 [features]
 default = []
@@ -86,11 +89,14 @@ approx = "0.5"
 
 [dev-dependencies]
 pretty_assertions = "1"
-wasm-bindgen-test = "0.3"
 tempdir = "0.3"
 anyhow = "1"
 approx = "0"
 regex = "1"
+# wasm
+wasm-bindgen-test = "0.3"
+# benchmarking
+criterion = "0.4"
 
 [dependencies.web-sys]
 version = "0.3"

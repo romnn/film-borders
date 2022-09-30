@@ -361,7 +361,11 @@ mod tests {
                 y: c.bottom,
                 x: c.right,
             };
-            let size = bottom_right.checked_sub(top_left).unwrap();
+            let size: Size = bottom_right
+                .checked_sub(top_left)
+                .unwrap()
+                .try_into()
+                .unwrap();
             border.fill_rect(red, top_left, size, FillMode::Blend);
         }
         border.save_with_filename(output.as_ref(), None)?;

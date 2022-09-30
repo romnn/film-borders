@@ -10,6 +10,8 @@ pub mod imageops;
 pub mod img;
 mod numeric;
 pub mod options;
+#[cfg(test)]
+mod test;
 pub mod types;
 pub mod utils;
 #[cfg(feature = "wasm")]
@@ -23,6 +25,7 @@ pub use img::Image;
 pub use options::*;
 pub use types::*;
 
+use numeric::ops::CheckedAdd;
 use std::path::Path;
 
 pub struct ImageBorders {
@@ -97,7 +100,11 @@ impl ImageBorders {
         let frame_width: Sides = options.frame_width * base;
         let margin: Sides = Sides::uniform((margin_factor * base as f32) as u32);
         // let margin: Sides = Sides::uniform((margin_factor * f64::from(base)) as u32);
-        let content_size = original_content_size + frame_width + margin;
+        let content_size = original_content_size
+            .checked_add(frame_width)
+            .unwrap()
+            .checked_add(margin)
+            .unwrap();
         let default_output_size = content_size * (1.0 / scale_factor);
 
         // set output size and do not keep aspect ratio

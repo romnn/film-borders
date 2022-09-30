@@ -47,7 +47,7 @@ impl Rect {
     #[inline]
     pub fn size(&self) -> Size {
         let size = self.bottom_right().checked_sub(self.top_left()).unwrap();
-        size.into()
+        size.try_into().unwrap()
     }
 
     #[inline]

@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::ops::{AddError, MulError, SubError};
+use crate::numeric::ops::{self, CheckedAdd, CheckedSub};
 use crate::numeric::{self, ArithmeticError, ArithmeticOp, NumCast, Round, RoundingMode};
 use crate::{img, utils};
 use regex::Regex;
@@ -80,22 +80,25 @@ impl std::fmt::Display for Point {
     }
 }
 
-impl numeric::ops::CheckedAdd for Point {
+impl CheckedAdd for Point {
     type Output = Self;
+    type Error = ops::AddError<Self, Self>;
 
     #[inline]
-    fn checked_add(self, rhs: Point) -> Result<Point, AddError<Self, Self>> {
+    fn checked_add(self, rhs: Self) -> Result<Self, Self::Error> {
         match (|| {
-            let x = numeric::ops::CheckedAdd::checked_add(self.x, rhs.x)?;
-            let y = numeric::ops::CheckedAdd::checked_add(self.y, rhs.y)?;
-            Ok::<Point, _>(Self { x, y })
+            let x = CheckedAdd::checked_add(self.x, rhs.x)?;
+            let y = CheckedAdd::checked_add(self.y, rhs.y)?;
+            Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(AddError(err)) => Err(AddError(ArithmeticError {
+            // Err(err @ ops::AddError(ref cause)) => Err(ops::AddError(ArithmeticError {
+            Err(err) => Err(ops::AddError(ArithmeticError {
                 lhs: self,
                 rhs: rhs,
-                type_name: err.type_name,
-                kind: err.kind,
+                // container_type_name: err.container_type_name,
+                kind: None, // err.0.kind,
+                cause: Some(Box::new(err)),
             })),
         }
     }
@@ -112,22 +115,24 @@ impl numeric::ops::CheckedAdd for Point {
 //     }
 // }
 
-impl numeric::ops::CheckedSub for Point {
+impl CheckedSub for Point {
     type Output = Self;
 
     #[inline]
-    fn checked_sub(self, rhs: Point) -> Result<Point, SubError<Self, Self>> {
+    fn checked_sub(self, rhs: Point) -> Result<Point, ops::SubError<Self, Self>> {
         match (|| {
-            let x = numeric::ops::CheckedSub::checked_sub(self.x, rhs.x)?;
-            let y = numeric::ops::CheckedSub::checked_sub(self.y, rhs.y)?;
-            Ok::<Point, _>(Self { x, y })
+            let x = CheckedSub::checked_sub(self.x, rhs.x)?;
+            let y = CheckedSub::checked_sub(self.y, rhs.y)?;
+            Ok::<Point, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(SubError(err)) => Err(SubError(ArithmeticError {
+            // Err(err @ ops::SubError(ref cause)) => Err(ops::SubError(ArithmeticError {
+            Err(err) => Err(ops::SubError(ArithmeticError {
                 lhs: self,
                 rhs: rhs,
-                type_name: err.type_name,
-                kind: err.kind,
+                // container_type_name: err.container_type_name,
+                kind: err.0.kind,
+                cause: Some(Box::new(err)),
             })),
         }
     }
@@ -187,8 +192,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::Point;
+    use crate::error::Report;
     use crate::numeric::ops::CheckedAdd;
     use crate::numeric::{Ceil, Floor, Round};
+    use crate::test::assert_matches_regex;
     use pretty_assertions::assert_eq;
     use regex::Regex;
 
@@ -200,17 +207,15 @@ mod tests {
         assert_eq!(p1.scale_by::<_, Round>(-2), Ok(Point { x: -20, y: -20 }));
         assert_eq!(p1.scale_by::<_, Round>(2i128), Ok(Point { x: 20, y: 20 }));
         assert_eq!(p1.scale_by::<_, Round>(1.5), Ok(Point { x: 15, y: 15 }));
+
+        assert_matches_regex!(
+            &p1.scale_by::<_, Round>(i128::MIN).err().unwrap().report(),
+            r"cannot cast -?\d* of type f64 to i64"
+        );
+
         assert!(Regex::new(r"^cannot cast -?\d* of type f64 to i64$")
             .unwrap()
-            .is_match(
-                &p1.scale_by::<_, Round>(i128::MIN)
-                    .err()
-                    .unwrap()
-                    .to_string()
-            ));
-        assert!(Regex::new(r"^cannot cast -?\d* of type f64 to i64$")
-            .unwrap()
-            .is_match(&p1.scale_by::<_, Round>(u64::MAX).err().unwrap().to_string()));
+            .is_match(&p1.scale_by::<_, Round>(u64::MAX).err().unwrap().report()));
         assert!(p1.scale_by::<_, Round>(u32::MAX).is_ok());
 
         let p1 = Point { x: 1, y: 1 };
@@ -230,15 +235,25 @@ mod tests {
     fn point_checked_add_underflow() {
         let p1 = Point { x: i64::MIN, y: 0 };
         let p2 = Point { x: -1, y: 0 };
-        assert_eq!(
-            &p1.checked_add(p2).err().unwrap().to_string(),
-            &format!("adding {} to {} would underflow i64", &p2, &p1)
+        assert_matches_regex!(
+            p1.checked_add(p2).err().unwrap().report(),
+            format!(
+                r"cannot add {} to {}",
+                regex::escape(&p2.to_string()),
+                regex::escape(&p1.to_string())
+            ),
+            r"adding -?\d* to -?\d* would underflow i64"
         );
         let p1 = Point { x: -1, y: i64::MIN };
         let p2 = Point { x: -1, y: -1 };
-        assert_eq!(
-            &p1.checked_add(p2).err().unwrap().to_string(),
-            &format!("adding {} to {} would underflow i64", &p2, &p1)
+        assert_matches_regex!(
+            &p1.checked_add(p2).err().unwrap().report(),
+            format!(
+                r"cannot add {} to {}",
+                regex::escape(&p2.to_string()),
+                regex::escape(&p1.to_string())
+            ),
+            r"adding -?\d* to -?\d* would underflow i64"
         );
         let p1 = Point { x: -1, y: i64::MIN };
         let p2 = Point { x: -1, y: 0 };
@@ -252,16 +267,28 @@ mod tests {
     fn point_checked_add_overflow() {
         let p1 = Point { x: i64::MAX, y: 0 };
         let p2 = Point { x: 1, y: 0 };
-        assert_eq!(
-            &p1.checked_add(p2).err().unwrap().to_string(),
-            &format!("adding {} to {} would overflow i64", &p2, &p1)
+        assert_matches_regex!(
+            &p1.checked_add(p2).err().unwrap().report(),
+            format!(
+                r"cannot add {} to {}",
+                regex::escape(&p2.to_string()),
+                regex::escape(&p1.to_string())
+            ),
+            r"adding -?\d* to -?\d* would overflow i64"
         );
+
         let p1 = Point { x: 1, y: i64::MAX };
         let p2 = Point { x: 1, y: 1 };
-        assert_eq!(
-            &p1.checked_add(p2).err().unwrap().to_string(),
-            &format!("adding {} to {} would overflow i64", &p2, &p1)
+        assert_matches_regex!(
+            &p1.checked_add(p2).err().unwrap().report(),
+            format!(
+                r"cannot add {} to {}",
+                regex::escape(&p2.to_string()),
+                regex::escape(&p1.to_string())
+            ),
+            r"adding -?\d* to -?\d* would overflow i64"
         );
+
         let p1 = Point { x: -1, y: i64::MAX };
         let p2 = Point { x: -1, y: 0 };
         assert_eq!(

@@ -80,11 +80,10 @@ where
 {
     let top_left = top_left.into();
     let color = color.into();
-    let top_left: Size = top_left.into();
+    let top_left: Size = top_left.try_into().unwrap();
 
     let bottom_right = top_left + size.into();
-    let origin = Point::origin();
-    let bottom_right = bottom_right.clamp(origin, image.size());
+    let bottom_right = bottom_right.clamp((0, 0), image.size());
 
     for x in top_left.width..bottom_right.width {
         for y in top_left.height..bottom_right.height {
