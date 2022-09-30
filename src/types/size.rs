@@ -318,19 +318,20 @@ impl From<(u32, u32)> for Size {
 }
 
 impl TryFrom<Point> for Size {
-    type Error = numeric::CastError<Point>;
+    type Error = numeric::CastError<Point, Size>;
 
     #[inline]
     fn try_from(point: Point) -> Result<Self, Self::Error> {
         match (|| {
             let width = point.x.cast::<u32>()?;
             let height = point.y.cast::<u32>()?;
-            Ok::<Size, numeric::CastError<_>>(Self { width, height })
+            Ok::<Size, numeric::CastError<i64, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
             Err(err) => Err(numeric::CastError {
                 src: point,
-                container_type_name: err.container_type_name,
+                target: std::marker::PhantomData,
+                cause: Some(Box::new(err)),
             }),
         }
     }
@@ -387,21 +388,20 @@ where
 
 impl CheckedSub<Sides> for Size {
     type Output = Self;
+    type Error = ops::SubError<Self, Sides>;
 
     #[inline]
-    fn checked_sub(self, rhs: Sides) -> Result<Self::Output, ops::SubError<Self, Sides>> {
+    fn checked_sub(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
         match (|| {
             let width = CheckedSub::checked_sub(self.width, rhs.width())?;
             let height = CheckedSub::checked_sub(self.height, rhs.height())?;
-            Ok::<Size, ops::SubError<u32, u32>>(Self { width, height })
+            Ok::<Self, ops::SubError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            // Err(err @ ops::SubError(ref cause)) => Err(ops::SubError(numeric::ArithmeticError {
             Err(err) => Err(ops::SubError(numeric::ArithmeticError {
                 lhs: self,
                 rhs: rhs,
-                // container_type_name: err.container_type_name,
-                kind: err.0.kind,
+                kind: None,
                 cause: Some(Box::new(err)),
             })),
         }
@@ -434,16 +434,12 @@ impl CheckedAdd<Sides> for Size {
             Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            // Err(err @ ops::AddError(ref cause)) => {
-            Err(err) => {
-                Err(ops::AddError(numeric::ArithmeticError {
-                    lhs: self,
-                    rhs: rhs,
-                    // container_type_name: err.container_type_name,
-                    kind: None, // err.0.kind,
-                    cause: Some(Box::new(err)),
-                }))
-            }
+            Err(err) => Err(ops::AddError(numeric::ArithmeticError {
+                lhs: self,
+                rhs: rhs,
+                kind: None,
+                cause: Some(Box::new(err)),
+            })),
         }
     }
 }

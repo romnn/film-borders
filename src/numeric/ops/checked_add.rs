@@ -19,7 +19,7 @@ macro_rules! impl_unsigned_checked_add {
 
             fn checked_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
                 num::CheckedAdd::checked_add(&self, &rhs)
-                    .ok_or(rhs.overflows::<Self>(self))
+                    .ok_or(rhs.overflows(self))
                     .map_err(AddError)
             }
         }
@@ -37,11 +37,11 @@ macro_rules! impl_signed_checked_add {
             fn checked_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
                 if rhs.is_negative() {
                     num::CheckedSub::checked_sub(&self, &rhs.abs())
-                        .ok_or(rhs.underflows::<Self>(self))
+                        .ok_or(rhs.underflows(self))
                         .map_err(AddError)
                 } else {
                     num::CheckedAdd::checked_add(&self, &rhs)
-                        .ok_or(rhs.overflows::<Self>(self))
+                        .ok_or(rhs.overflows(self))
                         .map_err(AddError)
                 }
             }
@@ -51,21 +51,8 @@ macro_rules! impl_signed_checked_add {
 
 impl_signed_checked_add!(i64);
 
-// #[derive(thiserror::Error, PartialEq, Eq, Debug)]
 #[derive(PartialEq, Eq, Debug)]
-// #[error(transparent)]
 pub struct AddError<Lhs, Rhs>(pub error::ArithmeticError<Lhs, Rhs>);
-// pub struct AddError<Lhs, Rhs>(#[source] pub error::ArithmeticError<Lhs, Rhs>);
-
-impl<Lhs, Rhs> From<AddError<Lhs, Rhs>> for error::Error
-where
-    Lhs: NumericType,
-    Rhs: NumericType,
-{
-    fn from(err: AddError<Lhs, Rhs>) -> Self {
-        error::Error::Add(Box::new(err))
-    }
-}
 
 impl<Lhs, Rhs> error::NumericError for AddError<Lhs, Rhs>
 where
@@ -75,10 +62,6 @@ where
     fn as_any(&self) -> &dyn Any {
         self
     }
-
-    // fn as_error(&self) -> &(dyn std::error::Error + 'static) {
-    //     self
-    // }
 
     fn eq(&self, other: &dyn error::NumericError) -> bool {
         match other.as_any().downcast_ref::<Self>() {

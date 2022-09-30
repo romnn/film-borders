@@ -19,29 +19,30 @@ impl<T> NumericType for T where T: num::Num + Debug + Display + PartialEq + 'sta
 pub trait ArithmeticOp<Lhs>
 where
     Self: Sized + Copy + NumericType,
-    Lhs: Sized + Copy + NumericType,
+    Lhs: Sized + Copy + NumericType + num::Zero,
 {
-    fn overflows<T>(self, lhs: Lhs) -> error::ArithmeticError<Lhs, Self>
-    where
-        T: NumericType,
-    {
+    fn divide_by_zero(self) -> error::ArithmeticError<Self, Lhs> {
+        error::ArithmeticError {
+            lhs: self,
+            rhs: Lhs::zero(),
+            kind: Some(error::ArithmeticErrorKind::DivideByZero),
+            cause: None,
+        }
+    }
+
+    fn overflows(self, lhs: Lhs) -> error::ArithmeticError<Lhs, Self> {
         error::ArithmeticError {
             lhs: lhs,
             rhs: self,
-            // container_type_name: std::any::type_name::<T>().to_string(),
             kind: Some(error::ArithmeticErrorKind::Overflow),
             cause: None,
         }
     }
 
-    fn underflows<T>(self, lhs: Lhs) -> error::ArithmeticError<Lhs, Self>
-    where
-        T: NumericType,
-    {
+    fn underflows(self, lhs: Lhs) -> error::ArithmeticError<Lhs, Self> {
         error::ArithmeticError {
             lhs: lhs,
             rhs: self,
-            // container_type_name: std::any::type_name::<T>().to_string(),
             kind: Some(error::ArithmeticErrorKind::Underflow),
             cause: None,
         }
@@ -50,7 +51,7 @@ where
 
 impl<L, R> ArithmeticOp<L> for R
 where
-    L: Sized + Copy + NumericType,
+    L: Sized + Copy + NumericType + num::Zero,
     R: Sized + Copy + NumericType,
 {
 }
@@ -63,17 +64,13 @@ mod tests {
 
     #[test]
     fn numeric_error_partial_eq() {
-        let add_err1: Box<dyn NumericError> =
-            Box::new(ops::AddError(10u32.overflows::<u32>(10u32)));
-        let add_err2: Box<dyn NumericError> =
-            Box::new(ops::AddError(10u32.overflows::<u64>(10u32)));
+        let add_err1: Box<dyn NumericError> = Box::new(ops::AddError(10u32.overflows(10u32)));
+        let add_err2: Box<dyn NumericError> = Box::new(ops::AddError(10u32.overflows(10u64)));
         assert!(add_err1 == add_err1);
         assert!(add_err1 != add_err2);
 
-        let sub_err1: Box<dyn NumericError> =
-            Box::new(ops::SubError(10u32.overflows::<u32>(12u32)));
-        let sub_err2: Box<dyn NumericError> =
-            Box::new(ops::SubError(10u32.overflows::<u32>(15u32)));
+        let sub_err1: Box<dyn NumericError> = Box::new(ops::SubError(10u32.overflows(12u32)));
+        let sub_err2: Box<dyn NumericError> = Box::new(ops::SubError(10u32.overflows(15u32)));
         assert!(sub_err1 == sub_err1);
         assert!(sub_err1 != sub_err2);
     }

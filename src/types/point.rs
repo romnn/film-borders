@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::ops::{self, CheckedAdd, CheckedSub};
+use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
 use crate::numeric::{self, ArithmeticError, ArithmeticOp, NumCast, Round, RoundingMode};
 use crate::{img, utils};
 use regex::Regex;
@@ -43,10 +43,8 @@ impl Point {
         let scalar = scalar.cast::<f64>()?;
         let x = self.x.cast::<f64>()?;
         let y = self.y.cast::<f64>()?;
-        // float multiplication is safe but can result in nans
-        let x = x * scalar;
-        let y = y * scalar;
-        // any nans will be detected when casting back
+        let x = CheckedMul::checked_mul(x, scalar)?;
+        let y = CheckedMul::checked_mul(y, scalar)?;
         let x = R::round(x).cast::<i64>()?;
         let y = R::round(y).cast::<i64>()?;
         Ok(Self { x, y })
@@ -85,19 +83,17 @@ impl CheckedAdd for Point {
     type Error = ops::AddError<Self, Self>;
 
     #[inline]
-    fn checked_add(self, rhs: Self) -> Result<Self, Self::Error> {
+    fn checked_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
         match (|| {
             let x = CheckedAdd::checked_add(self.x, rhs.x)?;
             let y = CheckedAdd::checked_add(self.y, rhs.y)?;
             Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            // Err(err @ ops::AddError(ref cause)) => Err(ops::AddError(ArithmeticError {
             Err(err) => Err(ops::AddError(ArithmeticError {
                 lhs: self,
                 rhs: rhs,
-                // container_type_name: err.container_type_name,
-                kind: None, // err.0.kind,
+                kind: None,
                 cause: Some(Box::new(err)),
             })),
         }
@@ -117,21 +113,20 @@ impl CheckedAdd for Point {
 
 impl CheckedSub for Point {
     type Output = Self;
+    type Error = ops::SubError<Self, Self>;
 
     #[inline]
-    fn checked_sub(self, rhs: Point) -> Result<Point, ops::SubError<Self, Self>> {
+    fn checked_sub(self, rhs: Self) -> Result<Self, Self::Error> {
         match (|| {
             let x = CheckedSub::checked_sub(self.x, rhs.x)?;
             let y = CheckedSub::checked_sub(self.y, rhs.y)?;
-            Ok::<Point, ops::SubError<i64, i64>>(Self { x, y })
+            Ok::<Self, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            // Err(err @ ops::SubError(ref cause)) => Err(ops::SubError(ArithmeticError {
             Err(err) => Err(ops::SubError(ArithmeticError {
                 lhs: self,
                 rhs: rhs,
-                // container_type_name: err.container_type_name,
-                kind: err.0.kind,
+                kind: None,
                 cause: Some(Box::new(err)),
             })),
         }
@@ -149,31 +144,67 @@ impl CheckedSub for Point {
 //     }
 // }
 
-impl<F> numeric::ops::CheckedMul<F> for Point
+impl<F> CheckedMul<F> for Point
 where
     F: numeric::NumCast + numeric::NumericType,
 {
     type Output = Self;
-    type Error = numeric::Error;
+    type Error = ops::MulError<Self, F>;
 
     #[inline]
     fn checked_mul(self, scalar: F) -> Result<Point, Self::Error> {
-        self.scale_by::<_, Round>(scalar)
+        match (|| {
+            let scalar = scalar.cast::<f64>()?;
+            let x = self.x.cast::<f64>()?;
+            let y = self.y.cast::<f64>()?;
+            let x = CheckedMul::checked_mul(x, scalar)?;
+            let y = CheckedMul::checked_mul(y, scalar)?;
+            let x = x.cast::<i64>()?;
+            let y = y.cast::<i64>()?;
+            Ok::<Self, numeric::Error>(Self { x, y })
+        })() {
+            Ok(point) => Ok(point),
+            Err(numeric::Error(err)) => Err(ops::MulError(ArithmeticError {
+                lhs: self,
+                rhs: scalar,
+                kind: None,
+                cause: Some(err),
+            })),
+        }
     }
 }
 
-impl<F> numeric::ops::CheckedDiv<F> for Point
+impl<F> CheckedDiv<F> for Point
 where
     F: numeric::NumCast + numeric::NumericType + num::traits::Inv,
 {
     type Output = Self;
-    type Error = numeric::Error;
+    type Error = ops::DivError<Self, F>;
+    // type Error = numeric::Error;
 
     #[inline]
     fn checked_div(self, scalar: F) -> Result<Point, Self::Error> {
-        use num::traits::Inv;
-        let inverse = scalar.cast::<f64>()?.inv();
-        self.scale_by::<_, Round>(inverse)
+        match (|| {
+            let scalar = scalar.cast::<f64>()?;
+            let x = self.x.cast::<f64>()?;
+            let y = self.y.cast::<f64>()?;
+            let x = CheckedDiv::checked_div(x, scalar)?;
+            let y = CheckedDiv::checked_div(y, scalar)?;
+            let x = x.cast::<i64>()?;
+            let y = y.cast::<i64>()?;
+            Ok::<Self, numeric::Error>(Self { x, y })
+        })() {
+            Ok(point) => Ok(point),
+            Err(numeric::Error(err)) => Err(ops::DivError(ArithmeticError {
+                lhs: self,
+                rhs: scalar,
+                kind: None,
+                cause: Some(err),
+            })),
+        }
+        // use num::traits::Inv;
+        // let inverse = scalar.cast::<f64>()?.inv();
+        // self.scale_by::<_, Round>(inverse)
     }
 }
 
@@ -212,10 +243,10 @@ mod tests {
             &p1.scale_by::<_, Round>(i128::MIN).err().unwrap().report(),
             r"cannot cast -?\d* of type f64 to i64"
         );
-
-        assert!(Regex::new(r"^cannot cast -?\d* of type f64 to i64$")
-            .unwrap()
-            .is_match(&p1.scale_by::<_, Round>(u64::MAX).err().unwrap().report()));
+        assert_matches_regex!(
+            &p1.scale_by::<_, Round>(u64::MAX).err().unwrap().report(),
+            r"cannot cast -?\d* of type f64 to i64"
+        );
         assert!(p1.scale_by::<_, Round>(u32::MAX).is_ok());
 
         let p1 = Point { x: 1, y: 1 };
@@ -296,32 +327,4 @@ mod tests {
             &Point { x: -2, y: i64::MAX },
         );
     }
-
-    // macro_rules! color_hex_tests {
-    //     ($($name:ident: $values:expr,)*) => {
-    //         $(
-    //             #[test]
-    //             fn $name() {
-    //                 let (hex, rgba) = $values;
-    //                 assert_eq!(Color::hex(hex).ok(), rgba);
-    //             }
-    //         )*
-    //     }
-    // }
-
-    // color_hex_tests! {
-    //     test_parse_valid_hex_color_1: (
-    //         "#4287f5", Some(Color::rgba(66, 135, 245, 255))),
-    //     test_parse_valid_hex_color_2: (
-    //         "4287f5", Some(Color::rgba(66, 135, 245, 255))),
-    //     test_parse_valid_hex_color_3: (
-    //         "  # 4287f5  ", Some(Color::rgba(66, 135, 245, 255))),
-    //     test_parse_valid_hex_color_4: (
-    //         "#e942f5", Some(Color::rgba(233, 66, 245, 255))),
-    //     test_parse_valid_hex_color_5: (
-    //         "  e942f5", Some(Color::rgba(233, 66, 245, 255))),
-    //     test_parse_invalid_hex_color_1: ("  # 487f5  ", None),
-    //     test_parse_invalid_hex_color_2: ("487f5", None),
-    //     test_parse_invalid_hex_color_3: ("#e942g5", None),
-    // }
 }

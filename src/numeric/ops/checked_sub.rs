@@ -7,17 +7,20 @@ where
     Self: Sized,
 {
     type Output;
+    type Error;
 
-    fn checked_sub(self, rhs: Rhs) -> Result<Self::Output, SubError<Self, Rhs>>;
+    fn checked_sub(self, rhs: Rhs) -> Result<Self::Output, Self::Error>;
 }
 
 macro_rules! impl_unsigned_checked_sub {
     ( $T:ty ) => {
         impl CheckedSub for $T {
-            type Output = $T;
-            fn checked_sub(self, rhs: Self) -> Result<Self::Output, SubError<Self, Self>> {
+            type Output = Self;
+            type Error = SubError<Self, Self>;
+
+            fn checked_sub(self, rhs: Self) -> Result<Self::Output, Self::Error> {
                 num::CheckedSub::checked_sub(&self, &rhs)
-                    .ok_or(rhs.underflows::<$T>(self))
+                    .ok_or(rhs.underflows(self))
                     .map_err(SubError)
             }
         }
@@ -29,15 +32,17 @@ impl_unsigned_checked_sub!(u32);
 macro_rules! impl_signed_checked_sub {
     ( $T:ty ) => {
         impl CheckedSub for $T {
-            type Output = $T;
-            fn checked_sub(self, rhs: Self) -> Result<Self::Output, SubError<$T, $T>> {
+            type Output = Self;
+            type Error = SubError<Self, Self>;
+
+            fn checked_sub(self, rhs: Self) -> Result<Self::Output, Self::Error> {
                 if rhs.is_negative() {
                     num::CheckedAdd::checked_add(&self, &rhs.abs())
-                        .ok_or(rhs.overflows::<$T>(self))
+                        .ok_or(rhs.overflows(self))
                         .map_err(SubError)
                 } else {
                     num::CheckedSub::checked_sub(&self, &rhs)
-                        .ok_or(rhs.underflows::<$T>(self))
+                        .ok_or(rhs.underflows(self))
                         .map_err(SubError)
                 }
             }
@@ -47,24 +52,8 @@ macro_rules! impl_signed_checked_sub {
 
 impl_signed_checked_sub!(i64);
 
-#[derive(thiserror::Error, PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct SubError<Lhs, Rhs>(pub error::ArithmeticError<Lhs, Rhs>);
-
-impl<Lhs, Rhs> From<SubError<Lhs, Rhs>> for error::Error
-where
-    Lhs: NumericType,
-    Rhs: NumericType,
-{
-    fn from(err: SubError<Lhs, Rhs>) -> Self {
-        error::Error::Sub(Box::new(err))
-    }
-}
-
-// impl<Lhs, Rhs> error::AsError for SubError<Lhs, Rhs> {
-//     fn as_error(&self) -> &(dyn std::error::Error + 'static) {
-//         self
-//     }
-// }
 
 impl<Lhs, Rhs> error::NumericError for SubError<Lhs, Rhs>
 where
@@ -83,6 +72,19 @@ where
     }
 }
 
+impl<Lhs, Rhs> std::error::Error for SubError<Lhs, Rhs>
+where
+    Lhs: Display + Debug,
+    Rhs: Display + Debug,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0
+            .cause
+            .as_deref()
+            .map(|cause: &dyn error::NumericError| cause.as_error())
+    }
+}
+
 impl<Lhs, Rhs> Display for SubError<Lhs, Rhs>
 where
     Lhs: Display,
@@ -97,7 +99,6 @@ where
                 self.0.lhs,
                 kind,
                 std::any::type_name::<Lhs>().to_string(),
-                // self.0.container_type_name,
             ),
             None => write!(f, "cannot subtract {} from {}", self.0.rhs, self.0.lhs),
         }

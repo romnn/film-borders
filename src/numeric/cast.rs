@@ -7,7 +7,7 @@ pub trait NumCast
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
-    fn cast<Target>(self) -> Result<Target, CastError<Self>>
+    fn cast<Target>(self) -> Result<Target, CastError<Self, Target>>
     where
         Target: num::NumCast;
 }
@@ -16,45 +16,43 @@ impl<Src> NumCast for Src
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
-    fn cast<Target>(self) -> Result<Target, CastError<Self>>
+    fn cast<Target>(self) -> Result<Target, CastError<Self, Target>>
     where
         Target: num::NumCast,
     {
         num::NumCast::from(self).ok_or(CastError {
             src: self,
-            container_type_name: std::any::type_name::<Target>().to_string(),
-            // target: PhantomData,
+            target: PhantomData,
+            cause: None,
         })
     }
 }
 
-#[derive(thiserror::Error, PartialEq, Eq)]
-pub struct CastError<Src> {
+#[derive(PartialEq, Eq)]
+pub struct CastError<Src, Target> {
     pub src: Src,
-    pub container_type_name: String,
-    // pub target: PhantomData<Target>,
+    pub target: PhantomData<Target>,
+    pub cause: Option<Box<dyn error::NumericError + 'static>>,
 }
 
-impl<Src> From<CastError<Src>> for error::Error
-where
-    Src: NumericType,
-{
-    fn from(err: CastError<Src>) -> Self {
-        error::Error::Cast(Box::new(err))
-    }
-}
+// impl<Src, Target> From<CastError<Src, Target>> for error::Error
+// where
+//     Src: NumericType,
+//     Target: NumericType,
+// {
+//     fn from(err: CastError<Src, Target>) -> Self {
+//         error::Error::Cast(Box::new(err))
+//     }
+// }
 
-impl<Src> error::NumericError for CastError<Src>
+impl<Src, Target> error::NumericError for CastError<Src, Target>
 where
     Src: NumericType,
+    Target: NumericType,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
-
-    // fn as_error(&self) -> &(dyn std::error::Error + 'static) {
-    //     self
-    // }
 
     fn eq(&self, other: &dyn error::NumericError) -> bool {
         match other.as_any().downcast_ref::<Self>() {
@@ -64,16 +62,31 @@ where
     }
 }
 
-impl<Src> Debug for CastError<Src>
+impl<Src, Target> std::error::Error for CastError<Src, Target>
 where
-    Src: Display,
+    Src: Debug + Display,
 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self,)
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.cause
+            .as_deref()
+            .map(|cause: &dyn error::NumericError| cause.as_error())
     }
 }
 
-impl<Src> Display for CastError<Src>
+impl<Src, Target> Debug for CastError<Src, Target>
+where
+    Src: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("CastError")
+            .field("src", &self.src)
+            .field("target", &std::any::type_name::<Target>())
+            .field("cause", &self.cause)
+            .finish()
+    }
+}
+
+impl<Src, Target> Display for CastError<Src, Target>
 where
     Src: Display,
 {
@@ -83,7 +96,7 @@ where
             "cannot cast {} of type {} to {}",
             self.src,
             std::any::type_name::<Src>().to_string(),
-            self.container_type_name,
+            std::any::type_name::<Target>().to_string(),
         )
     }
 }

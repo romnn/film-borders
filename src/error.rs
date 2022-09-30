@@ -11,14 +11,13 @@ where
     E: std::error::Error,
 {
     fn report(&self) -> String {
-        dbg!(self);
-        dbg!(self.source());
         let mut buf = String::new();
         write!(buf, "ERROR: {}", self.to_string());
         if let Some(cause) = self.source() {
             write!(buf, "\n");
             write!(buf, "Caused by:\n");
-            for (i, e) in std::iter::successors(Some(cause), |e| e.source()).enumerate() {
+            let causes = std::iter::successors(Some(cause), |e| e.source());
+            for (i, e) in causes.enumerate() {
                 write!(buf, "   {}: {}\n", i, e);
             }
         }
