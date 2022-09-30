@@ -1,6 +1,7 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
+use crate::numeric::ops::{CheckedSub, CheckedAdd, CheckedDiv};
 use crate::numeric::{Ceil, Round, RoundingMode};
 use crate::{img, utils};
 use num::traits::NumCast;
@@ -113,8 +114,12 @@ impl Size {
     pub fn center(self, size: Self) -> Rect {
         let container: Point = self.into();
         let size: Point = size.into();
-        let top_left = (container - size) / 2.0f64;
-        let bottom_right = top_left + size;
+        let top_left = container
+            .checked_sub(size)
+            .unwrap()
+            .checked_div(2.0)
+            .unwrap();
+        let bottom_right = top_left.checked_add(size).unwrap();
         Rect {
             top: top_left.y,
             left: top_left.x,
@@ -223,7 +228,7 @@ impl Size {
         let center_top_left = self.center(container).top_left();
 
         let top_left: Point = match mode {
-            CropMode::Custom { x, y } => center_top_left + Point { x, y },
+            CropMode::Custom { x, y } => center_top_left.checked_add(Point { x, y }).unwrap(),
             CropMode::Right => Point {
                 x: self.width as i64 - container.width as i64,
                 ..center_top_left

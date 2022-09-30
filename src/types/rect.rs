@@ -1,6 +1,7 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
+use crate::numeric::ops::{CheckedAdd, CheckedSub};
 use crate::numeric::{Ceil, Round, RoundingMode};
 use crate::{img, utils};
 use num::traits::NumCast;
@@ -20,7 +21,7 @@ pub struct Rect {
 
 impl Rect {
     pub fn new(top_left: Point, size: Size) -> Self {
-        let bottom_right: Point = top_left + Point::from(size);
+        let bottom_right = top_left.checked_add(Point::from(size)).unwrap();
         Self {
             top: top_left.y,
             left: top_left.x,
@@ -45,18 +46,20 @@ impl Rect {
 
     #[inline]
     pub fn size(&self) -> Size {
-        let size = self.bottom_right() - self.top_left();
+        let size = self.bottom_right().checked_sub(self.top_left()).unwrap();
         size.into()
     }
 
     #[inline]
     pub fn center(&self) -> Point {
-        self.top_left() + Point::from(self.size() / 2.0f64)
+        self.top_left()
+            .checked_add(Point::from(self.size() / 2.0))
+            .unwrap()
     }
 
     #[inline]
     pub fn crop_mode(&self, container: &Rect) -> CropMode {
-        let offset = container.center() - self.center();
+        let offset = container.center().checked_sub(self.center()).unwrap();
         CropMode::Custom {
             x: offset.x,
             y: offset.y,

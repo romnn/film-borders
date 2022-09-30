@@ -1,4 +1,5 @@
 use super::imageops::*;
+use super::numeric::ops::{CheckedAdd, CheckedSub};
 use super::numeric::{Ceil, Round, RoundingMode};
 use super::types::Orientation;
 use super::types::*;
@@ -160,8 +161,9 @@ impl Border {
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
         border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
-        let bottom_patch_top_left: Point =
-            Point::from(new_border_size) - bottom_patch.size().into();
+        let bottom_patch_top_left: Point = Point::from(new_border_size)
+            .checked_sub(bottom_patch.size().into())
+            .unwrap();
         new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
 
         // draw patches in between
@@ -197,15 +199,19 @@ impl Border {
             let axis = img::Axis::Y;
             border_overlay_patch.fade_out(fade_size, Point::origin(), axis);
             border_overlay_patch.fade_out(
-                Point::from(patch_size) - Point::from(fade_size),
+                Point::from(patch_size)
+                    .checked_sub(Point::from(fade_size))
+                    .unwrap(),
                 patch_size,
                 axis,
             );
-            let patch_top_left = top_patch.bottom_left()
-                + Point {
+            let patch_top_left = top_patch
+                .bottom_left()
+                .checked_add(Point {
                     x: 0,
                     y: i * patch_safe_height as i64 - fade_height as i64,
-                };
+                })
+                .unwrap();
             new_border.overlay(border_overlay_patch.as_ref(), patch_top_left);
         }
 
@@ -355,7 +361,7 @@ mod tests {
                 y: c.bottom,
                 x: c.right,
             };
-            let size = bottom_right - top_left;
+            let size = bottom_right.checked_sub(top_left).unwrap();
             border.fill_rect(red, top_left, size, FillMode::Blend);
         }
         border.save_with_filename(output.as_ref(), None)?;

@@ -1,8 +1,8 @@
 use super::*;
 use crate::error::*;
 use crate::imageops::*;
-use crate::numeric::{self, AddError, ArithmeticError, MulError, SubError};
-use crate::numeric::{ArithmeticOp, NumCast, Round, RoundingMode};
+use crate::numeric::ops::{AddError, MulError, SubError};
+use crate::numeric::{self, ArithmeticError, ArithmeticOp, NumCast, Round, RoundingMode};
 use crate::{img, utils};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -80,20 +80,20 @@ impl std::fmt::Display for Point {
     }
 }
 
-impl numeric::CheckedAdd for Point {
+impl numeric::ops::CheckedAdd for Point {
     type Output = Self;
 
     #[inline]
-    fn checked_add(&self, rhs: &Point) -> Result<Point, AddError<Self, Self>> {
+    fn checked_add(self, rhs: Point) -> Result<Point, AddError<Self, Self>> {
         match (|| {
-            let x = numeric::CheckedAdd::checked_add(&self.x, &rhs.x)?;
-            let y = numeric::CheckedAdd::checked_add(&self.y, &rhs.y)?;
+            let x = numeric::ops::CheckedAdd::checked_add(self.x, rhs.x)?;
+            let y = numeric::ops::CheckedAdd::checked_add(self.y, rhs.y)?;
             Ok::<Point, _>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
             Err(AddError(err)) => Err(AddError(ArithmeticError {
-                lhs: *self,
-                rhs: *rhs,
+                lhs: self,
+                rhs: rhs,
                 type_name: err.type_name,
                 kind: err.kind,
             })),
@@ -101,31 +101,31 @@ impl numeric::CheckedAdd for Point {
     }
 }
 
-impl std::ops::Add for Point {
-    type Output = Self;
+// impl std::ops::Add for Point {
+//     type Output = Self;
 
-    fn add(self, rhs: Point) -> Self::Output {
-        Point {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y,
-        }
-    }
-}
+//     fn add(self, rhs: Point) -> Self::Output {
+//         Point {
+//             x: self.x + rhs.x,
+//             y: self.y + rhs.y,
+//         }
+//     }
+// }
 
-impl numeric::CheckedSub for Point {
+impl numeric::ops::CheckedSub for Point {
     type Output = Self;
 
     #[inline]
-    fn checked_sub(&self, rhs: &Point) -> Result<Point, SubError<Self, Self>> {
+    fn checked_sub(self, rhs: Point) -> Result<Point, SubError<Self, Self>> {
         match (|| {
-            let x = numeric::CheckedSub::checked_sub(&self.x, &rhs.x)?;
-            let y = numeric::CheckedSub::checked_sub(&self.y, &rhs.y)?;
+            let x = numeric::ops::CheckedSub::checked_sub(self.x, rhs.x)?;
+            let y = numeric::ops::CheckedSub::checked_sub(self.y, rhs.y)?;
             Ok::<Point, _>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
             Err(SubError(err)) => Err(SubError(ArithmeticError {
-                lhs: *self,
-                rhs: *rhs,
+                lhs: self,
+                rhs: rhs,
                 type_name: err.type_name,
                 kind: err.kind,
             })),
@@ -133,18 +133,18 @@ impl numeric::CheckedSub for Point {
     }
 }
 
-impl std::ops::Sub for Point {
-    type Output = Self;
+// impl std::ops::Sub for Point {
+//     type Output = Self;
 
-    fn sub(self, rhs: Point) -> Self::Output {
-        Point {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y,
-        }
-    }
-}
+//     fn sub(self, rhs: Point) -> Self::Output {
+//         Point {
+//             x: self.x - rhs.x,
+//             y: self.y - rhs.y,
+//         }
+//     }
+// }
 
-impl<F> numeric::CheckedMul<F> for Point
+impl<F> numeric::ops::CheckedMul<F> for Point
 where
     F: numeric::NumCast + numeric::NumericType,
 {
@@ -152,12 +152,12 @@ where
     type Error = numeric::Error;
 
     #[inline]
-    fn checked_mul(&self, scalar: F) -> Result<Point, Self::Error> {
+    fn checked_mul(self, scalar: F) -> Result<Point, Self::Error> {
         self.scale_by::<_, Round>(scalar)
     }
 }
 
-impl<F> numeric::CheckedDiv<F> for Point
+impl<F> numeric::ops::CheckedDiv<F> for Point
 where
     F: numeric::NumCast + numeric::NumericType + num::traits::Inv,
 {
@@ -165,29 +165,30 @@ where
     type Error = numeric::Error;
 
     #[inline]
-    fn checked_div(&self, scalar: F) -> Result<Point, Self::Error> {
+    fn checked_div(self, scalar: F) -> Result<Point, Self::Error> {
         use num::traits::Inv;
         let inverse = scalar.cast::<f64>()?.inv();
         self.scale_by::<_, Round>(inverse)
     }
 }
 
-impl<F> std::ops::Div<F> for Point
-where
-    F: num::NumCast,
-{
-    type Output = Self;
+// impl<F> std::ops::Div<F> for Point
+// where
+//     F: num::NumCast,
+// {
+//     type Output = Self;
 
-    fn div(self, scalar: F) -> Self::Output {
-        let scalar: f64 = num::NumCast::from(scalar).unwrap();
-        self.scale_by::<_, Round>(1.0 / scalar).unwrap()
-    }
-}
+//     fn div(self, scalar: F) -> Self::Output {
+//         let scalar: f64 = num::NumCast::from(scalar).unwrap();
+//         self.scale_by::<_, Round>(1.0 / scalar).unwrap()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
     use super::Point;
-    use crate::numeric::{Ceil, CheckedAdd, Floor, Round};
+    use crate::numeric::ops::CheckedAdd;
+    use crate::numeric::{Ceil, Floor, Round};
     use pretty_assertions::assert_eq;
     use regex::Regex;
 
@@ -222,7 +223,7 @@ mod tests {
     fn point_checked_add() {
         let p1 = Point { x: 10, y: 20 };
         let p2 = Point { x: -2, y: 2 };
-        assert_eq!(&p1.checked_add(&p2).ok().unwrap(), &Point { x: 8, y: 22 });
+        assert_eq!(&p1.checked_add(p2).ok().unwrap(), &Point { x: 8, y: 22 });
     }
 
     #[test]
@@ -230,19 +231,19 @@ mod tests {
         let p1 = Point { x: i64::MIN, y: 0 };
         let p2 = Point { x: -1, y: 0 };
         assert_eq!(
-            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &p1.checked_add(p2).err().unwrap().to_string(),
             &format!("adding {} to {} would underflow i64", &p2, &p1)
         );
         let p1 = Point { x: -1, y: i64::MIN };
         let p2 = Point { x: -1, y: -1 };
         assert_eq!(
-            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &p1.checked_add(p2).err().unwrap().to_string(),
             &format!("adding {} to {} would underflow i64", &p2, &p1)
         );
         let p1 = Point { x: -1, y: i64::MIN };
         let p2 = Point { x: -1, y: 0 };
         assert_eq!(
-            &p1.checked_add(&p2).ok().unwrap(),
+            &p1.checked_add(p2).ok().unwrap(),
             &Point { x: -2, y: i64::MIN },
         );
     }
@@ -252,19 +253,19 @@ mod tests {
         let p1 = Point { x: i64::MAX, y: 0 };
         let p2 = Point { x: 1, y: 0 };
         assert_eq!(
-            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &p1.checked_add(p2).err().unwrap().to_string(),
             &format!("adding {} to {} would overflow i64", &p2, &p1)
         );
         let p1 = Point { x: 1, y: i64::MAX };
         let p2 = Point { x: 1, y: 1 };
         assert_eq!(
-            &p1.checked_add(&p2).err().unwrap().to_string(),
+            &p1.checked_add(p2).err().unwrap().to_string(),
             &format!("adding {} to {} would overflow i64", &p2, &p1)
         );
         let p1 = Point { x: -1, y: i64::MAX };
         let p2 = Point { x: -1, y: 0 };
         assert_eq!(
-            &p1.checked_add(&p2).ok().unwrap(),
+            &p1.checked_add(p2).ok().unwrap(),
             &Point { x: -2, y: i64::MAX },
         );
     }

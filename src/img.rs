@@ -1,5 +1,6 @@
 use super::defaults;
 pub use super::imageops::*;
+use super::numeric::ops::CheckedSub;
 use super::types::*;
 use super::Error;
 use image::{
@@ -142,7 +143,7 @@ impl Image {
     }
 
     pub fn crop(&mut self, top_left: Point, bottom_right: Point) {
-        let cropped_size: Size = (bottom_right - top_left).into();
+        let cropped_size = Size::from(bottom_right.checked_sub(top_left).unwrap());
         self.inner = crop(
             &mut self.inner,
             max(0, top_left.x) as u32,
