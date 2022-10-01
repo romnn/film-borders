@@ -1,4 +1,4 @@
-use crate::numeric::{error, ArithmeticOp, NumericType};
+use crate::numeric::{error, ArithmeticOp, Numeric};
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
@@ -77,18 +77,19 @@ macro_rules! impl_float_checked_mul {
 impl_float_checked_mul!(f64);
 
 #[derive(PartialEq, Eq, Debug)]
-pub struct MulError<Lhs, Rhs>(pub error::ArithmeticError<Lhs, Rhs>);
+#[allow(clippy::module_name_repetitions)]
+pub struct MulError<Lhs, Rhs>(pub error::Arithmetic<Lhs, Rhs>);
 
-impl<Lhs, Rhs> error::NumericError for MulError<Lhs, Rhs>
+impl<Lhs, Rhs> error::Numeric for MulError<Lhs, Rhs>
 where
-    Lhs: NumericType,
-    Rhs: NumericType,
+    Lhs: Numeric,
+    Rhs: Numeric,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn eq(&self, other: &dyn error::NumericError) -> bool {
+    fn eq(&self, other: &dyn error::Numeric) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,
@@ -102,10 +103,7 @@ where
     Rhs: Display + Debug,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0
-            .cause
-            .as_deref()
-            .map(error::AsError::as_error)
+        self.0.cause.as_deref().map(error::AsErr::as_err)
     }
 }
 

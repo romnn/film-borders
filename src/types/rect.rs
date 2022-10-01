@@ -2,8 +2,6 @@ use super::sides::abs::Sides;
 use super::{CropMode, Point, Size};
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedSub};
 use crate::numeric::{self, error};
-use crate::utils;
-use std::cmp::{max, min};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Rect {
@@ -30,10 +28,10 @@ impl Rect {
     #[must_use]
     pub fn from_points(p1: Point, p2: Point) -> Self {
         Self {
-            top: min(p1.y, p2.y),
-            bottom: max(p1.y, p2.y),
-            left: min(p1.x, p2.x),
-            right: max(p1.x, p2.x),
+            top: p1.y.min(p2.y),
+            bottom: p1.y.max(p2.y),
+            left: p1.x.min(p2.x),
+            right: p1.x.max(p2.x),
         }
     }
 
@@ -128,10 +126,10 @@ impl Rect {
 
     #[inline]
     pub fn extend_to(&mut self, point: Point) {
-        self.top = min(self.top, point.y);
-        self.left = min(self.left, point.x);
-        self.bottom = max(self.bottom, point.y);
-        self.right = max(self.right, point.x);
+        self.top = self.top.min(point.y);
+        self.left = self.left.min(point.x);
+        self.bottom = self.bottom.max(point.y);
+        self.right = self.right.max(point.x);
     }
 
     #[inline]
@@ -154,10 +152,10 @@ impl Rect {
     #[inline]
     #[must_use]
     pub fn clip_to(self, bounds: &Self) -> Self {
-        let top = utils::clamp(self.top, bounds.top, bounds.bottom);
-        let left = utils::clamp(self.left, bounds.left, bounds.right);
-        let bottom = utils::clamp(self.bottom, bounds.top, bounds.bottom);
-        let right = utils::clamp(self.right, bounds.left, bounds.right);
+        let top = self.top.clamp(bounds.top, bounds.bottom);
+        let left = self.left.clamp(bounds.left, bounds.right);
+        let bottom = self.bottom.clamp(bounds.top, bounds.bottom);
+        let right = self.right.clamp(bounds.left, bounds.right);
         Self {
             top,
             left,
@@ -186,7 +184,7 @@ impl CheckedAdd<Point> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(err) => Err(ops::AddError(error::ArithmeticError {
+            Err(err) => Err(ops::AddError(error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -215,7 +213,7 @@ impl CheckedSub<Sides> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(numeric::Error(err)) => Err(ops::SubError(error::ArithmeticError {
+            Err(numeric::Error(err)) => Err(ops::SubError(error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -244,7 +242,7 @@ impl CheckedAdd<Sides> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(numeric::Error(err)) => Err(ops::AddError(error::ArithmeticError {
+            Err(numeric::Error(err)) => Err(ops::AddError(error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,

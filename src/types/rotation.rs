@@ -19,7 +19,7 @@ impl Default for Rotation {
 }
 
 impl std::str::FromStr for Rotation {
-    type Err = error::ParseEnumError;
+    type Err = error::ParseEnum;
 
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -29,7 +29,7 @@ impl std::str::FromStr for Rotation {
             "180" => Ok(Rotation::Rotate180),
             "90" => Ok(Rotation::Rotate90),
             "0" => Ok(Rotation::Rotate0),
-            _ => Err(error::ParseEnumError::Unknown(s.to_string())),
+            _ => Err(error::ParseEnum::Unknown(s.to_string())),
         }
     }
 }

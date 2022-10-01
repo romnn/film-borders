@@ -6,30 +6,30 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[derive(Debug, Copy, Clone)]
-pub enum Border {
+pub enum Builtin {
     Border120_1,
 }
 
-impl Default for Border {
+impl Default for Builtin {
     #[inline]
     fn default() -> Self {
-        Border::Border120_1
+        Self::Border120_1
     }
 }
 
-impl std::str::FromStr for Border {
-    type Err = error::ParseEnumError;
+impl std::str::FromStr for Builtin {
+    type Err = error::ParseEnum;
 
-    fn from_str(s: &str) -> Result<Border, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_ascii_lowercase();
         match s.as_str() {
-            "120mm" | "120mm1" => Ok(Border::Border120_1),
-            _ => Err(error::ParseEnumError::Unknown(s.to_string())),
+            "120mm" | "120mm1" => Ok(Self::Border120_1),
+            _ => Err(error::ParseEnum::Unknown(s.to_string())),
         }
     }
 }
 
-impl Border {
+impl Builtin {
     #[inline]
     pub fn into_border(self) -> Result<border::Border, Error> {
         match self {
@@ -45,6 +45,6 @@ impl Border {
 impl Default for border::Kind {
     #[inline]
     fn default() -> Self {
-        border::Kind::Builtin(Border::default())
+        border::Kind::Builtin(Builtin::default())
     }
 }

@@ -1,5 +1,5 @@
 use super::img;
-use super::numeric::{cast::NumCast, ops::CheckedAdd};
+use super::numeric::{Cast, ops::CheckedAdd};
 use super::types::{Point, Rect, Size};
 pub use image::imageops::*;
 use image::{Pixel, Rgba};

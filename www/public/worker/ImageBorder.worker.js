@@ -6,7 +6,7 @@ importScripts(`${baseURL}/wasm/filmborders.js`);
 
 const init_wasm_in_worker = async () => {
   await wasm_bindgen(`${baseURL}/wasm/filmborders_bg.wasm`);
-  const { WasmImageBorders, Builtin, Border, Options } = wasm_bindgen;
+  const { ImageBorders, Builtin, Border, Options } = wasm_bindgen;
 
   let imageData = null; // ImageData
   let borderData = null; // ImageData
@@ -23,7 +23,7 @@ const init_wasm_in_worker = async () => {
     }
     if ("applyOptions" in message) {
       let { applyOptions, renderID, save, borderName } = message;
-      let image = WasmImageBorders.from_image_data(imageData);
+      let image = ImageBorders.from_image_data(imageData);
       let options = Options.deserialize(message.applyOptions);
       let border = new Border(borderData, borderName);
       let result = image.add_border(border, options);

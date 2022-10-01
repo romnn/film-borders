@@ -1,8 +1,7 @@
 use super::img;
-use super::numeric::ops::{CheckedAdd, CheckedSub};
+use super::numeric::ops::CheckedSub;
 use super::numeric::Round;
 use super::types::{Point, Size};
-use std::cmp::max;
 use std::path::Path;
 
 #[derive(thiserror::Error, Debug)]
@@ -15,12 +14,12 @@ pub enum Error {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct BorderOptions {
+pub struct Options {
     pub transparent_component_threshold: i64,
     pub alpha_threshold: f32,
 }
 
-impl Default for BorderOptions {
+impl Default for Options {
     #[inline]
     fn default() -> Self {
         Self {
@@ -32,7 +31,7 @@ impl Default for BorderOptions {
 
 pub enum Kind {
     #[cfg(feature = "builtin")]
-    Builtin(super::builtin::Border),
+    Builtin(super::builtin::Builtin),
     Custom(Border),
 }
 
@@ -60,7 +59,7 @@ impl std::fmt::Debug for Kind {
 #[derive(Clone)]
 pub struct Border {
     inner: img::Image,
-    options: Option<BorderOptions>,
+    options: Option<Options>,
     transparent_components: Vec<super::Rect>,
 }
 
@@ -68,29 +67,26 @@ impl Border {
     #[inline]
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(
         reader: R,
-        options: Option<BorderOptions>,
+        options: Option<Options>,
     ) -> Result<Self, super::Error> {
         Self::from_image(img::Image::from_reader(reader)?, options)
     }
 
     #[inline]
-    pub fn open<P: AsRef<Path>>(
-        path: P,
-        options: Option<BorderOptions>,
-    ) -> Result<Self, super::Error> {
+    pub fn open<P: AsRef<Path>>(path: P, options: Option<Options>) -> Result<Self, super::Error> {
         Self::from_image(img::Image::open(path)?, options)
     }
 
     #[inline]
-    #[allow(clippy::cast_sign_loss)]
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_precision_loss)]
-    #[allow(clippy::cast_lossless)]
     pub fn new(
         mut border: Self,
         content_size: Size,
         stich_direction: Option<super::Orientation>,
     ) -> Result<Self, super::Error> {
+        use super::numeric::{
+            ops::{CheckedAdd, CheckedDiv, CheckedMul},
+            Cast,
+        };
         use super::{BoundedSize, Orientation, Rect, ResizeMode};
 
         let comps = border.transparent_components().len();
@@ -117,23 +113,39 @@ impl Border {
         // todo: find optimal overlay patches somehow
         let top_patch = Rect {
             top: 0,
-            bottom: (0.25 * border_size.height as f32) as i64,
+            bottom: f64::from(border_size.height)
+                .checked_mul(0.25)
+                .unwrap()
+                .cast::<i64>()
+                .unwrap(),
             left: 0,
-            right: border_size.width as i64,
+            right: i64::from(border_size.width),
         };
 
         let bottom_patch = Rect {
-            top: (0.75 * border_size.height as f32) as i64,
-            bottom: border_size.height as i64,
+            top: f64::from(border_size.height)
+                .checked_mul(0.75)
+                .unwrap()
+                .cast::<i64>()
+                .unwrap(),
+            bottom: i64::from(border_size.height),
             left: 0,
-            right: border_size.width as i64,
+            right: i64::from(border_size.width),
         };
 
         let overlay_patch = Rect {
-            top: (0.3 * border_size.height as f32) as i64,
-            bottom: (0.7 * border_size.height as f32) as i64,
+            top: f64::from(border_size.height)
+                .checked_mul(0.3)
+                .unwrap()
+                .cast::<i64>()
+                .unwrap(),
+            bottom: f64::from(border_size.height)
+                .checked_mul(0.7)
+                .unwrap()
+                .cast::<i64>()
+                .unwrap(),
             left: 0,
-            right: border_size.width as i64,
+            right: i64::from(border_size.width),
         };
 
         // create buffer for the new border
@@ -168,31 +180,49 @@ impl Border {
         new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
 
         // draw patches in between
-        let mut fill_height = new_border_size.height as i64;
-        fill_height -= bottom_patch.size().height as i64;
-        fill_height -= top_patch.size().height as i64;
-        let fill_height = max(1, fill_height) as u32;
+        let fill_height = i64::from(new_border_size.height)
+            .checked_sub(i64::from(bottom_patch.size().height))
+            .unwrap()
+            .checked_sub(i64::from(top_patch.size().height))
+            .unwrap()
+            .max(1)
+            .cast::<u32>()
+            .unwrap();
         crate::debug!(&fill_height);
 
-        let fade_frac = 0.2f64;
-        let fade_height = fade_frac * overlay_patch.height() as f64;
-        let fade_height = fade_height.ceil() as u32;
+        let fade_height = f64::from(overlay_patch.height())
+            .checked_mul(0.2)
+            .unwrap()
+            .ceil()
+            .cast::<u32>()
+            .unwrap();
         let fade_size = Size {
             width: overlay_patch.width(),
             height: fade_height,
         };
         let patch_safe_height = overlay_patch.height() - 2 * fade_size.height;
 
-        let num_patches = fill_height as f64 / patch_safe_height as f64;
-        let num_patches = num_patches.ceil() as i64;
+        let num_patches = f64::from(fill_height)
+            .checked_div(f64::from(patch_safe_height))
+            .unwrap()
+            .ceil()
+            .cast::<u32>()
+            .unwrap();
         assert!(num_patches > 0);
         crate::debug!(&num_patches);
 
-        let patch_safe_height = fill_height as f64 / num_patches as f64;
-        let patch_safe_height = patch_safe_height.ceil() as u32;
+        let patch_safe_height = f64::from(fill_height)
+            .checked_div(f64::from(num_patches))
+            .unwrap()
+            .ceil()
+            .cast::<u32>()
+            .unwrap();
+        let patch_height = patch_safe_height
+            .checked_add(fade_size.height.checked_mul(2).unwrap())
+            .unwrap();
         let patch_size = Size {
             width: overlay_patch.width(),
-            height: patch_safe_height + 2 * fade_size.height,
+            height: patch_height,
         };
 
         for i in 0..num_patches {
@@ -207,7 +237,7 @@ impl Border {
                 patch_size,
                 axis,
             );
-            let patch_offset_y = i
+            let patch_offset_y = i64::from(i)
                 .checked_mul(
                     i64::from(patch_safe_height)
                         .checked_sub(i64::from(fade_height))
@@ -232,10 +262,7 @@ impl Border {
     }
 
     #[inline]
-    fn compute_transparent_components(
-        &mut self,
-        options: Option<BorderOptions>,
-    ) -> Result<(), Error> {
+    fn compute_transparent_components(&mut self, options: Option<Options>) -> Result<(), Error> {
         use super::imageops::find_transparent_components;
 
         let options = options.unwrap_or_default();
@@ -254,10 +281,7 @@ impl Border {
     }
 
     #[inline]
-    pub fn from_image(
-        inner: img::Image,
-        options: Option<BorderOptions>,
-    ) -> Result<Self, super::Error> {
+    pub fn from_image(inner: img::Image, options: Option<Options>) -> Result<Self, super::Error> {
         let mut border = Self {
             inner,
             options,
@@ -401,7 +425,7 @@ mod tests {
                     let (border_path, expected_components) = $values;
                     let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
                     let border_file = repo.join(&border_path);
-                    let options = BorderOptions::default();
+                    let options = Options::default();
                     let img = img::Image::open(&border_file)?;
                     let border = Border::from_image(img.clone(), Some(options));
                     let components = match border {
@@ -442,7 +466,7 @@ mod tests {
 
         let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
         let border_file = repo.join("samples/borders/border_3_areas_vertical.png");
-        let options = BorderOptions {
+        let options = Options {
             transparent_component_threshold: 8,
             alpha_threshold: 0.95,
         };

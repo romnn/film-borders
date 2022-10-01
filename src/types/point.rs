@@ -1,6 +1,6 @@
 use super::Size;
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
-use crate::numeric::{self, error, NumCast, Round};
+use crate::numeric::{self, error, Cast, Round};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -11,7 +11,7 @@ pub struct Point {
     pub y: i64,
 }
 
-impl numeric::NumericType for Point {}
+impl numeric::Numeric for Point {}
 
 #[wasm_bindgen]
 impl Point {
@@ -34,7 +34,7 @@ impl Point {
     pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, numeric::Error>
     where
         R: numeric::RoundingMode,
-        F: numeric::NumCast + numeric::NumericType,
+        F: numeric::Cast + numeric::Numeric,
     {
         let scalar = scalar.cast::<f64>()?;
         let x = self.x.cast::<f64>()?;
@@ -86,7 +86,7 @@ impl CheckedAdd for Point {
             Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::AddError(error::ArithmeticError {
+            Err(err) => Err(ops::AddError(error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -108,7 +108,7 @@ impl CheckedSub for Point {
             Ok::<Self, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::SubError(error::ArithmeticError {
+            Err(err) => Err(ops::SubError(error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -120,7 +120,7 @@ impl CheckedSub for Point {
 
 impl<F> CheckedMul<F> for Point
 where
-    F: numeric::NumCast + numeric::NumericType,
+    F: numeric::Cast + numeric::Numeric,
 {
     type Output = Self;
     type Error = ops::MulError<Self, F>;
@@ -129,7 +129,7 @@ where
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
         match self.scale_by::<_, Round>(scalar) {
             Ok(point) => Ok(point),
-            Err(numeric::Error(err)) => Err(ops::MulError(error::ArithmeticError {
+            Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
@@ -141,7 +141,7 @@ where
 
 impl<F> CheckedDiv<F> for Point
 where
-    F: numeric::NumCast + numeric::NumericType + num::traits::Inv<Output = F>,
+    F: numeric::Cast + numeric::Numeric + num::traits::Inv<Output = F>,
 {
     type Output = Self;
     type Error = ops::DivError<Self, F>;
@@ -151,7 +151,7 @@ where
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(point) => Ok(point),
-            Err(numeric::Error(err)) => Err(ops::DivError(error::ArithmeticError {
+            Err(numeric::Error(err)) => Err(ops::DivError(error::Arithmetic {
                 lhs: self,
                 rhs: inverse,
                 kind: None,

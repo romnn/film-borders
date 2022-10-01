@@ -45,7 +45,7 @@ pub enum Error {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum ParseEnumError {
+pub enum ParseEnum {
     #[error("unknown enum variant: `{0}`")]
     Unknown(String),
 }

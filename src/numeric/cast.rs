@@ -1,9 +1,9 @@
-use super::{error, NumericType};
+use super::{error, Numeric};
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
 
-pub trait NumCast
+pub trait Cast
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
@@ -12,7 +12,7 @@ where
         Target: num::NumCast;
 }
 
-impl<Src> NumCast for Src
+impl<Src> Cast for Src
 where
     Self: Sized + num::ToPrimitive + Copy,
 {
@@ -29,22 +29,23 @@ where
 }
 
 #[derive(PartialEq, Eq)]
+#[allow(clippy::module_name_repetitions)]
 pub struct CastError<Src, Target> {
     pub src: Src,
     pub target: PhantomData<Target>,
-    pub cause: Option<Box<dyn error::NumericError + 'static>>,
+    pub cause: Option<Box<dyn error::Numeric+ 'static>>,
 }
 
-impl<Src, Target> error::NumericError for CastError<Src, Target>
+impl<Src, Target> error::Numeric for CastError<Src, Target>
 where
-    Src: NumericType,
-    Target: NumericType,
+    Src: Numeric,
+    Target: Numeric,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn eq(&self, other: &dyn error::NumericError) -> bool {
+    fn eq(&self, other: &dyn error::Numeric) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,
@@ -57,7 +58,7 @@ where
     Src: Debug + Display,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause.as_deref().map(error::AsError::as_error)
+        self.cause.as_deref().map(error::AsErr::as_err)
     }
 }
 

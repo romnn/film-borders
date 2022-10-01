@@ -44,22 +44,42 @@ fieldset
   border: 0 none
 
 input, textarea, select, button
+  color: inherit
   box-sizing: border-box
+  background-color: transparent
   padding: 2px
   margin: 0
   outline: 0 none
   box-shadow: none
+  border: 1px solid transparent
   clear: both
   float: right
   width: 50%
+  // &:focus
+  //   border: 1px solid #ff1288
+  &:hover
+    border: 1px solid #ff1288
+  &:disabled
+    opacity: 0.5
+    &:hover
+      border: 1px solid transparent
 
 button
-  color: black
+  color: inherit
+  // font-weight: 600
+  // color: white
+  border: 1px solid #ff1288
   margin-bottom: 10px
-  border: 1px solid black
+  // border: 1px solid black
   padding: 2px
-  background-color: lightblue
+  // background-color: lightblue
+  // background-color: red
   cursor: pointer
+  &:hover
+    // padding: 1px
+    color: #ff1288
+    border: 1px solid #ff1288
+
 
 label
   margin-bottom: 10px

@@ -100,7 +100,7 @@ fn main() {
                 #[cfg(feature = "builtin")]
                 let border = match options.border {
                     None => Ok(border::Kind::default()),
-                    Some(border) => builtin::Border::from_str(&border)
+                    Some(border) => builtin::Builtin::from_str(&border)
                         .map(border::Kind::Builtin)
                         .or_else(|_| {
                             Border::open(PathBuf::from(border), None).map(border::Kind::Custom)

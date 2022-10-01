@@ -3,12 +3,12 @@ import axios from "axios";
 import { Oval } from "react-loader-spinner";
 import { Buffer } from "buffer";
 import init, {
-  SidesPercent,
-  Mode,
+  Sides,
+  FitMode,
   Options,
-  OutputSize,
+  BoundedSize,
   Rotation,
-  BuiltinBorder,
+  Builtin,
   Color,
 } from "filmborders";
 import "./App.sass";
@@ -20,14 +20,14 @@ type AppState = {
   rendering: boolean;
   exporting: boolean;
   filename?: string;
-  fitMode?: Mode;
+  fitMode?: FitMode;
   fitModeName?: string;
-  borderOverlay?: BuiltinBorder;
+  borderOverlay?: Builtin;
   borderOverlayName?: string;
   canvasScale: number;
   outputSizeName: string;
-  outputWidth: number;
-  outputHeight: number;
+  outputWidth?: number;
+  outputHeight?: number;
   frameColor: string;
   backgroundColor: string;
   scaleFactor: number;
@@ -47,10 +47,11 @@ type AppState = {
   borderRotationName?: string;
 };
 
-const PREVIEW_MAX_RES = 250;
-const DEFAULT_BORDER_WIDTH = 0.02;
+const PREVIEW_MAX_RES = 1000;
+const DEFAULT_BORDER_WIDTH_PERCENT = 1;
 
 const OUTPUT_SIZES_KEYS: string[] = [
+  "Match source",
   "Insta Portrait",
   "Insta Landscape",
   "Insta Square",
@@ -97,8 +98,8 @@ export default class App extends React.Component<AppProps, AppState> {
 
   constructor(props: AppProps) {
     super(props);
-    const outputSizeName = "Insta Portrait";
-    const size = OUTPUT_SIZES[outputSizeName];
+    const outputSizeName = "Match source";
+    // const size = OUTPUT_SIZES[outputSizeName];
     this.state = {
       wasmLoaded: false,
       workerReady: false,
@@ -111,21 +112,21 @@ export default class App extends React.Component<AppProps, AppState> {
       borderOverlayName: undefined,
       canvasScale: 0.0,
       outputSizeName,
-      outputWidth: size.width,
-      outputHeight: size.height,
+      outputWidth: undefined, // size.width,
+      outputHeight: undefined, // size.height,
       frameColor: "#000000",
       backgroundColor: "#ffffff",
-      scaleFactor: 1.0,
+      scaleFactor: 100.0,
       preview: false,
-      margin: 0.1,
+      margin: 1.0,
       cropTop: 0.0,
       cropRight: 0.0,
       cropBottom: 0.0,
       cropLeft: 0.0,
-      frameWidthTop: DEFAULT_BORDER_WIDTH,
-      frameWidthRight: DEFAULT_BORDER_WIDTH,
-      frameWidthBottom: DEFAULT_BORDER_WIDTH,
-      frameWidthLeft: DEFAULT_BORDER_WIDTH,
+      frameWidthTop: DEFAULT_BORDER_WIDTH_PERCENT,
+      frameWidthRight: DEFAULT_BORDER_WIDTH_PERCENT,
+      frameWidthBottom: DEFAULT_BORDER_WIDTH_PERCENT,
+      frameWidthLeft: DEFAULT_BORDER_WIDTH_PERCENT,
       imageRotation: undefined,
       imageRotationName: undefined,
       borderRotation: undefined,
@@ -134,9 +135,9 @@ export default class App extends React.Component<AppProps, AppState> {
   }
 
   setWasmDefaults = async () => {
-    const borderOverlay = BuiltinBorder.Border120_1;
+    const borderOverlay = Builtin.Border120_1;
     const defaultRotation = Rotation.Rotate0;
-    const fitMode = Mode.FitImage;
+    const fitMode = FitMode.Image;
 
     await this.setState({
       imageRotation: defaultRotation,
@@ -144,9 +145,9 @@ export default class App extends React.Component<AppProps, AppState> {
       borderRotation: defaultRotation,
       borderRotationName: Rotation[defaultRotation],
       fitMode,
-      fitModeName: Mode[fitMode],
+      fitModeName: FitMode[fitMode],
       borderOverlay,
-      borderOverlayName: BuiltinBorder[borderOverlay],
+      borderOverlayName: Builtin[borderOverlay],
     });
   };
 
@@ -186,13 +187,13 @@ export default class App extends React.Component<AppProps, AppState> {
     let options = new Options();
 
     // output size
-    let output_size = new OutputSize();
+    let output_size = new BoundedSize();
     output_size.width = this.state.outputWidth;
     output_size.height = this.state.outputHeight;
     options.output_size = output_size;
 
     // fit mode
-    options.mode = this.state.fitMode ?? Mode.FitImage;
+    options.mode = this.state.fitMode ?? FitMode.Image;
 
     // frame color
     try {
@@ -209,24 +210,24 @@ export default class App extends React.Component<AppProps, AppState> {
     }
 
     // scale factor
-    options.scale_factor = this.state.scaleFactor ?? 1.0;
+    options.scale_factor = (this.state.scaleFactor ?? 100.0) / 100.0;
 
     // preview
     options.preview = this.state.preview;
 
     // margin
-    options.margin = this.state.margin ?? 0.0;
+    options.margin = (this.state.margin ?? 0.0) / 100.0;
 
     // crop
-    let crop = new SidesPercent();
-    crop.top = this.state.cropTop ?? 0.0;
-    crop.right = this.state.cropRight ?? 0.0;
-    crop.bottom = this.state.cropBottom ?? 0.0;
-    crop.left = this.state.cropLeft ?? 0.0;
+    let crop = new Sides();
+    crop.top = (this.state.cropTop ?? 0.0) / 100.0;
+    crop.right = (this.state.cropRight ?? 0.0) / 100.0;
+    crop.bottom = (this.state.cropBottom ?? 0.0) / 100.0;
+    crop.left = (this.state.cropLeft ?? 0.0) / 100.0;
     options.crop = crop;
 
     // border width
-    let frameWidth = new SidesPercent();
+    let frameWidth = new Sides();
     frameWidth.top = this.state.frameWidthTop ?? 0.0;
     frameWidth.right = this.state.frameWidthRight ?? 0.0;
     frameWidth.bottom = this.state.frameWidthBottom ?? 0.0;
@@ -307,6 +308,8 @@ export default class App extends React.Component<AppProps, AppState> {
         previewCanvas.height
       );
       console.log(previewCanvas.width, previewCanvas.height);
+      // todo: compute the output width based on the original canvas and the options in rust
+      console.log(originalCanvas.width, originalCanvas.height);
 
       let borderData = null;
       if (this.state.borderOverlayName === "Custom") {
@@ -320,7 +323,7 @@ export default class App extends React.Component<AppProps, AppState> {
 
       await this.worker.postMessage({ imageData, borderData });
       let options = await this.getOptions();
-      let size = new OutputSize();
+      let size = new BoundedSize();
       size.width = canvas.width;
       size.height = canvas.height;
       options.output_size = size;
@@ -353,8 +356,8 @@ export default class App extends React.Component<AppProps, AppState> {
     const resultCtx = resultCanvas.getContext("2d");
     if (!resultCtx || !originalCtx || !borderCtx) return;
 
-    resultCanvas.width = this.state.outputWidth;
-    resultCanvas.height = this.state.outputHeight;
+    // resultCanvas.width = this.state.outputWidth;
+    // resultCanvas.height = this.state.outputHeight;
     let renderID = uuidv4();
     console.time(renderID);
 
@@ -377,10 +380,12 @@ export default class App extends React.Component<AppProps, AppState> {
 
     await this.worker.postMessage({ imageData, borderData });
     let options = await this.getOptions();
-    let size = new OutputSize();
-    size.width = resultCanvas.width;
-    size.height = resultCanvas.height;
-    options.output_size = size;
+    // let size = new BoundedSize();
+    // size.width = resultCanvas.width;
+    // size.height = resultCanvas.height;
+    // options.output_size = size;
+    options.output_size.width = this.state.outputWidth;
+    options.output_size.height = this.state.outputHeight;
     options.preview = false;
 
     // console.log(options);
@@ -454,8 +459,19 @@ export default class App extends React.Component<AppProps, AppState> {
         let previewCanvas = this.previewCanvas.current;
         let canvas = this.canvas.current;
         if (!previewCanvas || !originalCanvas || !canvas) return reject();
+
+        const screenWidth =
+          window.innerWidth ||
+          document.documentElement.clientWidth ||
+          document.body.clientWidth;
+        const screenHeight =
+          window.innerHeight ||
+          document.documentElement.clientHeight ||
+          document.body.clientHeight;
+        let maxScreenDim = Math.max(screenWidth, screenHeight);
+        let maxImageDim = Math.max(img.width, img.height);
         let previewScaledownFac =
-          PREVIEW_MAX_RES / Math.max(img.width, img.height);
+          PREVIEW_MAX_RES / Math.min(maxImageDim, maxScreenDim);
 
         canvas.width = width * previewScaledownFac;
         canvas.height = height * previewScaledownFac;
@@ -596,11 +612,11 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   updateFitMode = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    let key = e.target.value as keyof typeof Mode;
-    if (key in Mode) {
+    let key = e.target.value as keyof typeof FitMode;
+    if (key in FitMode) {
       await this.setState({
-        fitMode: Mode[key],
-        fitModeName: Mode[Mode[key]],
+        fitMode: FitMode[key],
+        fitModeName: FitMode[FitMode[key]],
       });
     } else {
       await this.setState({
@@ -611,11 +627,11 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   updateBorderOverlay = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    let key = e.target.value as keyof typeof BuiltinBorder;
-    if (key in BuiltinBorder) {
+    let key = e.target.value as keyof typeof Builtin;
+    if (key in Builtin) {
       await this.setState({
-        borderOverlay: BuiltinBorder[key],
-        borderOverlayName: BuiltinBorder[BuiltinBorder[key]],
+        borderOverlay: Builtin[key],
+        borderOverlayName: Builtin[Builtin[key]],
       });
     } else {
       await this.setState({
@@ -750,6 +766,7 @@ export default class App extends React.Component<AppProps, AppState> {
         <form className="parameters" onSubmit={this.update}>
           <fieldset>
             <div className="formgrid">
+              <p id="app-title">film borders.</p>
               <input
                 type="file"
                 disabled={this.state.rendering || this.state.exporting}
@@ -766,7 +783,7 @@ export default class App extends React.Component<AppProps, AppState> {
                 disabled={this.state.exporting}
                 onChange={this.updateFitMode}
               >
-                {Object.values(Mode)
+                {Object.values(FitMode)
                   .filter((r) => typeof r == "string")
                   .map((option) => (
                     <option value={option} key={option}>
@@ -782,7 +799,11 @@ export default class App extends React.Component<AppProps, AppState> {
                 disabled={this.state.exporting}
                 onChange={this.updateBorderOverlay}
               >
-                {Object.values(BuiltinBorder)
+                <option value="Match source" key="Match">
+                  Match source
+                </option>
+
+                {Object.values(Builtin)
                   .filter((r) => typeof r == "string")
                   .map((option) => (
                     <option value={option} key={option}>
@@ -903,71 +924,72 @@ export default class App extends React.Component<AppProps, AppState> {
               <input
                 id="scaleFactor"
                 type="number"
-                step="0.01"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.scaleFactor}
                 onChange={this.updateScaleFactor}
               />
-              <label htmlFor="scaleFactor">Scale factor</label>
+              <label htmlFor="scaleFactor">Scale %</label>
 
               <input
                 id="margin"
                 type="number"
-                step="0.01"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.margin}
                 onChange={this.updateMargin}
               />
-              <label htmlFor="margin">Margin</label>
+              <label htmlFor="margin">Margin %</label>
 
               <input
                 type="number"
                 id="frameWidth"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.frameWidthTop}
                 onChange={this.updateframeWidth}
               />
-              <label htmlFor="frameWidth">Frame width</label>
+              <label htmlFor="frameWidth">Frame width %</label>
 
               <input
                 id="cropTop"
                 type="number"
-                step="0.01"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.cropTop}
                 onChange={this.updateCropTop}
               />
-              <label htmlFor="cropTop">Crop top</label>
+              <label htmlFor="cropTop">Crop top %</label>
 
               <input
                 id="cropRight"
                 type="number"
-                step="0.01"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.cropRight}
                 onChange={this.updateCropRight}
               />
-              <label htmlFor="cropRight">Crop right</label>
+              <label htmlFor="cropRight">Crop right %</label>
 
               <input
                 id="cropBottom"
                 type="number"
-                step="0.01"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.cropBottom}
                 onChange={this.updateCropBottom}
               />
-              <label htmlFor="cropBottom">Crop bottom</label>
+              <label htmlFor="cropBottom">Crop bottom %</label>
 
               <input
                 id="cropLeft"
                 type="number"
-                step="0.01"
+                step="0.5"
                 disabled={this.state.exporting}
                 value={this.state.cropLeft}
                 onChange={this.updateCropLeft}
               />
-              <label htmlFor="cropLeft">Crop left</label>
+              <label htmlFor="cropLeft">Crop left %</label>
 
               <input
                 id="preview"

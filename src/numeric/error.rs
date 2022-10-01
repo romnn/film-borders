@@ -1,64 +1,64 @@
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
-pub trait AsError {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static);
+pub trait AsErr {
+    fn as_err(&self) -> &(dyn std::error::Error + 'static);
 }
 
-impl AsError for dyn std::error::Error + 'static {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+impl AsErr for dyn std::error::Error + 'static {
+    fn as_err(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
 }
 
-impl AsError for dyn std::error::Error + Send + 'static {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+impl AsErr for dyn std::error::Error + Send + 'static {
+    fn as_err(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
 }
 
-impl AsError for dyn std::error::Error + Sync + 'static {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+impl AsErr for dyn std::error::Error + Sync + 'static {
+    fn as_err(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
 }
 
-impl AsError for dyn std::error::Error + Send + Sync + 'static {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+impl AsErr for dyn std::error::Error + Send + Sync + 'static {
+    fn as_err(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
 }
 
-impl<T> AsError for T
+impl<T> AsErr for T
 where
     T: std::error::Error + 'static,
 {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+    fn as_err(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
 }
 
-pub trait NumericError: AsError + std::error::Error + 'static {
+pub trait Numeric: AsErr + std::error::Error + 'static {
     fn as_any(&self) -> &dyn Any;
-    fn eq(&self, other: &dyn NumericError) -> bool;
+    fn eq(&self, other: &dyn Numeric) -> bool;
 }
 
-impl Eq for Box<dyn NumericError> {}
+impl Eq for Box<dyn Numeric> {}
 
-impl PartialEq for Box<dyn NumericError> {
+impl PartialEq for Box<dyn Numeric> {
     fn eq(&self, other: &Self) -> bool {
-        NumericError::eq(self.as_ref(), other.as_ref())
+        Numeric::eq(self.as_ref(), other.as_ref())
     }
 }
 
-impl PartialEq<&Self> for Box<dyn NumericError> {
+impl PartialEq<&Self> for Box<dyn Numeric> {
     fn eq(&self, other: &&Self) -> bool {
-        NumericError::eq(self.as_ref(), other.as_ref())
+        Numeric::eq(self.as_ref(), other.as_ref())
     }
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub struct Error(pub Box<dyn NumericError>);
+pub struct Error(pub Box<dyn Numeric>);
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -74,7 +74,7 @@ impl std::error::Error for Error {
 
 impl<E> From<E> for Error
 where
-    E: NumericError,
+    E: Numeric,
 {
     fn from(err: E) -> Self {
         Error(Box::new(err))
@@ -82,38 +82,38 @@ where
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum ArithmeticErrorKind {
+pub enum Kind {
     Overflow,
     Underflow,
     DivideByZero,
 }
 
-impl Display for ArithmeticErrorKind {
+impl Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ArithmeticErrorKind::Underflow => write!(f, "underflow"),
-            ArithmeticErrorKind::Overflow => write!(f, "overflow"),
-            ArithmeticErrorKind::DivideByZero => write!(f, "divide by zero"),
+            Kind::Underflow => write!(f, "underflow"),
+            Kind::Overflow => write!(f, "overflow"),
+            Kind::DivideByZero => write!(f, "divide by zero"),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct ArithmeticError<Lhs, Rhs> {
+pub struct Arithmetic<Lhs, Rhs> {
     pub lhs: Lhs,
     pub rhs: Rhs,
-    pub kind: Option<ArithmeticErrorKind>,
-    pub cause: Option<Box<dyn NumericError + 'static>>,
+    pub kind: Option<Kind>,
+    pub cause: Option<Box<dyn Numeric + 'static>>,
 }
 
-impl<Lhs, Rhs> Eq for ArithmeticError<Lhs, Rhs>
+impl<Lhs, Rhs> Eq for Arithmetic<Lhs, Rhs>
 where
     Lhs: Eq,
     Rhs: Eq,
 {
 }
 
-impl<Lhs, Rhs> PartialEq for ArithmeticError<Lhs, Rhs>
+impl<Lhs, Rhs> PartialEq for Arithmetic<Lhs, Rhs>
 where
     Lhs: PartialEq,
     Rhs: PartialEq,
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn numeric_error_is_std_error() {
-        let err: &dyn NumericError = &ops::AddError(10u32.overflows(10u32));
+        let err: &dyn Numeric = &ops::AddError(10u32.overflows(10u32));
         let _: &dyn std::error::Error = &err;
     }
 }

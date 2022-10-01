@@ -1,6 +1,6 @@
 pub mod percent {
     use crate::numeric::ops::{self, CheckedMul};
-    use crate::numeric::{self, cast::NumCast, error};
+    use crate::numeric::{self, Cast, error};
     use crate::types::Size;
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
@@ -67,7 +67,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(numeric::Error(err)) => Err(ops::MulError(error::ArithmeticError {
+                Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
                     lhs: self,
                     rhs: scalar,
                     kind: None,
@@ -96,7 +96,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(numeric::Error(err)) => Err(ops::MulError(error::ArithmeticError {
+                Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
                     lhs: self,
                     rhs: size,
                     kind: None,
@@ -109,7 +109,7 @@ pub mod percent {
 
 pub mod abs {
     use crate::numeric::ops::{self, CheckedMul};
-    use crate::numeric::{self, cast::NumCast, error};
+    use crate::numeric::{self, Cast, error};
     use crate::types::Point;
 
     #[derive(Debug, Default, Copy, Clone)]
@@ -165,7 +165,7 @@ pub mod abs {
 
     impl<F> CheckedMul<F> for Sides
     where
-        F: numeric::NumCast + numeric::NumericType,
+        F: numeric::Cast + numeric::Numeric,
     {
         type Output = Self;
         type Error = ops::MulError<Self, F>;
@@ -197,7 +197,7 @@ pub mod abs {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(numeric::Error(err)) => Err(ops::MulError(error::ArithmeticError {
+                Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
                     lhs: self,
                     rhs: scalar,
                     kind: None,

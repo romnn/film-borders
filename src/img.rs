@@ -2,14 +2,13 @@ use super::numeric::ops::CheckedSub;
 use super::types::{sides::abs::Sides, Point, Size};
 use super::{defaults, imageops, Error};
 pub use image::ImageFormat;
-use image::{io::Reader as ImageReader, RgbaImage};
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
 pub struct Image {
-    pub(crate) inner: RgbaImage,
+    pub(crate) inner: image::RgbaImage,
     pub(crate) path: Option<PathBuf>,
 }
 
@@ -23,7 +22,7 @@ impl AsRef<image::RgbaImage> for Image {
 impl Image {
     #[inline]
     #[must_use]
-    pub fn data(&self) -> RgbaImage {
+    pub fn data(&self) -> image::RgbaImage {
         self.inner.clone()
     }
 
@@ -42,7 +41,7 @@ impl Image {
     #[inline]
     #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
-        let inner = RgbaImage::new(width, height);
+        let inner = image::RgbaImage::new(width, height);
         Self { inner, path: None }
     }
 
@@ -62,7 +61,7 @@ impl Image {
 
     #[inline]
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
-        let reader = ImageReader::new(reader).with_guessed_format()?;
+        let reader = image::io::Reader::new(reader).with_guessed_format()?;
         let inner = reader.decode()?.to_rgba8();
         Ok(Self { inner, path: None })
     }

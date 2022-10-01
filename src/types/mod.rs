@@ -60,7 +60,7 @@ impl Default for FitMode {
 }
 
 impl std::str::FromStr for FitMode {
-    type Err = super::error::ParseEnumError;
+    type Err = super::error::ParseEnum;
 
     #[inline]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -68,7 +68,7 @@ impl std::str::FromStr for FitMode {
         match s.as_str() {
             "image" => Ok(FitMode::Image),
             "border" => Ok(FitMode::Border),
-            _ => Err(super::error::ParseEnumError::Unknown(s.to_string())),
+            _ => Err(super::error::ParseEnum::Unknown(s.to_string())),
         }
     }
 }

@@ -3,7 +3,7 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::unsafe_derive_deserialize)]
-#![allow(clippy::module_name_repetitions)]
+// #![allow(clippy::module_name_repetitions)]
 
 pub mod border;
 #[cfg(feature = "builtin")]
@@ -18,7 +18,6 @@ pub mod options;
 #[cfg(test)]
 mod test;
 pub mod types;
-pub mod utils;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
@@ -31,8 +30,10 @@ pub use options::*;
 pub use sides::{abs::Sides, percent::Sides as SidesPercent};
 pub use types::*;
 
-use numeric::cast::NumCast;
-use numeric::ops::{CheckedAdd, CheckedMul, CheckedSub};
+use numeric::{
+    ops::{CheckedAdd, CheckedMul, CheckedSub},
+    Cast,
+};
 use std::path::Path;
 
 pub struct ImageBorders {
@@ -118,7 +119,7 @@ impl ImageBorders {
         };
         crate::debug!("image with border size: {}", &original_content_size);
 
-        let scale_factor = utils::clamp(options.scale_factor, 0.0, 1.0);
+        let scale_factor = options.scale_factor.clamp(0.0, 1.0);
         let margin_factor = f64::from(options.margin).max(0.0);
 
         let base = original_content_size.min_dim();
@@ -258,8 +259,8 @@ impl ImageBorders {
 
         if options.preview {
             let preview_size = Size {
-                width: output_size.min(),
-                height: output_size.min(),
+                width: output_size.min_dim(),
+                height: output_size.min_dim(),
             };
             let preview_rect = output_size.center(preview_size);
             result_image.fill_rect(
@@ -314,7 +315,7 @@ mod tests {
                     let output = repo.join(&outfile);
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
-                    let border = border::Kind::Builtin(builtin::Border::Border120_1);
+                    let border = border::Kind::Builtin(builtin::Builtin::Border120_1);
                     let result = borders.add_border(Some(border), options)?;
                     result.save_with_filename(&output, None)?;
                     assert!(output.is_file());
@@ -356,7 +357,7 @@ mod tests {
         let bytes = include_bytes!("../samples/lowres.jpg");
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
-        let border = border::Kind::Builtin(builtin::Border::Border120_1);
+        let border = border::Kind::Builtin(builtin::Builtin::Border120_1);
         let result = borders.add_border(Some(border), &OPTIONS)?;
         let mut output = Cursor::new(Vec::new());
         result.encode_to(&mut output, ImageFormat::Png, None)?;
