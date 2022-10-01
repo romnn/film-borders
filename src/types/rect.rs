@@ -1,7 +1,8 @@
 use super::sides::abs::Sides;
 use super::{CropMode, Point, Size};
+use crate::numeric;
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedSub};
-use crate::numeric::{self, error};
+use crate::Error;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Rect {
@@ -13,15 +14,20 @@ pub struct Rect {
 
 impl Rect {
     #[inline]
-    #[must_use]
-    pub fn new(top_left: Point, size: Size) -> Self {
-        let bottom_right = top_left.checked_add(Point::from(size)).unwrap();
-        Self {
+    pub fn new(top_left: Point, size: Size) -> Result<Self, Error> {
+        let bottom_right =
+            top_left
+                .checked_add(Point::from(size))
+                .map_err(|err| Error::Arithmetic {
+                    msg: format!("failed to create rect at {} of size {}", top_left, size),
+                    source: err.into(),
+                })?;
+        Ok(Self {
             top: top_left.y,
             left: top_left.x,
             bottom: bottom_right.y,
             right: bottom_right.x,
-        }
+        })
     }
 
     #[inline]
@@ -141,10 +147,10 @@ impl Rect {
     #[inline]
     #[must_use]
     pub fn contains(&self, x: i64, y: i64, padding: i64) -> bool {
-        let y_top = self.top - padding;
-        let x_left = self.left - padding;
-        let y_bottom = self.bottom + padding;
-        let x_right = self.right + padding;
+        let y_top = self.top.checked_sub(padding).unwrap();
+        let x_left = self.left.checked_sub(padding).unwrap();
+        let y_bottom = self.bottom.checked_add(padding).unwrap();
+        let x_right = self.right.checked_add(padding).unwrap();
 
         x_left <= x && x <= x_right && y_top <= y && y <= y_bottom
     }
@@ -184,7 +190,7 @@ impl CheckedAdd<Point> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(err) => Err(ops::AddError(error::Arithmetic {
+            Err(err) => Err(ops::AddError(numeric::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -213,7 +219,7 @@ impl CheckedSub<Sides> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(numeric::Error(err)) => Err(ops::SubError(error::Arithmetic {
+            Err(numeric::Error(err)) => Err(ops::SubError(numeric::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -242,7 +248,7 @@ impl CheckedAdd<Sides> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(numeric::Error(err)) => Err(ops::AddError(error::Arithmetic {
+            Err(numeric::Error(err)) => Err(ops::AddError(numeric::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,

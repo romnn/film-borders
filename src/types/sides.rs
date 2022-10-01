@@ -135,13 +135,13 @@ pub mod abs {
         #[inline]
         #[must_use]
         pub fn height(&self) -> u32 {
-            self.top + self.bottom
+            self.top.checked_add(self.bottom).unwrap()
         }
 
         #[inline]
         #[must_use]
         pub fn width(&self) -> u32 {
-            self.left + self.right
+            self.left.checked_add(self.right).unwrap()
         }
 
         #[inline]

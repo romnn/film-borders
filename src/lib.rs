@@ -199,7 +199,7 @@ impl ImageBorders {
             border_rect.size(),
             FillMode::Blend,
         );
-        let default_component = Rect::new(Point::origin(), border_rect.size());
+        let default_component = Rect::new(Point::origin(), border_rect.size())?;
 
         crate::debug!("overlay content");
         match options.mode {

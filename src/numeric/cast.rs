@@ -33,7 +33,7 @@ where
 pub struct CastError<Src, Target> {
     pub src: Src,
     pub target: PhantomData<Target>,
-    pub cause: Option<Box<dyn error::Numeric+ 'static>>,
+    pub cause: Option<Box<dyn error::Numeric + Send + Sync + 'static>>,
 }
 
 impl<Src, Target> error::Numeric for CastError<Src, Target>

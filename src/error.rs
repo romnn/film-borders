@@ -40,6 +40,13 @@ pub enum Error {
     #[error("border error: {0}")]
     Border(#[from] super::border::Error),
 
+    #[error("arithmetic error: {msg}")]
+    Arithmetic {
+        msg: String,
+        // #[from]
+        source: super::numeric::Error,
+    },
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
