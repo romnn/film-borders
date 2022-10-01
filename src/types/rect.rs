@@ -50,24 +50,49 @@ impl Rect {
     }
 
     #[inline]
-    #[must_use]
-    pub fn size(&self) -> Size {
-        let size = self.bottom_right().checked_sub(self.top_left()).unwrap();
-        size.try_into().unwrap()
+    pub fn size(&self) -> Result<Size, Error> {
+        let top_left = self.top_left();
+        let bottom_right = self.bottom_right();
+        let size = bottom_right
+            .checked_sub(top_left)
+            .map_err(|err| Error::Arithmetic {
+                msg: format!(
+                    "failed to compute size from top right {} and bottom left {}",
+                    top_left, bottom_right
+                ),
+                source: err.into(),
+            })?;
+        size.try_into()
     }
 
     #[inline]
-    #[must_use]
-    pub fn center(&self) -> Point {
-        self.top_left()
-            .checked_add(Point::from(self.size()).checked_div(2.0).unwrap())
-            .unwrap()
+    pub fn center(&self) -> Result<Point, Error> {
+        let size = self.size()?;
+        let rel_center = Point::from(size)
+            .checked_div(2.0)
+            .map_err(numeric::Error::from);
+        // .map_err(|err| Error::Arithmetic {
+        //     msg: format!("failed to compute center point of size {}", size),
+        //     source: err.into(),
+        // });
+        rel_center
+            .and_then(|rel_center| {
+                self.top_left()
+                    .checked_add(rel_center)
+                    .map_err(numeric::Error::from)
+            })
+            .map_err(|err| Error::Arithmetic {
+                msg: format!("failed to compute center point of size {}", size),
+                source: err,
+            })
     }
 
     #[inline]
     #[must_use]
     pub fn crop_mode(&self, container: &Rect) -> CropMode {
-        let offset = container.center().checked_sub(self.center()).unwrap();
+        let self_center = self.center().unwrap();
+        let container_center = container.center().unwrap();
+        let offset = container_center.checked_sub(self_center).unwrap();
         CropMode::Custom {
             x: offset.x,
             y: offset.y,
@@ -113,13 +138,13 @@ impl Rect {
     #[inline]
     #[must_use]
     pub fn width(&self) -> u32 {
-        self.size().width
+        self.size().unwrap().width
     }
 
     #[inline]
     #[must_use]
     pub fn height(&self) -> u32 {
-        self.size().height
+        self.size().unwrap().height
     }
 
     #[inline]

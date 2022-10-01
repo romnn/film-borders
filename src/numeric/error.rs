@@ -43,48 +43,15 @@ pub trait Numeric: AsErr + std::error::Error + 'static {
     fn eq(&self, other: &dyn Numeric) -> bool;
 }
 
-// impl Eq for Box<dyn Numeric> {}
-// impl Eq for Box<dyn Numeric + Send + Sync + 'static> {}
-// impl Eq for dyn Numeric {}
 impl Eq for dyn Numeric + Send + Sync + 'static {}
-
-// impl PartialEq for Box<dyn Numeric> {
-// impl PartialEq for dyn Numeric {
-//     fn eq(&self, other: &Self) -> bool {
-//         Numeric::eq(self, other)
-//     }
-// }
-
-// impl PartialEq<&Self> for dyn Numeric {
-//     fn eq(&self, other: &&Self) -> bool {
-//         Numeric::eq(self, *other)
-//     }
-// }
 
 impl PartialEq for dyn Numeric + Send + Sync + 'static {
     fn eq(&self, other: &Self) -> bool {
         Numeric::eq(self, other)
     }
 }
-impl PartialEq<&Self> for dyn Numeric + Send + Sync + 'static {
-    fn eq(&self, other: &&Self) -> bool {
-        Numeric::eq(self, *other)
-    }
-}
 
-// impl PartialEq for Box<dyn Numeric + Send + Sync + 'static> {
-//     fn eq(&self, other: &Self) -> bool {
-//         Numeric::eq(self.as_ref(), other.as_ref())
-//     }
-// }
-
-// impl PartialEq<&Self> for Box<dyn Numeric> {
-//     fn eq(&self, other: &&Self) -> bool {
-//         Numeric::eq(self.as_ref(), other.as_ref())
-//     }
-// }
-
-
+// required fix for derived PartialEq that otherwise moves
 impl PartialEq<&Self> for Box<dyn Numeric + Send + Sync + 'static> {
     fn eq(&self, other: &&Self) -> bool {
         Numeric::eq(self.as_ref(), other.as_ref())

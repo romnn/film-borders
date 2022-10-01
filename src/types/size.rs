@@ -1,6 +1,7 @@
 use super::sides::abs::Sides;
 use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
-use crate::numeric::{self, error, Ceil, Cast, Round};
+use crate::numeric::{self, error, Cast, Ceil, Round};
+use crate::Error;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -298,22 +299,27 @@ impl From<(u32, u32)> for Size {
 }
 
 impl TryFrom<super::Point> for Size {
-    type Error = numeric::CastError<super::Point, Size>;
+    // type Error = numeric::CastError<super::Point, Size>;
+    type Error = Error;
 
     #[inline]
     fn try_from(point: super::Point) -> Result<Self, Self::Error> {
-        match (|| {
+        let size = (|| {
             let width = point.x.cast::<u32>()?;
             let height = point.y.cast::<u32>()?;
             Ok::<Size, numeric::CastError<i64, u32>>(Self { width, height })
-        })() {
-            Ok(size) => Ok(size),
-            Err(err) => Err(numeric::CastError {
-                src: point,
-                target: std::marker::PhantomData,
-                cause: Some(Box::new(err)),
-            }),
-        }
+        })();
+        size.map_err(|err| numeric::CastError {
+            src: point,
+            target: std::marker::PhantomData,
+            cause: Some(Box::new(err)),
+        })
+        .map_err(
+            |err: numeric::CastError<super::Point, Size>| Error::Arithmetic {
+                msg: format!("failed to convert {} to size", point),
+                source: err.into(),
+            },
+        )
     }
 }
 

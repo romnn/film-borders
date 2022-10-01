@@ -174,16 +174,19 @@ impl Border {
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
         border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
+        let bottom_patch_size = bottom_patch.size().unwrap();
+        let top_patch_size = top_patch.size().unwrap();
+
         let bottom_patch_top_left: Point = Point::from(new_border_size)
-            .checked_sub(bottom_patch.size().into())
+            .checked_sub(bottom_patch_size.into())
             .unwrap();
         new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
 
         // draw patches in between
         let fill_height = i64::from(new_border_size.height)
-            .checked_sub(i64::from(bottom_patch.size().height))
+            .checked_sub(i64::from(bottom_patch_size.height))
             .unwrap()
-            .checked_sub(i64::from(top_patch.size().height))
+            .checked_sub(i64::from(top_patch_size.height))
             .unwrap()
             .max(1)
             .cast::<u32>()
@@ -330,7 +333,7 @@ impl Border {
     #[inline]
     #[must_use]
     pub fn content_size(&self) -> Size {
-        self.content_rect().size()
+        self.content_rect().size().unwrap()
     }
 
     #[inline]

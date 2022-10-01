@@ -1,5 +1,5 @@
 use super::img;
-use super::numeric::{Cast, ops::CheckedAdd};
+use super::numeric::{ops::CheckedAdd, Cast};
 use super::types::{Point, Rect, Size};
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
@@ -118,7 +118,7 @@ where
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
     let rect = Rect::from_points(start, end);
-    let size = rect.size();
+    let size = rect.size().unwrap();
     let top_left = Size::try_from(rect.top_left()).unwrap();
     let dx = top_left.width;
     let dy = top_left.height;
