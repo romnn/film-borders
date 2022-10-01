@@ -4,7 +4,7 @@ use crate::arithmetic::{
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
     Cast, Ceil, Round,
 };
-use crate::Error;
+use crate::error;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -302,7 +302,7 @@ impl From<(u32, u32)> for Size {
 }
 
 impl TryFrom<super::Point> for Size {
-    type Error = Error;
+    type Error = error::Arithmetic;
 
     #[inline]
     fn try_from(point: super::Point) -> Result<Self, Self::Error> {
@@ -317,7 +317,7 @@ impl TryFrom<super::Point> for Size {
             cause: Some(Box::new(err)),
         })
         .map_err(
-            |err: arithmetic::CastError<super::Point, Size>| Error::Arithmetic {
+            |err: arithmetic::CastError<super::Point, Size>| error::Arithmetic {
                 msg: format!("failed to convert {} to size", point),
                 source: err.into(),
             },
@@ -336,7 +336,7 @@ where
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
         match self.scale_by::<_, Round>(scalar) {
             Ok(size) => Ok(size),
-            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
@@ -358,7 +358,7 @@ where
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(size) => Ok(size),
-            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Operation {
                 lhs: self,
                 rhs: inverse,
                 kind: None,
@@ -380,7 +380,7 @@ impl CheckedSub<Sides> for Size {
             Ok::<Self, ops::SubError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::SubError(arithmetic::error::Arithmetic {
+            Err(err) => Err(ops::SubError(arithmetic::error::Operation {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -402,7 +402,7 @@ impl CheckedAdd<Sides> for Size {
             Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Operation {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -424,7 +424,7 @@ impl CheckedAdd for Size {
             Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Operation {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -446,7 +446,7 @@ impl CheckedSub for Size {
             Ok::<Self, ops::SubError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::SubError(arithmetic::error::Arithmetic {
+            Err(err) => Err(ops::SubError(arithmetic::error::Operation {
                 lhs: self,
                 rhs,
                 kind: None,

@@ -120,6 +120,7 @@ impl Border {
             left: 0,
             right: i64::from(border_size.width),
         };
+        let top_patch_size = top_patch.size().unwrap();
 
         let bottom_patch = Rect {
             top: f64::from(border_size.height)
@@ -131,6 +132,7 @@ impl Border {
             left: 0,
             right: i64::from(border_size.width),
         };
+        let bottom_patch_size = bottom_patch.size().unwrap();
 
         let overlay_patch = Rect {
             top: f64::from(border_size.height)
@@ -146,6 +148,7 @@ impl Border {
             left: 0,
             right: i64::from(border_size.width),
         };
+        let overlay_patch_size = overlay_patch.size().unwrap();
 
         // create buffer for the new border
         let border_padding = border_size.checked_sub(border.content_size()).unwrap();
@@ -173,8 +176,8 @@ impl Border {
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
         border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
-        let bottom_patch_size = bottom_patch.size().unwrap();
-        let top_patch_size = top_patch.size().unwrap();
+        // let bottom_patch_size = bottom_patch.size().unwrap();
+        // let top_patch_size = top_patch.size().unwrap();
 
         let bottom_patch_top_left: Point = Point::from(new_border_size)
             .checked_sub(bottom_patch_size.into())
@@ -192,17 +195,17 @@ impl Border {
             .unwrap();
         crate::debug!(&fill_height);
 
-        let fade_height = f64::from(overlay_patch.height())
+        let fade_height = f64::from(overlay_patch_size.height)
             .checked_mul(0.2)
             .unwrap()
             .ceil()
             .cast::<u32>()
             .unwrap();
         let fade_size = Size {
-            width: overlay_patch.width(),
+            width: overlay_patch_size.width,
             height: fade_height,
         };
-        let patch_safe_height = overlay_patch.height() - 2 * fade_size.height;
+        let patch_safe_height = overlay_patch_size.height - 2 * fade_size.height;
 
         let num_patches = f64::from(fill_height)
             .checked_div(f64::from(patch_safe_height))
@@ -223,7 +226,7 @@ impl Border {
             .checked_add(fade_size.height.checked_mul(2).unwrap())
             .unwrap();
         let patch_size = Size {
-            width: overlay_patch.width(),
+            width: overlay_patch_size.width,
             height: patch_height,
         };
 
@@ -278,7 +281,8 @@ impl Border {
             return Err(Error::BadTransparency(self.transparent_components.clone()));
         }
         self.transparent_components
-            .sort_by(|a, b| b.pixel_count().partial_cmp(&a.pixel_count()).unwrap());
+            .sort_by_key(|b| std::cmp::Reverse(b.pixel_count().unwrap()));
+        // .sort_by(|a, b| b.pixel_count().unwrap().cmp(&a.pixel_count().unwrap()));
         Ok(())
     }
 

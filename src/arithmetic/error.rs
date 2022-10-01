@@ -38,28 +38,28 @@ where
     }
 }
 
-pub trait Numeric: AsErr + std::error::Error + 'static {
+pub trait Arithmetic: AsErr + std::error::Error + 'static {
     fn as_any(&self) -> &dyn Any;
-    fn eq(&self, other: &dyn Numeric) -> bool;
+    fn eq(&self, other: &dyn Arithmetic) -> bool;
 }
 
-impl Eq for dyn Numeric + Send + Sync + 'static {}
+impl Eq for dyn Arithmetic + Send + Sync + 'static {}
 
-impl PartialEq for dyn Numeric + Send + Sync + 'static {
+impl PartialEq for dyn Arithmetic + Send + Sync + 'static {
     fn eq(&self, other: &Self) -> bool {
-        Numeric::eq(self, other)
+        Arithmetic::eq(self, other)
     }
 }
 
 // required fix for derived PartialEq that otherwise moves
-impl PartialEq<&Self> for Box<dyn Numeric + Send + Sync + 'static> {
+impl PartialEq<&Self> for Box<dyn Arithmetic + Send + Sync + 'static> {
     fn eq(&self, other: &&Self) -> bool {
-        Numeric::eq(self.as_ref(), other.as_ref())
+        Arithmetic::eq(self.as_ref(), other.as_ref())
     }
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub struct Error(pub Box<dyn Numeric + Sync + Send + 'static>);
+pub struct Error(pub Box<dyn Arithmetic + Sync + Send + 'static>);
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -75,7 +75,7 @@ impl std::error::Error for Error {
 
 impl<E> From<E> for Error
 where
-    E: Numeric + Send + Sync,
+    E: Arithmetic + Send + Sync,
 {
     fn from(err: E) -> Self {
         Error(Box::new(err))
@@ -99,38 +99,38 @@ impl Display for Kind {
     }
 }
 
-#[derive(Debug)]
-pub struct Arithmetic<Lhs, Rhs> {
+#[derive(PartialEq, Eq, Debug)]
+pub struct Operation<Lhs, Rhs> {
     pub lhs: Lhs,
     pub rhs: Rhs,
     pub kind: Option<Kind>,
-    pub cause: Option<Box<dyn Numeric + Send + Sync + 'static>>,
+    pub cause: Option<Box<dyn Arithmetic + Send + Sync + 'static>>,
 }
 
-impl<Lhs, Rhs> Eq for Arithmetic<Lhs, Rhs>
-where
-    Lhs: Eq,
-    Rhs: Eq,
-{
-}
+// impl<Lhs, Rhs> Eq for Operation<Lhs, Rhs>
+// where
+//     Lhs: Eq,
+//     Rhs: Eq,
+// {
+// }
 
-impl<Lhs, Rhs> PartialEq for Arithmetic<Lhs, Rhs>
-where
-    Lhs: PartialEq,
-    Rhs: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.lhs == other.lhs && self.rhs == other.rhs && self.kind == other.kind
-    }
-}
+// impl<Lhs, Rhs> PartialEq for Operation<Lhs, Rhs>
+// where
+//     Lhs: PartialEq,
+//     Rhs: PartialEq,
+// {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.lhs == other.lhs && self.rhs == other.rhs && self.kind == other.kind
+//     }
+// }
 
 pub trait DivideByZero<Rhs>
 where
     Self: super::Type + Sized + Copy,
     Rhs: super::Type + Sized + Copy + num::Zero,
 {
-    fn divide_by_zero(self) -> Arithmetic<Self, Rhs> {
-        Arithmetic {
+    fn divide_by_zero(self) -> Operation<Self, Rhs> {
+        Operation {
             lhs: self,
             rhs: Rhs::zero(),
             kind: Some(Kind::DivideByZero),
@@ -144,8 +144,8 @@ where
     Self: super::Type + Sized + Copy,
     Lhs: super::Type + Sized + Copy,
 {
-    fn overflows(self, lhs: Lhs) -> Arithmetic<Lhs, Self> {
-        Arithmetic {
+    fn overflows(self, lhs: Lhs) -> Operation<Lhs, Self> {
+        Operation {
             lhs,
             rhs: self,
             kind: Some(Kind::Overflow),
@@ -159,8 +159,8 @@ where
     Self: super::Type + Sized + Copy,
     Lhs: super::Type + Sized + Copy,
 {
-    fn underflows(self, lhs: Lhs) -> Arithmetic<Lhs, Self> {
-        Arithmetic {
+    fn underflows(self, lhs: Lhs) -> Operation<Lhs, Self> {
+        Operation {
             lhs,
             rhs: self,
             kind: Some(Kind::Underflow),
@@ -192,25 +192,25 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Arithmetic as ArithmeticError;
     use crate::arithmetic::{error::Overflow, ops};
 
     #[test]
-    fn numeric_error_is_std_error() {
-        let err: &dyn Numeric = &ops::AddError(10u32.overflows(10u32));
+    fn arithmetic_error_is_std_error() {
+        let err: &dyn ArithmeticError = &ops::AddError(10u32.overflows(10u32));
         let _: &dyn std::error::Error = &err;
     }
 
     #[test]
-    fn numeric_error_partial_eq() {
-        type BoxedNumeric = Box<dyn Numeric + Send + Sync + 'static>;
-        let add_err1: BoxedNumeric = Box::new(ops::AddError(10u32.overflows(10u32)));
-        let add_err2: BoxedNumeric = Box::new(ops::AddError(10u32.overflows(10u64)));
+    fn arithmetic_error_partial_eq() {
+        type BoxedError = Box<dyn ArithmeticError + Send + Sync + 'static>;
+        let add_err1: BoxedError = Box::new(ops::AddError(10u32.overflows(10u32)));
+        let add_err2: BoxedError = Box::new(ops::AddError(10u32.overflows(10u64)));
         assert!(add_err1 == add_err1);
         assert!(add_err1 != add_err2);
 
-        let sub_err1: BoxedNumeric = Box::new(ops::SubError(10u32.overflows(12u32)));
-        let sub_err2: BoxedNumeric = Box::new(ops::SubError(10u32.overflows(15u32)));
+        let sub_err1: BoxedError = Box::new(ops::SubError(10u32.overflows(12u32)));
+        let sub_err2: BoxedError = Box::new(ops::SubError(10u32.overflows(15u32)));
         assert!(sub_err1 == sub_err1);
         assert!(sub_err1 != sub_err2);
     }

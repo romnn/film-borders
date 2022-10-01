@@ -220,12 +220,19 @@ impl ImageBorders {
                 for (c, image) in components {
                     crate::debug!("drawing {:?}", &c);
                     let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                    image_rect = image_rect.extend(3);
+                    image_rect = image_rect.extend(3).unwrap();
                     image_rect = image_rect.clip_to(&border_rect);
                     let image_size = image_rect.size()?;
 
-                    let crop_mode = image_rect.crop_mode(&border_rect);
-                    image.resize_to_fit(image_size, ResizeMode::Cover, crop_mode);
+                    let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
+                    image.resize_to_fit(
+                        image_size,
+                        ResizeMode::Cover,
+                        CropMode::Custom {
+                            x: center_offset.x,
+                            y: center_offset.y,
+                        },
+                    );
 
                     result_image.overlay(image.as_ref(), image_rect.top_left());
                 }
@@ -245,7 +252,7 @@ impl ImageBorders {
                 };
 
                 let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                image_rect = image_rect.extend(3);
+                image_rect = image_rect.extend(3).unwrap();
                 image_rect = image_rect.clip_to(&border_rect);
 
                 primary.resize_to_fit(image_rect.size()?, ResizeMode::Cover, CropMode::Center);
@@ -279,10 +286,8 @@ impl ImageBorders {
 mod tests {
     use super::border::{self, Border};
     #[cfg(feature = "builtin")]
-    use super::ImageFormat;
-    #[cfg(feature = "builtin")]
-    use super::{builtin, types};
-    use super::{ImageBorders, Options};
+    use super::{builtin, ImageFormat};
+    use super::{types, ImageBorders, Options};
     use anyhow::Result;
     #[cfg(feature = "builtin")]
     use std::io::Cursor;

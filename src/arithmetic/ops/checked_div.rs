@@ -3,7 +3,6 @@ use crate::arithmetic::{
     error::{DivideByZero, Overflow, Underflow},
 };
 use num::Zero;
-use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
 pub trait CheckedDiv<Rhs = Self>
@@ -96,18 +95,18 @@ impl_float_checked_div!(f64);
 
 #[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct DivError<Lhs, Rhs>(pub arithmetic::error::Arithmetic<Lhs, Rhs>);
+pub struct DivError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 
-impl<Lhs, Rhs> arithmetic::error::Numeric for DivError<Lhs, Rhs>
+impl<Lhs, Rhs> arithmetic::error::Arithmetic for DivError<Lhs, Rhs>
 where
     Lhs: arithmetic::Type,
     Rhs: arithmetic::Type,
 {
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,

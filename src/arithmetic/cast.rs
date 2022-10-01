@@ -33,10 +33,10 @@ where
 pub struct CastError<Src, Target> {
     pub src: Src,
     pub target: PhantomData<Target>,
-    pub cause: Option<Box<dyn arithmetic::error::Numeric + Send + Sync + 'static>>,
+    pub cause: Option<Box<dyn arithmetic::error::Arithmetic + Send + Sync + 'static>>,
 }
 
-impl<Src, Target> arithmetic::error::Numeric for CastError<Src, Target>
+impl<Src, Target> arithmetic::error::Arithmetic for CastError<Src, Target>
 where
     Src: arithmetic::Type,
     Target: arithmetic::Type,
@@ -45,7 +45,7 @@ where
         self
     }
 
-    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,

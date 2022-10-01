@@ -2,7 +2,6 @@ use crate::arithmetic::{
     self,
     error::{Overflow, Underflow},
 };
-use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
 pub trait CheckedSub<Rhs = Self>
@@ -57,18 +56,18 @@ impl_signed_checked_sub!(i64);
 
 #[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct SubError<Lhs, Rhs>(pub arithmetic::error::Arithmetic<Lhs, Rhs>);
+pub struct SubError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 
-impl<Lhs, Rhs> arithmetic::error::Numeric for SubError<Lhs, Rhs>
+impl<Lhs, Rhs> arithmetic::error::Arithmetic for SubError<Lhs, Rhs>
 where
     Lhs: arithmetic::Type,
     Rhs: arithmetic::Type,
 {
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,

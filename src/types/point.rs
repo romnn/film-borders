@@ -57,8 +57,20 @@ impl Default for Point {
     }
 }
 
+impl From<(i64, i64)> for Point {
+    #[inline]
+    #[must_use]
+    fn from(coords: (i64, i64)) -> Self {
+        Self {
+            x: coords.0,
+            y: coords.1,
+        }
+    }
+}
+
 impl From<Size> for Point {
     #[inline]
+    #[must_use]
     fn from(size: Size) -> Self {
         Self {
             x: i64::from(size.width),
@@ -89,7 +101,7 @@ impl CheckedAdd for Point {
             Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Operation {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -111,7 +123,7 @@ impl CheckedSub for Point {
             Ok::<Self, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::SubError(arithmetic::error::Arithmetic {
+            Err(err) => Err(ops::SubError(arithmetic::error::Operation {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -132,7 +144,7 @@ where
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
         match self.scale_by::<_, Round>(scalar) {
             Ok(point) => Ok(point),
-            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
@@ -154,7 +166,7 @@ where
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(point) => Ok(point),
-            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Operation {
                 lhs: self,
                 rhs: inverse,
                 kind: None,

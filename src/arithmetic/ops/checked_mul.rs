@@ -2,7 +2,6 @@ use crate::arithmetic::{
     self,
     error::{Overflow, Underflow},
 };
-use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
 pub trait CheckedMul<Rhs = Self>
@@ -31,6 +30,7 @@ macro_rules! impl_unsigned_checked_mul {
 }
 
 impl_unsigned_checked_mul!(u32);
+impl_unsigned_checked_mul!(u64);
 
 macro_rules! impl_signed_checked_mul {
     ( $T:ty ) => {
@@ -81,18 +81,18 @@ impl_float_checked_mul!(f64);
 
 #[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct MulError<Lhs, Rhs>(pub arithmetic::error::Arithmetic<Lhs, Rhs>);
+pub struct MulError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 
-impl<Lhs, Rhs> arithmetic::error::Numeric for MulError<Lhs, Rhs>
+impl<Lhs, Rhs> arithmetic::error::Arithmetic for MulError<Lhs, Rhs>
 where
     Lhs: arithmetic::Type,
     Rhs: arithmetic::Type,
 {
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,

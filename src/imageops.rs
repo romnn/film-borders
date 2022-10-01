@@ -1,5 +1,5 @@
-use super::img;
 use super::arithmetic::{ops::CheckedAdd, Cast};
+use super::img;
 use super::types::{Point, Rect, Size};
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
@@ -20,6 +20,10 @@ pub fn find_transparent_components(
     let (w, h) = image.inner.dimensions();
     for y in 0..h {
         for x in 0..w {
+            let point = Point {
+                x: i64::from(x),
+                y: i64::from(y),
+            };
             let p: &Rgba<u8> = image.inner.get_pixel(x, y);
             let alpha = p.channels()[3];
             if alpha >= alpha_threshold {
@@ -29,13 +33,11 @@ pub fn find_transparent_components(
             let mut updated = None;
             // check if this is a new component
             for c in &mut components {
-                if c.contains(i64::from(x), i64::from(y), component_threshold) {
+                let contained = c.contains(&point, component_threshold).unwrap();
+                if contained {
                     // update component
                     updated = Some(*c);
-                    c.extend_to(Point {
-                        x: i64::from(x),
-                        y: i64::from(y),
-                    });
+                    c.extend_to(&point);
                     break;
                 }
             }
@@ -45,9 +47,9 @@ pub fn find_transparent_components(
                     // merge components
                     // this will remove updated component as well
                     components.retain(|other| {
-                        if updated.intersects(other, 0) || other.intersects(&updated, 0) {
-                            updated.extend_to(other.top_left());
-                            updated.extend_to(other.bottom_right());
+                        if updated.has_intersection(other, 0).unwrap_or(false) {
+                            updated.extend_to(&other.top_left());
+                            updated.extend_to(&other.bottom_right());
                             false
                         } else {
                             true

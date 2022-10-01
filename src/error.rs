@@ -23,6 +23,26 @@ where
     }
 }
 
+#[derive(thiserror::Error, PartialEq, Eq, Debug)]
+#[error("arithmetic error: {msg}")]
+pub struct Arithmetic {
+    pub msg: String,
+    pub source: super::arithmetic::Error,
+}
+
+impl super::arithmetic::error::Arithmetic for Arithmetic {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn super::arithmetic::error::Arithmetic) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => PartialEq::eq(self, other),
+            None => false,
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("missing border")]
@@ -40,11 +60,8 @@ pub enum Error {
     #[error("border error: {0}")]
     Border(#[from] super::border::Error),
 
-    #[error("arithmetic error: {msg}")]
-    Arithmetic {
-        msg: String,
-        source: super::arithmetic::Error,
-    },
+    #[error(transparent)]
+    Arithmetic(#[from] Arithmetic),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

@@ -87,7 +87,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
+                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
                     lhs: self,
                     rhs: scalar,
                     kind: None,
@@ -116,7 +116,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
+                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
                     lhs: self,
                     rhs: size,
                     kind: None,
@@ -234,7 +234,7 @@ pub mod abs {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
+                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
                     lhs: self,
                     rhs: scalar,
                     kind: None,
