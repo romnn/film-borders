@@ -1,4 +1,4 @@
-use super::numeric::ops::CheckedSub;
+use super::arithmetic::ops::CheckedSub;
 use super::types::{sides::abs::Sides, Point, Size};
 use super::{defaults, imageops, Error};
 pub use image::ImageFormat;

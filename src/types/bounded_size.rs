@@ -1,5 +1,5 @@
 use super::Size;
-use crate::numeric::OptionOrd;
+use crate::arithmetic::OptionOrd;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 

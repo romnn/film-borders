@@ -1,18 +1,23 @@
 pub mod percent {
-    use crate::numeric::ops::{self, CheckedMul};
-    use crate::numeric::{self, Cast, error};
+    use crate::arithmetic::{
+        self,
+        ops::{self, CheckedMul},
+        Cast,
+    };
     use crate::types::Size;
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
     #[wasm_bindgen]
-    #[derive(Serialize, Deserialize, Debug, Default, Copy, Clone)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Copy, Clone)]
     pub struct Sides {
         pub top: f32,
         pub left: f32,
         pub bottom: f32,
         pub right: f32,
     }
+
+    impl arithmetic::Type for Sides {}
 
     #[wasm_bindgen]
     impl Sides {
@@ -35,8 +40,23 @@ pub mod percent {
         }
     }
 
+    impl std::fmt::Display for Sides {
+        #[inline]
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.debug_struct("SidesPercent")
+                .field("top", &self.top)
+                .field("left", &self.left)
+                .field("bottom", &self.bottom)
+                .field("right", &self.right)
+                .finish()
+        }
+    }
+
     #[inline]
-    fn percent_to_abs(percent: f32, dimension: u32) -> Result<u32, numeric::CastError<f64, u32>> {
+    fn percent_to_abs(
+        percent: f32,
+        dimension: u32,
+    ) -> Result<u32, arithmetic::CastError<f64, u32>> {
         let percent = f64::from(percent).max(0.0);
         let dimension = f64::from(dimension);
         let absolute = if percent <= 1.0 {
@@ -59,7 +79,7 @@ pub mod percent {
                 let left = percent_to_abs(self.left, scalar)?;
                 let bottom = percent_to_abs(self.bottom, scalar)?;
                 let right = percent_to_abs(self.right, scalar)?;
-                Ok::<Self::Output, numeric::Error>(Self::Output {
+                Ok::<Self::Output, arithmetic::Error>(Self::Output {
                     top,
                     left,
                     bottom,
@@ -67,7 +87,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
+                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
                     lhs: self,
                     rhs: scalar,
                     kind: None,
@@ -88,7 +108,7 @@ pub mod percent {
                 let left = percent_to_abs(self.left, size.width)?;
                 let bottom = percent_to_abs(self.bottom, size.height)?;
                 let right = percent_to_abs(self.right, size.width)?;
-                Ok::<Self::Output, numeric::Error>(Self::Output {
+                Ok::<Self::Output, arithmetic::Error>(Self::Output {
                     top,
                     left,
                     bottom,
@@ -96,7 +116,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
+                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
                     lhs: self,
                     rhs: size,
                     kind: None,
@@ -108,17 +128,22 @@ pub mod percent {
 }
 
 pub mod abs {
-    use crate::numeric::ops::{self, CheckedMul};
-    use crate::numeric::{self, Cast, error};
+    use crate::arithmetic::{
+        self,
+        ops::{self, CheckedMul},
+        Cast,
+    };
     use crate::types::Point;
 
-    #[derive(Debug, Default, Copy, Clone)]
+    #[derive(PartialEq, Eq, Debug, Default, Copy, Clone)]
     pub struct Sides {
         pub top: u32,
         pub left: u32,
         pub bottom: u32,
         pub right: u32,
     }
+
+    impl arithmetic::Type for Sides {}
 
     impl Sides {
         #[inline]
@@ -163,9 +188,21 @@ pub mod abs {
         }
     }
 
+    impl std::fmt::Display for Sides {
+        #[inline]
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.debug_struct("Sides")
+                .field("top", &self.top)
+                .field("left", &self.left)
+                .field("bottom", &self.bottom)
+                .field("right", &self.right)
+                .finish()
+        }
+    }
+
     impl<F> CheckedMul<F> for Sides
     where
-        F: numeric::Cast + numeric::Numeric,
+        F: arithmetic::Cast + arithmetic::Type,
     {
         type Output = Self;
         type Error = ops::MulError<Self, F>;
@@ -189,7 +226,7 @@ pub mod abs {
                 let bottom = bottom.ceil().cast::<u32>()?;
                 let right = right.ceil().cast::<u32>()?;
 
-                Ok::<Self::Output, numeric::Error>(Self::Output {
+                Ok::<Self::Output, arithmetic::Error>(Self::Output {
                     top,
                     left,
                     bottom,
@@ -197,7 +234,7 @@ pub mod abs {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
+                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
                     lhs: self,
                     rhs: scalar,
                     kind: None,

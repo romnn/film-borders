@@ -1,4 +1,4 @@
-use super::{error, Numeric};
+use crate::arithmetic;
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
@@ -33,19 +33,19 @@ where
 pub struct CastError<Src, Target> {
     pub src: Src,
     pub target: PhantomData<Target>,
-    pub cause: Option<Box<dyn error::Numeric + Send + Sync + 'static>>,
+    pub cause: Option<Box<dyn arithmetic::error::Numeric + Send + Sync + 'static>>,
 }
 
-impl<Src, Target> error::Numeric for CastError<Src, Target>
+impl<Src, Target> arithmetic::error::Numeric for CastError<Src, Target>
 where
-    Src: Numeric,
-    Target: Numeric,
+    Src: arithmetic::Type,
+    Target: arithmetic::Type,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn eq(&self, other: &dyn error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,
@@ -58,7 +58,7 @@ where
     Src: Debug + Display,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause.as_deref().map(error::AsErr::as_err)
+        self.cause.as_deref().map(arithmetic::error::AsErr::as_err)
     }
 }
 

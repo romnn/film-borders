@@ -1,6 +1,9 @@
 use super::sides::abs::Sides;
-use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
-use crate::numeric::{self, error, Cast, Ceil, Round};
+use crate::arithmetic::{
+    self,
+    ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
+    Cast, Ceil, Round,
+};
 use crate::Error;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -12,7 +15,7 @@ pub struct Size {
     pub height: u32,
 }
 
-impl numeric::Numeric for Size {}
+impl arithmetic::Type for Size {}
 
 #[wasm_bindgen]
 impl Size {
@@ -138,10 +141,10 @@ impl Size {
     }
 
     #[inline]
-    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, numeric::Error>
+    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, arithmetic::Error>
     where
-        R: numeric::RoundingMode,
-        F: numeric::Cast + numeric::Numeric,
+        R: arithmetic::RoundingMode,
+        F: arithmetic::Cast + arithmetic::Type,
     {
         let scalar = scalar.cast::<f64>()?;
         let width = self.width.cast::<f64>()?;
@@ -299,7 +302,6 @@ impl From<(u32, u32)> for Size {
 }
 
 impl TryFrom<super::Point> for Size {
-    // type Error = numeric::CastError<super::Point, Size>;
     type Error = Error;
 
     #[inline]
@@ -307,15 +309,15 @@ impl TryFrom<super::Point> for Size {
         let size = (|| {
             let width = point.x.cast::<u32>()?;
             let height = point.y.cast::<u32>()?;
-            Ok::<Size, numeric::CastError<i64, u32>>(Self { width, height })
+            Ok::<Size, arithmetic::CastError<i64, u32>>(Self { width, height })
         })();
-        size.map_err(|err| numeric::CastError {
+        size.map_err(|err| arithmetic::CastError {
             src: point,
             target: std::marker::PhantomData,
             cause: Some(Box::new(err)),
         })
         .map_err(
-            |err: numeric::CastError<super::Point, Size>| Error::Arithmetic {
+            |err: arithmetic::CastError<super::Point, Size>| Error::Arithmetic {
                 msg: format!("failed to convert {} to size", point),
                 source: err.into(),
             },
@@ -325,7 +327,7 @@ impl TryFrom<super::Point> for Size {
 
 impl<F> CheckedMul<F> for Size
 where
-    F: numeric::Cast + numeric::Numeric,
+    F: arithmetic::Cast + arithmetic::Type,
 {
     type Output = Self;
     type Error = ops::MulError<Self, F>;
@@ -334,7 +336,7 @@ where
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
         match self.scale_by::<_, Round>(scalar) {
             Ok(size) => Ok(size),
-            Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
@@ -346,7 +348,7 @@ where
 
 impl<F> CheckedDiv<F> for Size
 where
-    F: numeric::Cast + numeric::Numeric + num::traits::Inv<Output = F>,
+    F: arithmetic::Cast + arithmetic::Type + num::traits::Inv<Output = F>,
 {
     type Output = Self;
     type Error = ops::DivError<Self, F>;
@@ -356,7 +358,7 @@ where
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(size) => Ok(size),
-            Err(numeric::Error(err)) => Err(ops::DivError(error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs: inverse,
                 kind: None,
@@ -378,7 +380,7 @@ impl CheckedSub<Sides> for Size {
             Ok::<Self, ops::SubError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::SubError(error::Arithmetic {
+            Err(err) => Err(ops::SubError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -400,7 +402,7 @@ impl CheckedAdd<Sides> for Size {
             Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::AddError(error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -422,7 +424,7 @@ impl CheckedAdd for Size {
             Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::AddError(error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -444,7 +446,7 @@ impl CheckedSub for Size {
             Ok::<Self, ops::SubError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
-            Err(err) => Err(ops::SubError(error::Arithmetic {
+            Err(err) => Err(ops::SubError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,

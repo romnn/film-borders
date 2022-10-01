@@ -43,8 +43,7 @@ pub enum Error {
     #[error("arithmetic error: {msg}")]
     Arithmetic {
         msg: String,
-        // #[from]
-        source: super::numeric::Error,
+        source: super::arithmetic::Error,
     },
 
     #[error("io error: {0}")]

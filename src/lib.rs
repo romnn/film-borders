@@ -5,6 +5,7 @@
 #![allow(clippy::unsafe_derive_deserialize)]
 // #![allow(clippy::module_name_repetitions)]
 
+pub mod arithmetic;
 pub mod border;
 #[cfg(feature = "builtin")]
 pub mod builtin;
@@ -13,7 +14,6 @@ pub mod defaults;
 pub mod error;
 pub mod imageops;
 pub mod img;
-mod numeric;
 pub mod options;
 #[cfg(test)]
 mod test;
@@ -30,7 +30,7 @@ pub use options::*;
 pub use sides::{abs::Sides, percent::Sides as SidesPercent};
 pub use types::*;
 
-use numeric::{
+use arithmetic::{
     ops::{CheckedAdd, CheckedMul, CheckedSub},
     Cast,
 };

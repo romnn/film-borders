@@ -1,15 +1,42 @@
 use super::sides::abs::Sides;
 use super::{CropMode, Point, Size};
-use crate::numeric;
-use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedSub};
+use crate::arithmetic;
+use crate::arithmetic::ops::{self, CheckedAdd, CheckedDiv, CheckedSub};
 use crate::Error;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Rect {
     pub top: i64,
     pub left: i64,
     pub bottom: i64,
     pub right: i64,
+}
+
+impl arithmetic::Type for Rect {}
+
+impl std::fmt::Debug for Rect {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Rect")
+            .field("top", &self.top)
+            .field("left", &self.left)
+            .field("bottom", &self.bottom)
+            .field("right", &self.right)
+            .field("size", &self.size().ok())
+            .finish()
+    }
+}
+
+impl std::fmt::Display for Rect {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Rect")
+            .field("top", &self.top)
+            .field("left", &self.left)
+            .field("bottom", &self.bottom)
+            .field("right", &self.right)
+            .finish()
+    }
 }
 
 impl Rect {
@@ -70,7 +97,7 @@ impl Rect {
         let size = self.size()?;
         let rel_center = Point::from(size)
             .checked_div(2.0)
-            .map_err(numeric::Error::from);
+            .map_err(arithmetic::Error::from);
         // .map_err(|err| Error::Arithmetic {
         //     msg: format!("failed to compute center point of size {}", size),
         //     source: err.into(),
@@ -79,7 +106,7 @@ impl Rect {
             .and_then(|rel_center| {
                 self.top_left()
                     .checked_add(rel_center)
-                    .map_err(numeric::Error::from)
+                    .map_err(arithmetic::Error::from)
             })
             .map_err(|err| Error::Arithmetic {
                 msg: format!("failed to compute center point of size {}", size),
@@ -215,7 +242,7 @@ impl CheckedAdd<Point> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(err) => Err(ops::AddError(numeric::error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -236,7 +263,7 @@ impl CheckedSub<Sides> for Rect {
             let left = CheckedAdd::checked_add(self.left, i64::from(rhs.left))?;
             let bottom = CheckedSub::checked_sub(self.bottom, i64::from(rhs.bottom))?;
             let right = CheckedSub::checked_sub(self.right, i64::from(rhs.right))?;
-            Ok::<Self, numeric::Error>(Self {
+            Ok::<Self, arithmetic::Error>(Self {
                 top,
                 left,
                 bottom,
@@ -244,7 +271,7 @@ impl CheckedSub<Sides> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(numeric::Error(err)) => Err(ops::SubError(numeric::error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::SubError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -265,7 +292,7 @@ impl CheckedAdd<Sides> for Rect {
             let left = CheckedSub::checked_sub(self.left, i64::from(rhs.left))?;
             let bottom = CheckedAdd::checked_add(self.bottom, i64::from(rhs.bottom))?;
             let right = CheckedAdd::checked_add(self.right, i64::from(rhs.right))?;
-            Ok::<Self, numeric::Error>(Self {
+            Ok::<Self, arithmetic::Error>(Self {
                 top,
                 left,
                 bottom,
@@ -273,7 +300,7 @@ impl CheckedAdd<Sides> for Rect {
             })
         })() {
             Ok(rect) => Ok(rect),
-            Err(numeric::Error(err)) => Err(ops::AddError(numeric::error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::AddError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,

@@ -1,6 +1,9 @@
 use super::Size;
-use crate::numeric::ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub};
-use crate::numeric::{self, error, Cast, Round};
+use crate::arithmetic::{
+    self,
+    ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
+    Cast, Round,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -11,7 +14,7 @@ pub struct Point {
     pub y: i64,
 }
 
-impl numeric::Numeric for Point {}
+impl arithmetic::Type for Point {}
 
 #[wasm_bindgen]
 impl Point {
@@ -31,10 +34,10 @@ impl Point {
 
 impl Point {
     #[inline]
-    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, numeric::Error>
+    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, arithmetic::Error>
     where
-        R: numeric::RoundingMode,
-        F: numeric::Cast + numeric::Numeric,
+        R: arithmetic::RoundingMode,
+        F: arithmetic::Cast + arithmetic::Type,
     {
         let scalar = scalar.cast::<f64>()?;
         let x = self.x.cast::<f64>()?;
@@ -86,7 +89,7 @@ impl CheckedAdd for Point {
             Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::AddError(error::Arithmetic {
+            Err(err) => Err(ops::AddError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -108,7 +111,7 @@ impl CheckedSub for Point {
             Ok::<Self, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::SubError(error::Arithmetic {
+            Err(err) => Err(ops::SubError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs,
                 kind: None,
@@ -120,7 +123,7 @@ impl CheckedSub for Point {
 
 impl<F> CheckedMul<F> for Point
 where
-    F: numeric::Cast + numeric::Numeric,
+    F: arithmetic::Cast + arithmetic::Type,
 {
     type Output = Self;
     type Error = ops::MulError<Self, F>;
@@ -129,7 +132,7 @@ where
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
         match self.scale_by::<_, Round>(scalar) {
             Ok(point) => Ok(point),
-            Err(numeric::Error(err)) => Err(ops::MulError(error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
@@ -141,7 +144,7 @@ where
 
 impl<F> CheckedDiv<F> for Point
 where
-    F: numeric::Cast + numeric::Numeric + num::traits::Inv<Output = F>,
+    F: arithmetic::Cast + arithmetic::Type + num::traits::Inv<Output = F>,
 {
     type Output = Self;
     type Error = ops::DivError<Self, F>;
@@ -151,7 +154,7 @@ where
         let inverse = scalar.inv();
         match self.scale_by::<_, Round>(inverse) {
             Ok(point) => Ok(point),
-            Err(numeric::Error(err)) => Err(ops::DivError(error::Arithmetic {
+            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Arithmetic {
                 lhs: self,
                 rhs: inverse,
                 kind: None,
@@ -164,9 +167,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::Point;
+    use crate::arithmetic::{ops::CheckedAdd, Ceil, Floor, Round};
     use crate::error::Report;
-    use crate::numeric::ops::CheckedAdd;
-    use crate::numeric::{Ceil, Floor, Round};
     use crate::test::assert_matches_regex;
     use pretty_assertions::assert_eq;
 

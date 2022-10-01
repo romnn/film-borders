@@ -1,6 +1,5 @@
+use super::arithmetic::{ops::CheckedSub, Round};
 use super::img;
-use super::numeric::ops::CheckedSub;
-use super::numeric::Round;
 use super::types::{Point, Size};
 use std::path::Path;
 
@@ -83,7 +82,7 @@ impl Border {
         content_size: Size,
         stich_direction: Option<super::Orientation>,
     ) -> Result<Self, super::Error> {
-        use super::numeric::{
+        use super::arithmetic::{
             ops::{CheckedAdd, CheckedDiv, CheckedMul},
             Cast,
         };

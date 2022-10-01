@@ -1,4 +1,7 @@
-use crate::numeric::{error, ArithmeticOp, Numeric};
+use crate::arithmetic::{
+    self,
+    error::{Overflow, Underflow},
+};
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
@@ -53,18 +56,18 @@ impl_signed_checked_add!(i64);
 
 #[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct AddError<Lhs, Rhs>(pub error::Arithmetic<Lhs, Rhs>);
+pub struct AddError<Lhs, Rhs>(pub arithmetic::error::Arithmetic<Lhs, Rhs>);
 
-impl<Lhs, Rhs> error::Numeric for AddError<Lhs, Rhs>
+impl<Lhs, Rhs> arithmetic::error::Numeric for AddError<Lhs, Rhs>
 where
-    Lhs: Numeric,
-    Rhs: Numeric,
+    Lhs: arithmetic::Type,
+    Rhs: arithmetic::Type,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn eq(&self, other: &dyn error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,
@@ -78,7 +81,10 @@ where
     Rhs: Display + Debug,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0.cause.as_deref().map(error::AsErr::as_err)
+        self.0
+            .cause
+            .as_deref()
+            .map(arithmetic::error::AsErr::as_err)
     }
 }
 

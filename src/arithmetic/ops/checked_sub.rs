@@ -1,4 +1,7 @@
-use crate::numeric::{error, ArithmeticOp, Numeric};
+use crate::arithmetic::{
+    self,
+    error::{Overflow, Underflow},
+};
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
 
@@ -54,18 +57,18 @@ impl_signed_checked_sub!(i64);
 
 #[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct SubError<Lhs, Rhs>(pub error::Arithmetic<Lhs, Rhs>);
+pub struct SubError<Lhs, Rhs>(pub arithmetic::error::Arithmetic<Lhs, Rhs>);
 
-impl<Lhs, Rhs> error::Numeric for SubError<Lhs, Rhs>
+impl<Lhs, Rhs> arithmetic::error::Numeric for SubError<Lhs, Rhs>
 where
-    Lhs: Numeric,
-    Rhs: Numeric,
+    Lhs: arithmetic::Type,
+    Rhs: arithmetic::Type,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn eq(&self, other: &dyn error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,
@@ -82,7 +85,7 @@ where
         self.0
             .cause
             .as_deref()
-            .map(error::AsErr::as_err)
+            .map(arithmetic::error::AsErr::as_err)
     }
 }
 

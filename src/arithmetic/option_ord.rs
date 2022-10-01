@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 pub trait OptionOrd {
     fn cmp(&self, other: &Self) -> Ordering;
+    #[must_use]
     fn min(self, other: Self) -> Self
     where
         Self: Sized;
@@ -11,6 +12,7 @@ impl<T> OptionOrd for Option<T>
 where
     T: Ord,
 {
+    #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         match self {
             Some(v) => match other {
@@ -21,6 +23,8 @@ where
         }
     }
 
+    #[inline]
+    #[must_use]
     fn min(self, other: Self) -> Self
     where
         Self: Sized,

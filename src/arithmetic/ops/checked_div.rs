@@ -1,4 +1,7 @@
-use crate::numeric::{error, ArithmeticOp, Numeric};
+use crate::arithmetic::{
+    self,
+    error::{DivideByZero, Overflow, Underflow},
+};
 use num::Zero;
 use std::any::Any;
 use std::fmt::{self, Debug, Display};
@@ -93,18 +96,18 @@ impl_float_checked_div!(f64);
 
 #[derive(PartialEq, Eq, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct DivError<Lhs, Rhs>(pub error::Arithmetic<Lhs, Rhs>);
+pub struct DivError<Lhs, Rhs>(pub arithmetic::error::Arithmetic<Lhs, Rhs>);
 
-impl<Lhs, Rhs> error::Numeric for DivError<Lhs, Rhs>
+impl<Lhs, Rhs> arithmetic::error::Numeric for DivError<Lhs, Rhs>
 where
-    Lhs: Numeric,
-    Rhs: Numeric,
+    Lhs: arithmetic::Type,
+    Rhs: arithmetic::Type,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn eq(&self, other: &dyn error::Numeric) -> bool {
+    fn eq(&self, other: &dyn arithmetic::error::Numeric) -> bool {
         match other.as_any().downcast_ref::<Self>() {
             Some(other) => PartialEq::eq(self, other),
             None => false,
@@ -118,7 +121,10 @@ where
     Rhs: Display + Debug,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0.cause.as_deref().map(error::AsErr::as_err)
+        self.0
+            .cause
+            .as_deref()
+            .map(arithmetic::error::AsErr::as_err)
     }
 }
 
@@ -131,7 +137,7 @@ where
         match self.0.kind {
             Some(kind) => {
                 let kind = match kind {
-                    error::Kind::DivideByZero => "is undefined".to_string(),
+                    arithmetic::error::Kind::DivideByZero => "is undefined".to_string(),
                     other => other.to_string(),
                 };
                 write!(

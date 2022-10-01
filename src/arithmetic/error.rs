@@ -124,10 +124,76 @@ where
     }
 }
 
+pub trait DivideByZero<Rhs>
+where
+    Self: super::Type + Sized + Copy,
+    Rhs: super::Type + Sized + Copy + num::Zero,
+{
+    fn divide_by_zero(self) -> Arithmetic<Self, Rhs> {
+        Arithmetic {
+            lhs: self,
+            rhs: Rhs::zero(),
+            kind: Some(Kind::DivideByZero),
+            cause: None,
+        }
+    }
+}
+
+pub trait Overflow<Lhs>
+where
+    Self: super::Type + Sized + Copy,
+    Lhs: super::Type + Sized + Copy,
+{
+    fn overflows(self, lhs: Lhs) -> Arithmetic<Lhs, Self> {
+        Arithmetic {
+            lhs,
+            rhs: self,
+            kind: Some(Kind::Overflow),
+            cause: None,
+        }
+    }
+}
+
+pub trait Underflow<Lhs>
+where
+    Self: super::Type + Sized + Copy,
+    Lhs: super::Type + Sized + Copy,
+{
+    fn underflows(self, lhs: Lhs) -> Arithmetic<Lhs, Self> {
+        Arithmetic {
+            lhs,
+            rhs: self,
+            kind: Some(Kind::Underflow),
+            cause: None,
+        }
+    }
+}
+
+impl<L, R> Underflow<L> for R
+where
+    L: super::Type + Sized + Copy,
+    R: super::Type + Sized + Copy,
+{
+}
+
+impl<L, R> Overflow<L> for R
+where
+    L: super::Type + Sized + Copy,
+    R: super::Type + Sized + Copy,
+{
+}
+
+impl<R, L> DivideByZero<R> for L
+where
+    L: super::Type + Sized + Copy,
+    R: super::Type + Sized + Copy + num::Zero,
+{
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::numeric::{ops, ArithmeticOp};
+    use crate::arithmetic::{error::Overflow, ops};
 
     #[test]
     fn numeric_error_is_std_error() {
