@@ -56,11 +56,12 @@ name = "benches"
 harness = false
 
 [features]
-default = []
+default = ["rayon"]
 builtin = []
+rayon = ["dep:rayon"]
 wasm = [
   "builtin",
-  "console_error_panic_hook",
+  "dep:console_error_panic_hook",
   "chrono/wasmbind"
 ]
 
@@ -86,6 +87,7 @@ cfg-if = "0.1"
 anyhow = "1"
 num = "0.4"
 approx = "0.5"
+rayon = { version = "1.5", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1"

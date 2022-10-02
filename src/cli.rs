@@ -89,7 +89,7 @@ fn main() {
     let images = options
         .images
         .iter()
-        .map(img::Image::open)
+        .map(|image_path| img::Image::open(image_path).map_err(Error::from))
         .collect::<Result<Vec<img::Image>, Error>>();
 
     match images.and_then(ImageBorders::new) {
@@ -159,8 +159,10 @@ fn main() {
             match borders
                 .add_border(border, &border_options)
                 .and_then(|result| match options.output {
-                    Some(output) => result.save_with_filename(output, options.quality),
-                    None => result.save(options.quality),
+                    Some(output) => result
+                        .save_with_filename(output, options.quality)
+                        .map_err(Error::from),
+                    None => result.save(options.quality).map_err(Error::from),
                 }) {
                 Ok(_) => {
                     println!(

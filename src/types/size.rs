@@ -2,7 +2,7 @@ use super::sides::abs::Sides;
 use crate::arithmetic::{
     self,
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
-    Cast, Ceil, Round,
+    Cast, Ceil, Clamp, Round,
 };
 use crate::error;
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,13 @@ impl Size {
                 f64::min(width_ratio, height_ratio),
             ),
         }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn contains(&self, point: impl Into<super::Point>) -> bool {
+        let rect: super::Rect = (*self).into();
+        rect.contains(&point.into())
     }
 
     #[inline]
@@ -122,21 +129,6 @@ impl Size {
             left: top_left.x,
             bottom: bottom_right.y,
             right: bottom_right.x,
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn clamp<S1, S2>(self, min: S1, max: S2) -> Self
-    where
-        S1: Into<Size>,
-        S2: Into<Size>,
-    {
-        let min: Size = min.into();
-        let max: Size = max.into();
-        Self {
-            width: self.width.clamp(min.width, max.width),
-            height: self.height.clamp(min.height, max.height),
         }
     }
 
@@ -322,6 +314,22 @@ impl TryFrom<super::Point> for Size {
                 source: err.into(),
             },
         )
+    }
+}
+
+impl Clamp for Size {
+    #[inline]
+    fn clamp<MIN, MAX>(self, min: MIN, max: MAX) -> Self
+    where
+        MIN: Into<Self>,
+        MAX: Into<Self>,
+    {
+        let min = min.into();
+        let max = max.into();
+        Self {
+            width: num::clamp(self.width, min.width, max.width),
+            height: num::clamp(self.height, min.height, max.height),
+        }
     }
 }
 

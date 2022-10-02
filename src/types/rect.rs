@@ -2,8 +2,14 @@ use super::{sides::abs::Sides, Point, Size};
 use crate::arithmetic::{
     self,
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
+    Cast, CastError,
 };
 use crate::error;
+
+struct Bounds {
+    x: std::ops::RangeInclusive<i64>,
+    y: std::ops::RangeInclusive<i64>,
+}
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Rect {
@@ -61,6 +67,36 @@ impl Rect {
             msg: format!("failed to compute pixel count for size {}", size),
             source: err.into(),
         })
+    }
+
+    #[inline]
+    pub fn x_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
+        match (|| {
+            let left = self.left.cast::<u32>()?;
+            let right = self.right.cast::<u32>()?;
+            Ok::<_, CastError<i64, u32>>(left..right)
+        })() {
+            Ok(range) => Ok(range),
+            Err(err) => Err(error::Arithmetic {
+                msg: format!("failed to get x coordinate range for {}", self),
+                source: err.into(),
+            }),
+        }
+    }
+
+    #[inline]
+    pub fn y_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
+        match (|| {
+            let top = self.top.cast::<u32>()?;
+            let bottom = self.bottom.cast::<u32>()?;
+            Ok::<_, CastError<i64, u32>>(top..bottom)
+        })() {
+            Ok(range) => Ok(range),
+            Err(err) => Err(error::Arithmetic {
+                msg: format!("failed to get y coordinate range for {}", self),
+                source: err.into(),
+            }),
+        }
     }
 
     #[inline]
@@ -153,16 +189,34 @@ impl Rect {
     }
 
     #[inline]
-    pub fn has_intersection(&self, other: &Self, padding: i64) -> Result<bool, error::Arithmetic> {
-        let self_intersects_other = self.intersects(other, padding)?;
-        let other_intersects_self = other.intersects(self, padding)?;
+    pub fn has_intersection(&self, other: &Self) -> bool {
+        let self_intersects_other = self.intersects(other);
+        let other_intersects_self = other.intersects(self);
+        self_intersects_other || other_intersects_self
+    }
+
+    #[inline]
+    pub fn has_intersection_padded(
+        &self,
+        other: &Self,
+        padding: i64,
+    ) -> Result<bool, error::Arithmetic> {
+        let self_intersects_other = self.intersects_padded(other, padding)?;
+        let other_intersects_self = other.intersects_padded(self, padding)?;
         Ok(self_intersects_other || other_intersects_self)
     }
 
     #[inline]
-    pub fn intersects(&self, other: &Self, padding: i64) -> Result<bool, error::Arithmetic> {
-        let contains_tl = self.contains(&other.top_left(), padding)?;
-        let contains_br = self.contains(&other.bottom_right(), padding)?;
+    pub fn intersects(&self, other: &Self) -> bool {
+        let contains_tl = self.contains(&other.top_left());
+        let contains_br = self.contains(&other.bottom_right());
+        contains_tl || contains_br
+    }
+
+    #[inline]
+    pub fn intersects_padded(&self, other: &Self, padding: i64) -> Result<bool, error::Arithmetic> {
+        let contains_tl = self.contains_padded(&other.top_left(), padding)?;
+        let contains_br = self.contains_padded(&other.bottom_right(), padding)?;
         Ok(contains_tl || contains_br)
     }
 
@@ -184,12 +238,16 @@ impl Rect {
     }
 
     #[inline]
-    pub fn contains(&self, point: &Point, padding: i64) -> Result<bool, error::Arithmetic> {
-        struct Bounds {
-            x: std::ops::RangeInclusive<i64>,
-            y: std::ops::RangeInclusive<i64>,
-        }
+    pub fn contains(&self, point: &Point) -> bool {
+        let bounds = Bounds {
+            x: self.left..=self.right,
+            y: self.top..=self.bottom,
+        };
+        bounds.x.contains(&point.x) && bounds.y.contains(&point.y)
+    }
 
+    #[inline]
+    pub fn contains_padded(&self, point: &Point, padding: i64) -> Result<bool, error::Arithmetic> {
         let bounds = (|| {
             let y_top = CheckedSub::checked_sub(self.top, padding)?;
             let x_left = CheckedSub::checked_sub(self.left, padding)?;
@@ -222,6 +280,31 @@ impl Rect {
             bottom,
             right,
         }
+    }
+}
+
+impl From<Size> for Rect {
+    fn from(size: Size) -> Self {
+        // let top_left = Point::origin();
+        // let bottom_right = Point {
+        //     // Safety: this can never underflow because size is u32
+        //     x: i64::from(size.width), //  - 1,
+        //     y: i64::from(size.height), // - 1,
+        // };
+        Self::from_points((0, 0), size)
+    }
+}
+
+impl From<Point> for Rect {
+    fn from(point: Point) -> Self {
+        Self::from_points(point, point)
+        // let Point { x, y } = point;
+        // Self {
+        //     top: y,
+        //     left: x,
+        //     bottom: y,
+        //     right: x,
+        // }
     }
 }
 

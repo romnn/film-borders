@@ -1,4 +1,4 @@
-// #![allow(warnings)]
+#![allow(warnings)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
@@ -173,18 +173,20 @@ impl ImageBorders {
         #[cfg(debug_assertions)]
         result_image.fill_rect(
             Color::rgba(0, 0, 255, 100),
-            content_rect.top_left(),
-            content_rect.size()?,
+            &content_rect,
+            // content_rect.top_left(),
+            // content_rect.size()?,
             FillMode::Blend,
-        );
+        )?;
 
         let content_rect_sub_margin = content_rect.checked_sub(margin).unwrap();
         result_image.fill_rect(
             options.frame_color,
-            content_rect_sub_margin.top_left(),
-            content_rect_sub_margin.size()?,
+            &content_rect_sub_margin,
+            // content_rect_sub_margin.top_left(),
+            // content_rect_sub_margin.size()?,
             FillMode::Set,
-        );
+        )?;
 
         let border_rect = content_rect_sub_margin.checked_sub(frame_width).unwrap();
         crate::debug!(&border_rect);
@@ -193,8 +195,9 @@ impl ImageBorders {
         #[cfg(debug_assertions)]
         result_image.fill_rect(
             Color::rgba(0, 255, 0, 100),
-            border_rect.top_left(),
-            border_size,
+            &border_rect,
+            // border_rect.top_left(),
+            // border_size,
             FillMode::Blend,
         );
         let default_component = Rect::new(Point::origin(), border_size)?;
@@ -234,11 +237,11 @@ impl ImageBorders {
                         },
                     );
 
-                    result_image.overlay(image.as_ref(), image_rect.top_left());
+                    result_image.overlay(image, image_rect.top_left());
                 }
 
                 if let Some(border) = border {
-                    result_image.overlay(border.as_ref(), border_rect.top_left());
+                    result_image.overlay(&*border, border_rect.top_left());
                 }
             }
             FitMode::Border => {
@@ -257,9 +260,9 @@ impl ImageBorders {
 
                 primary.resize_to_fit(image_rect.size()?, ResizeMode::Cover, CropMode::Center);
 
-                result_image.overlay(primary.as_ref(), image_rect.top_left());
+                result_image.overlay(&*primary, image_rect.top_left());
                 if let Some(border) = border {
-                    result_image.overlay(border.as_ref(), border_rect.top_left());
+                    result_image.overlay(&*border, border_rect.top_left());
                 }
             }
         };
@@ -272,8 +275,9 @@ impl ImageBorders {
             let preview_rect = output_size.center(preview_size);
             result_image.fill_rect(
                 Color::rgba(255, 0, 0, 50),
-                preview_rect.top_left(),
-                preview_rect.size()?,
+                &preview_rect,
+                // preview_rect.top_left(),
+                // preview_rect.size()?,
                 FillMode::Blend,
             );
         }

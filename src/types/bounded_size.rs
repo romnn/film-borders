@@ -1,5 +1,5 @@
 use super::Size;
-use crate::arithmetic::OptionOrd;
+use crate::arithmetic::{ClampMin, OptionOrd};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -20,12 +20,16 @@ impl From<Size> for BoundedSize {
     }
 }
 
-impl BoundedSize {
+impl ClampMin for BoundedSize {
     #[inline]
     #[must_use]
-    pub fn clamp_min(self, other: Self) -> Self {
-        let width = OptionOrd::min(self.width, other.width);
-        let height = OptionOrd::min(self.height, other.height);
+    fn clamp_min<MIN>(self, min: MIN) -> Self
+    where
+        MIN: Into<Self>,
+    {
+        let min = min.into();
+        let width = OptionOrd::min(self.width, min.width);
+        let height = OptionOrd::min(self.height, min.height);
         Self { width, height }
     }
 }

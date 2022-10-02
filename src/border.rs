@@ -1,6 +1,6 @@
 use super::arithmetic::{ops::CheckedSub, Round};
 use super::img;
-use super::types::{Point, Size};
+use super::types::{Rect, Point, Size};
 use std::path::Path;
 
 #[derive(thiserror::Error, Debug)]
@@ -160,18 +160,20 @@ impl Border {
         {
             use super::imageops::FillMode;
             new_border.fill(super::Color::rgba(0, 100, 0, 255), FillMode::Set);
+            // todo: this might be wrong
             new_border.fill_rect(
                 super::Color::clear(),
-                border.content_rect().top_left(),
-                target_content_size,
+                border.content_rect(),
+                // border.content_rect().top_left(),
+                // target_content_size,
                 FillMode::Set,
             );
         }
 
         // draw top patch
-        let mut border_top = border.inner.clone();
+        let mut border_top: img::Image = (*border).clone();
         border_top.crop(top_patch.top_left(), top_patch.bottom_right());
-        new_border.overlay(border_top.as_ref(), Point::origin());
+        new_border.overlay(&border_top, Point::origin());
 
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
@@ -182,7 +184,7 @@ impl Border {
         let bottom_patch_top_left: Point = Point::from(new_border_size)
             .checked_sub(bottom_patch_size.into())
             .unwrap();
-        new_border.overlay(border_bottom.as_ref(), bottom_patch_top_left);
+        new_border.overlay(&border_bottom, bottom_patch_top_left);
 
         // draw patches in between
         let fill_height = i64::from(new_border_size.height)
@@ -256,7 +258,7 @@ impl Border {
                     y: patch_offset_y,
                 })
                 .unwrap();
-            new_border.overlay(border_overlay_patch.as_ref(), patch_top_left);
+            new_border.overlay(&border_overlay_patch, patch_top_left);
         }
 
         let mut new_border = Self::from_image(new_border, border.options)?;
@@ -275,14 +277,14 @@ impl Border {
             &self.inner,
             options.alpha_threshold,
             options.transparent_component_threshold,
-        );
+        )
+        .unwrap();
 
         if self.transparent_components.is_empty() {
             return Err(Error::BadTransparency(self.transparent_components.clone()));
         }
         self.transparent_components
             .sort_by_key(|b| std::cmp::Reverse(b.pixel_count().unwrap()));
-        // .sort_by(|a, b| b.pixel_count().unwrap().cmp(&a.pixel_count().unwrap()));
         Ok(())
     }
 
@@ -321,9 +323,8 @@ impl Border {
         &mut self,
         orientation: super::Orientation,
     ) -> Result<(), super::Error> {
-        if self.inner.orientation() != orientation {
-            self.rotate(&super::Rotation::Rotate90)?;
-        }
+        self.inner.rotate_to_orientation(orientation);
+        self.compute_transparent_components(self.options)?;
         Ok(())
     }
 
@@ -369,24 +370,38 @@ impl Border {
         &self.transparent_components
     }
 
-    #[inline]
-    #[must_use]
-    pub fn size(&self) -> Size {
-        self.inner.size()
-    }
+    // #[inline]
+    // #[must_use]
+    // pub fn size(&self) -> Size {
+    //     self.inner.size()
+    // }
 
-    #[inline]
-    #[must_use]
-    pub fn orientation(&self) -> super::Orientation {
-        self.size().orientation()
+    // #[inline]
+    // #[must_use]
+    // pub fn orientation(&self) -> super::Orientation {
+    //     self.size().orientation()
+    // }
+}
+
+impl std::ops::Deref for Border {
+    type Target = img::Image;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
-impl AsRef<image::RgbaImage> for Border {
-    fn as_ref(&self) -> &image::RgbaImage {
-        self.inner.as_ref()
+impl std::ops::DerefMut for Border {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
+
+// impl AsRef<image::RgbaImage> for Border {
+//     fn as_ref(&self) -> &image::RgbaImage {
+//         self.inner.as_ref()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -412,12 +427,17 @@ mod tests {
                 y: c.bottom,
                 x: c.right,
             };
-            let size: Size = bottom_right
-                .checked_sub(top_left)
-                .unwrap()
-                .try_into()
-                .unwrap();
-            border.fill_rect(red, top_left, size, FillMode::Blend);
+            // let size: Size = bottom_right
+            //     .checked_sub(top_left)
+            //     .unwrap()
+            //     .try_into()
+            //     .unwrap();
+            border.fill_rect(
+                red,
+                &Rect::from_points(top_left, bottom_right),
+                FillMode::Blend,
+            );
+            // border.fill_rect(red, top_left, size, FillMode::Blend);
         }
         border.save_with_filename(output.as_ref(), None)?;
         Ok(())

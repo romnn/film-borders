@@ -51,11 +51,8 @@ pub enum Error {
     #[error("missing input image")]
     MissingImage,
 
-    #[error("missing output path")]
-    MissingOutputFile,
-
     #[error("image error: {0}")]
-    Image(#[from] image::error::ImageError),
+    Image(#[from] super::img::Error),
 
     #[error("border error: {0}")]
     Border(#[from] super::border::Error),

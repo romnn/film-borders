@@ -358,6 +358,7 @@ dependencies = [
  "lazy_static",
  "num",
  "pretty_assertions",
+ "rayon",
  "regex",
  "serde",
  "serde_json",

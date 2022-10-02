@@ -2,7 +2,7 @@ use super::Size;
 use crate::arithmetic::{
     self,
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
-    Cast, Round,
+    Cast, Clamp, Round,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -86,6 +86,21 @@ impl std::fmt::Display for Point {
             .field("x", &self.x)
             .field("y", &self.y)
             .finish()
+    }
+}
+
+impl Clamp for Point {
+    fn clamp<MIN, MAX>(self, min: MIN, max: MAX) -> Self
+    where
+        MIN: Into<Self>,
+        MAX: Into<Self>,
+    {
+        let min = min.into();
+        let max = max.into();
+        Self {
+            x: num::clamp(self.x, min.x, max.x),
+            y: num::clamp(self.y, min.y, max.y),
+        }
     }
 }
 

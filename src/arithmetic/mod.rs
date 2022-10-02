@@ -6,6 +6,7 @@ pub mod option_ord;
 pub mod round;
 
 pub use cast::{Cast, CastError};
+pub use clamp::{Clamp, ClampMin};
 pub use error::Error;
 pub use option_ord::OptionOrd;
 pub use round::{Ceil, Floor, Round, RoundingMode};

@@ -1,10 +1,29 @@
 use super::arithmetic::ops::CheckedSub;
-use super::types::{sides::abs::Sides, Point, Size};
-use super::{defaults, imageops, Error};
+use super::types::{sides::abs::Sides, Point, Rect, Size};
+use super::{defaults, error, imageops};
 pub use image::ImageFormat;
+use std::borrow::Borrow;
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("point {point} exceeds image bounds {bounds}")]
+    OutOfBounds { point: Point, bounds: Rect },
+
+    #[error("missing output file path")]
+    MissingOutputPath,
+
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Image(#[from] image::error::ImageError),
+}
 
 #[derive(Clone)]
 pub struct Image {
@@ -12,26 +31,21 @@ pub struct Image {
     pub(crate) path: Option<PathBuf>,
 }
 
-impl AsRef<image::RgbaImage> for Image {
-    #[inline]
-    fn as_ref(&self) -> &image::RgbaImage {
+impl std::ops::Deref for Image {
+    type Target = image::RgbaImage;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
+impl std::ops::DerefMut for Image {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 impl Image {
-    #[inline]
-    #[must_use]
-    pub fn data(&self) -> image::RgbaImage {
-        self.inner.clone()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn as_raw(&self) -> &[u8] {
-        self.inner.as_raw()
-    }
-
     #[inline]
     #[must_use]
     pub fn size(&self) -> Size {
@@ -88,18 +102,37 @@ impl Image {
 
     #[inline]
     pub fn fill<C: Into<image::Rgba<u8>>>(&mut self, color: C, mode: imageops::FillMode) {
-        let size = self.size();
-        self.fill_rect(color.into(), Point::origin(), size, mode);
+        let rect: Rect = self.size().into();
+        self.fill_rect(color.into(), &rect, mode);
     }
 
     #[inline]
-    pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S, mode: imageops::FillMode)
-    where
-        TL: Into<Point>,
-        S: Into<Size>,
-        C: Into<image::Rgba<u8>>,
-    {
-        imageops::fill_rect(self, color.into(), top_left.into(), size.into(), mode);
+    pub fn fill_rect(
+        &mut self,
+        color: impl Into<image::Rgba<u8>>,
+        rect: &Rect,
+        // rect: impl Borrow<Rect>,
+        // top_left: impl Into<Point>,
+        // size: impl Into<Size>,
+        mode: imageops::FillMode,
+    ) -> Result<(), Error> {
+        let color = color.into();
+        // let rect = rect.borrow();
+        // let rect: &Rect = (*rect).into();
+        // #[inline]
+        // pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S, mode: imageops::FillMode)
+        // where
+        //     TL: Into<Point>,
+        //     S: Into<Size>,
+        //     C: Into<image::Rgba<u8>>,
+        // {
+        imageops::fill_rect(self, color, rect, mode)
+        // top_left.into(), size.into(), mode)
+        // .map_err(|err| error::Arithmetic {
+        //     msg: format!("failed to fill {} with color {:?}", rect, color),
+        //     source: err,
+        // })
+        // Ok(())
     }
 
     #[inline]
@@ -155,13 +188,13 @@ impl Image {
     }
 
     #[inline]
-    pub fn overlay<O, P>(&mut self, overlay_image: &O, offset: P)
-    where
-        O: image::GenericImageView<Pixel = image::Rgba<u8>>,
-        P: Into<Point>,
-    {
+    pub fn overlay(
+        &mut self,
+        overlay_image: &impl std::ops::Deref<Target = image::RgbaImage>,
+        offset: impl Into<Point>,
+    ) {
         let offset: Point = offset.into();
-        imageops::overlay(&mut self.inner, overlay_image, offset.x, offset.y);
+        imageops::overlay(&mut self.inner, &**overlay_image, offset.x, offset.y);
     }
 
     #[inline]
@@ -205,6 +238,13 @@ impl Image {
     }
 
     #[inline]
+    pub fn rotate_to_orientation(&mut self, orientation: super::Orientation) {
+        if self.orientation() != orientation {
+            self.rotate(&super::Rotation::Rotate90);
+        }
+    }
+
+    #[inline]
     pub fn save_with_filename(
         &self,
         path: impl AsRef<Path>,
@@ -228,7 +268,7 @@ impl Image {
     #[inline]
     pub fn save(&self, quality: impl Into<Option<u8>>) -> Result<(), Error> {
         let (default_output, _) = self.output_path(None);
-        let path = default_output.ok_or(Error::MissingOutputFile)?;
+        let path = default_output.ok_or(Error::MissingOutputPath)?;
         self.save_with_filename(path, quality)
     }
 
