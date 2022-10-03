@@ -1,6 +1,6 @@
 use super::arithmetic::{self, ops::CheckedAdd, Cast, Clamp};
-use super::img;
 use super::types::{Point, Rect, Size};
+use super::{error, img};
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
 #[cfg(feature = "rayon")]
@@ -14,7 +14,8 @@ pub fn find_transparent_components(
     component_threshold: i64,
 ) -> Result<Vec<Rect>, arithmetic::Error> {
     let mut components: Vec<Rect> = Vec::new();
-    let alpha_threshold: u8 = (alpha_threshold * 255.0).clamp(0.0, 255.0).cast::<u8>()?;
+    // .clamp(0.0, 255.0)
+    let alpha_threshold: u8 = (alpha_threshold * 255.0).cast::<u8>()?;
 
     let (w, h) = image.inner.dimensions();
     for y in 0..h {
@@ -75,29 +76,10 @@ pub enum FillMode {
 pub fn fill_rect(
     image: &mut img::Image,
     color: image::Rgba<u8>,
-    // rect: &Rect,
-    rect: &img::ImageRect,
+    rect: &Rect,
     mode: FillMode,
 ) -> Result<(), img::Error> {
-    // todo: still check the bounds please
-
-    // let image_size =
-    // let image_rect: Rect = image.size().into();
-
-    // if !image_rect.contains(&rect.top_left()) {
-    //     return Err(img::Error::OutOfBounds {
-    //         bounds: image_rect,
-    //         point: rect.top_left(),
-    //     });
-    // }
-
-    // if !image_rect.contains(&rect.bottom_right()) {
-    //     return Err(img::Error::OutOfBounds {
-    //         bounds: image_rect,
-    //         point: rect.bottom_right(),
-    //     });
-    // }
-
+    let rect = image.subimage_rect(rect)?;
     for x in rect.x_coords() {
         for y in rect.y_coords() {
             let p = image.inner.get_pixel_mut(x, y);
@@ -128,15 +110,8 @@ pub fn fade_out(
     };
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
-    // let rect = Rect::from_points(start, end);
     let rect = image.subimage_rect(&Rect::from_points(start, end))?;
     let size = rect.size();
-    let dx = rect.left;
-    let dy = rect.top;
-    // let top_left = Size::try_from(rect.top_left()).unwrap();
-    // let top_left = Size::try_from(rect.top_left()).unwrap();
-    // let dx = top_left.width;
-    // let dy = top_left.height;
 
     let (w, h) = match axis {
         Axis::X => (size.height, size.width),
@@ -145,7 +120,13 @@ pub fn fade_out(
     for y in 0..h {
         let mut frac = f64::from(y) / f64::from(h);
         frac = (switch_direction - frac).abs();
-        let alpha = (255.0 * frac).cast::<u8>().unwrap();
+        let alpha = 255.0 * frac;
+        let alpha = alpha.cast::<u8>().map_err(|err| {
+            img::Error::Arithmetic(error::Arithmetic {
+                msg: format!("failed to convert {} to alpha value", alpha),
+                source: err.into(),
+            })
+        })?;
 
         for x in 0..w {
             let (x, y) = match axis {
@@ -153,7 +134,10 @@ pub fn fade_out(
                 Axis::Y => (x, y),
             };
 
-            let channels = image.inner.get_pixel_mut(dx + x, dy + y).channels_mut();
+            let channels = image
+                .inner
+                .get_pixel_mut(rect.left + x, rect.top + y)
+                .channels_mut();
             channels[3] = channels[3].min(alpha);
         }
     }

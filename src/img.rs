@@ -114,8 +114,7 @@ impl Image {
         mode: imageops::FillMode,
     ) -> Result<(), Error> {
         let color = color.into();
-        let rect = self.subimage_rect(rect)?;
-        imageops::fill_rect(self, color, &rect, mode)
+        imageops::fill_rect(self, color, rect, mode)
     }
 
     #[inline]

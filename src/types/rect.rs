@@ -131,36 +131,6 @@ impl Rect {
         })
     }
 
-    // #[inline]
-    // pub fn x_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
-    //     match (|| {
-    //         let left = self.left.cast::<u32>()?;
-    //         let right = self.right.cast::<u32>()?;
-    //         Ok::<_, CastError<i64, u32>>(left..right)
-    //     })() {
-    //         Ok(range) => Ok(range),
-    //         Err(err) => Err(error::Arithmetic {
-    //             msg: format!("failed to get x coordinate range for {}", self),
-    //             source: err.into(),
-    //         }),
-    //     }
-    // }
-
-    // #[inline]
-    // pub fn y_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
-    //     match (|| {
-    //         let top = self.top.cast::<u32>()?;
-    //         let bottom = self.bottom.cast::<u32>()?;
-    //         Ok::<_, CastError<i64, u32>>(top..bottom)
-    //     })() {
-    //         Ok(range) => Ok(range),
-    //         Err(err) => Err(error::Arithmetic {
-    //             msg: format!("failed to get y coordinate range for {}", self),
-    //             source: err.into(),
-    //         }),
-    //     }
-    // }
-
     #[inline]
     pub fn size(&self) -> Result<Size, error::Arithmetic> {
         match (|| {
@@ -179,22 +149,6 @@ impl Rect {
                 source: err.into(),
             }),
         }
-        // Size {
-        //     width: self.right - self.left,
-        //     height: self.bottom - self.top,
-        // }
-        // let top_left = self.top_left();
-        // let bottom_right = self.bottom_right();
-        // let size = bottom_right
-        //     .checked_sub(top_left)
-        //     .map_err(|err| error::Arithmetic {
-        //         msg: format!(
-        //             "failed to compute size from top right {} and bottom left {}",
-        //             top_left, bottom_right
-        //         ),
-        //         source: err.into(),
-        //     })?;
-        // size.try_into()
     }
 
     #[inline]
