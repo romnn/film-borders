@@ -34,7 +34,7 @@ use arithmetic::{
     ops::{CheckedAdd, CheckedMul, CheckedSub},
     Cast, Round,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct ImageBorders {
     images: Vec<img::Image>,
@@ -69,7 +69,7 @@ impl ImageBorders {
     ///
     /// If the image can not be opened, an error is returned
     ///
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self, Error> {
         let img = Image::open(path).unwrap();
         Ok(Self::single(img))
     }

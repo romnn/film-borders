@@ -5,60 +5,6 @@ use crate::arithmetic::{
     Cast, CastError,
 };
 
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to create rect at {top_left} of size {size}")]
-pub struct Error {
-    top_left: Point,
-    size: Size,
-    source: ops::AddError<Point, Point>,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute pixel count for {rect}")]
-pub struct PixelCountError {
-    rect: Rect,
-    source: arithmetic::Error,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute center point of {rect}")]
-pub struct CenterError {
-    rect: Rect,
-    source: arithmetic::Error,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-pub enum CenterOffsetErrorSource {
-    #[error(transparent)]
-    Center(#[from] CenterError),
-
-    #[error(transparent)]
-    Arithmetic(#[from] ops::SubError<Point, Point>),
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute center offset from {parent} to {child}")]
-pub struct CenterOffsetError {
-    parent: Rect,
-    child: Rect,
-    source: CenterOffsetErrorSource,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute size for {rect}")]
-pub struct SizeError {
-    rect: Rect,
-    source: CastError<i64, u32>,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to add padding of {padding} to {rect}")]
-pub struct PadError {
-    rect: Rect,
-    padding: u32,
-    source: ops::AddError<Rect, Sides>,
-}
-
 struct Bounds {
     x: std::ops::RangeInclusive<i64>,
     y: std::ops::RangeInclusive<i64>,
@@ -319,30 +265,12 @@ impl Rect {
         self_intersects_other || other_intersects_self
     }
 
-    // #[inline]
-    // pub fn has_intersection_padded(
-    //     &self,
-    //     other: &Self,
-    //     padding: i64,
-    // ) -> Result<bool, error::Arithmetic> {
-    //     let self_intersects_other = self.intersects_padded(other, padding)?;
-    //     let other_intersects_self = other.intersects_padded(self, padding)?;
-    //     Ok(self_intersects_other || other_intersects_self)
-    // }
-
     #[inline]
     pub fn intersects(&self, other: &Self) -> bool {
         let contains_tl = self.contains(&other.top_left());
         let contains_br = self.contains(&other.bottom_right());
         contains_tl || contains_br
     }
-
-    // #[inline]
-    // pub fn intersects_padded(&self, other: &Self, padding: i64) -> Result<bool, error::Arithmetic> {
-    //     let contains_tl = self.contains_padded(&other.top_left(), padding)?;
-    //     let contains_br = self.contains_padded(&other.bottom_right(), padding)?;
-    //     Ok(contains_tl || contains_br)
-    // }
 
     #[inline]
     pub fn extend_to(&mut self, point: &Point) {
@@ -351,36 +279,6 @@ impl Rect {
         self.bottom = self.bottom.max(point.y);
         self.right = self.right.max(point.x);
     }
-
-    // #[inline]
-    // pub fn extend(self, value: u32) -> Result<Self, error::Arithmetic> {
-    //     self.checked_add(Sides::uniform(value))
-    //         .map_err(|err| error::Arithmetic {
-    //             msg: format!("failed to extend {} by {}", self, value),
-    //             source: err.into(),
-    //         })
-    // }
-
-    // #[inline]
-    // pub fn contains_padded(&self, point: &Point, padding: i64) -> Result<bool, error::Arithmetic> {
-    //     let bounds = (|| {
-    //         let y_top = CheckedSub::checked_sub(self.top, padding)?;
-    //         let x_left = CheckedSub::checked_sub(self.left, padding)?;
-    //         let y_bottom = CheckedAdd::checked_add(self.bottom, padding)?;
-    //         let x_right = CheckedAdd::checked_add(self.right, padding)?;
-    //         Ok::<Bounds, arithmetic::Error>(Bounds {
-    //             x: x_left..=x_right,
-    //             y: y_top..=y_bottom,
-    //         })
-    //     })();
-
-    //     let bounds = bounds.map_err(|err| error::Arithmetic {
-    //         msg: format!("failed to add padding of {} to {}", padding, self),
-    //         source: err,
-    //     })?;
-
-    //     Ok(bounds.x.contains(&point.x) && bounds.y.contains(&point.y))
-    // }
 }
 
 impl From<Size> for Rect {
@@ -490,6 +388,60 @@ impl CheckedAdd<Sides> for Rect {
             })),
         }
     }
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to create rect at {top_left} of size {size}")]
+pub struct Error {
+    top_left: Point,
+    size: Size,
+    source: ops::AddError<Point, Point>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute pixel count for {rect}")]
+pub struct PixelCountError {
+    rect: Rect,
+    source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute center point of {rect}")]
+pub struct CenterError {
+    rect: Rect,
+    source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum CenterOffsetErrorSource {
+    #[error(transparent)]
+    Center(#[from] CenterError),
+
+    #[error(transparent)]
+    Arithmetic(#[from] ops::SubError<Point, Point>),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute center offset from {parent} to {child}")]
+pub struct CenterOffsetError {
+    parent: Rect,
+    child: Rect,
+    source: CenterOffsetErrorSource,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute size for {rect}")]
+pub struct SizeError {
+    rect: Rect,
+    source: CastError<i64, u32>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to add padding of {padding} to {rect}")]
+pub struct PadError {
+    rect: Rect,
+    padding: u32,
+    source: ops::AddError<Rect, Sides>,
 }
 
 #[cfg(test)]

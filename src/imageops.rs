@@ -2,7 +2,7 @@ use super::arithmetic::{self, ops::CheckedAdd, Cast, CastError, Clamp};
 use super::types::{self, Point, Rect, Size};
 use super::{error, img};
 pub use image::imageops::*;
-use image::{Pixel, Rgba};
+use image::{GenericImage, GenericImageView, Pixel, Rgba};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
@@ -52,7 +52,6 @@ pub fn find_transparent_components(
             let mut updated = None;
             // check if this is a new component
             for c in &mut components {
-                // let contained = c.contains_padded(&point, component_threshold)?;
                 let contained = c.padded(component_threshold)?.contains(&point);
                 if contained {
                     // update component
@@ -94,62 +93,62 @@ pub enum FillMode {
 
 #[inline]
 pub fn fill_rect(
-    image: &mut img::Image,
+    mut image: image::SubImage<&mut image::RgbaImage>,
     color: image::Rgba<u8>,
-    rect: &Rect,
     mode: FillMode,
-) -> Result<(), img::SubviewError> {
-    let rect = image.subimage_rect(rect)?;
-    for x in rect.x_coords() {
-        for y in rect.y_coords() {
-            let p = image.inner.get_pixel_mut(x, y);
-            match mode {
-                FillMode::Blend => p.blend(&color),
-                FillMode::Set => *p = color,
-            }
+) {
+    let (w, h) = image.dimensions();
+    for x in 0..w {
+        for y in 0..h {
+            let p = match mode {
+                FillMode::Blend => {
+                    let mut p = image.get_pixel(x, y);
+                    p.blend(&color);
+                    p
+                }
+                FillMode::Set => color,
+            };
+            image.put_pixel(x, y, p);
         }
     }
-    Ok(())
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum FadeError {
-    #[error(transparent)]
-    Subview(#[from] img::SubviewError),
-
+    // #[error(transparent)]
+    // Subview(#[from] img::SubviewError),
     #[error(transparent)]
     Alpha(#[from] AlphaError),
-    // #[error("failed convert {alpha} to alpha value")]
-    // InvalidAlpha {
-    //     alpha: f64,
-    //     source: CastError<f64, u8>,
-    // },
 }
 
 #[inline]
 pub fn fade_out(
-    image: &mut img::Image,
-    start: impl Into<Point>,
-    end: impl Into<Point>,
+    mut image: image::SubImage<&mut image::RgbaImage>,
+    // image: &mut img::Image,
+    // start: impl Into<Point>,
+    // end: impl Into<Point>,
     axis: super::Axis,
+    switch_direction: bool,
 ) -> Result<(), FadeError> {
     use super::Axis;
 
-    let start = start.into();
-    let end = end.into();
+    // let start = start.into();
+    // let end = end.into();
 
-    let switch_direction = match axis {
-        Axis::X => start.x < end.x,
-        Axis::Y => start.y < end.y,
-    };
+    // let switch_direction = match axis {
+    //     Axis::X => start.x < end.x,
+    //     Axis::Y => start.y < end.y,
+    // };
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
-    let rect = image.subimage_rect(&Rect::from_points(start, end))?;
-    let size = rect.size();
+    // let rect = image.subimage_rect(&Rect::from_points(start, end))?;
+    // let size = rect.size();
+    // let size = image.size();
+    let (width, height) = image.dimensions();
 
     let (w, h) = match axis {
-        Axis::X => (size.height, size.width),
-        Axis::Y => (size.width, size.height),
+        Axis::X => (height, width),
+        Axis::Y => (width, height),
     };
     for y in 0..h {
         let mut frac = f64::from(y) / f64::from(h);
@@ -172,8 +171,9 @@ pub fn fade_out(
             };
 
             let channels = image
-                .inner
-                .get_pixel_mut(rect.left + x, rect.top + y)
+                // .inner
+                // .get_pixel_mut(rect.left + x, rect.top + y)
+                .get_pixel_mut(x, y)
                 .channels_mut();
             channels[3] = channels[3].min(alpha);
         }

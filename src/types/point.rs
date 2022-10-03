@@ -7,14 +7,6 @@ use crate::arithmetic::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to scale {point} by {scalar:?}")]
-pub struct ScaleByError {
-    point: Point,
-    scalar: Option<f64>,
-    source: arithmetic::Error,
-}
-
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct Point {
@@ -223,6 +215,14 @@ where
             })),
         }
     }
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to scale {point} by {scalar:?}")]
+pub struct ScaleByError {
+    point: Point,
+    scalar: Option<f64>,
+    source: arithmetic::Error,
 }
 
 #[cfg(test)]

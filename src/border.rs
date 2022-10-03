@@ -1,7 +1,7 @@
 use super::arithmetic::{ops::CheckedSub, Round};
 use super::img::{self, Image};
 use super::types::{Point, Rect, Size};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -76,8 +76,8 @@ impl Border {
     }
 
     #[inline]
-    pub fn open<P: AsRef<Path>>(path: P, options: Option<Options>) -> Result<Self, Error> {
-        let image = Image::open(path).map_err(img::Error::from)?;
+    pub fn open(path: impl Into<PathBuf>, options: Option<Options>) -> Result<Self, Error> {
+        let image = Image::open(path.into()).map_err(img::Error::from)?;
         Self::from_image(image, options)
     }
 

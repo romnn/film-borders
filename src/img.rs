@@ -8,12 +8,19 @@ use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 #[derive(thiserror::Error, Debug)]
-pub enum ReadError {
+pub enum ReadErrorSource {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
     #[error(transparent)]
     Image(#[from] image::error::ImageError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to read image from path {path:?}")]
+pub struct ReadError {
+    path: Option<PathBuf>,
+    source: ReadErrorSource,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -31,7 +38,26 @@ pub enum SaveError {
 #[derive(thiserror::Error, Debug)]
 pub enum FillError {
     #[error(transparent)]
-    Subview(#[from] SubviewError),
+    SubImage(#[from] SubImageError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum FadeErrorSource {
+    #[error(transparent)]
+    SubImage(#[from] SubImageError),
+
+    #[error(transparent)]
+    Fade(#[from] imageops::FadeError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to fade out image with size {} from {start} to {end} along {axis}")]
+pub struct FadeError {
+    size: Size,
+    start: Point,
+    end: Point,
+    axis: types::Axis,
+    source: FadeErrorSource,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -46,10 +72,10 @@ pub enum ResizeError {
 pub enum CropError {
     #[error(transparent)]
     CropToFit(#[from] types::size::CropToFitError),
+    // #[error(transparent)]
+    // Arithmetic(#[from] error::Arithmetic),
     #[error(transparent)]
-    Arithmetic(#[from] error::Arithmetic),
-    #[error(transparent)]
-    Subview(#[from] SubviewError),
+    SubImage(#[from] SubImageError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -69,19 +95,28 @@ pub enum ResizeAndCropError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum SubviewError {
+pub enum SubImageErrorSource {
     #[error(transparent)]
     OutOfBounds(#[from] OutOfBoundsError),
 
-    #[error("failed go get subview {subview} of image with size {image_size}")]
-    Arithmetic {
-        subview: Rect,
-        image_size: Size,
-        source: arithmetic::Error,
-    },
+    #[error(transparent)]
+    Cast(#[from] CastError<i64, u32>),
 }
 
 #[derive(thiserror::Error, Debug)]
+#[error("failed to get sub image {rect} for image with size {size}")]
+pub struct SubImageError {
+    size: Size,
+    rect: Rect,
+    source: SubImageErrorSource,
+    // Arithmetic {
+    //     subview: Rect,
+    //     image_size: Size,
+    //     source: arithmetic::Error,
+    // },
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
 #[error("point {point} exceeds image bounds {bounds}")]
 pub struct OutOfBoundsError {
     point: Point,
@@ -100,10 +135,10 @@ pub enum Error {
     ResizeAndCrop(#[from] ResizeAndCropError),
 
     #[error("failed to get subview of image")]
-    Subview(
+    SubImage(
         #[from]
         #[source]
-        SubviewError,
+        SubImageError,
     ),
 
     #[error("failed to fill image")]
@@ -173,7 +208,7 @@ impl Image {
 
     #[inline]
     #[must_use]
-    pub fn with_size<S: Into<Size>>(size: S) -> Self {
+    pub fn with_size(size: impl Into<Size>) -> Self {
         let size = size.into();
         Self::new(size.width, size.height)
     }
@@ -186,19 +221,40 @@ impl Image {
     }
 
     #[inline]
-    pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, ReadError> {
-        let reader = image::io::Reader::new(reader).with_guessed_format()?;
-        let inner = reader.decode()?.to_rgba8();
-        Ok(Self { inner, path: None })
+    pub fn from_reader(reader: impl std::io::BufRead + std::io::Seek) -> Result<Self, ReadError> {
+        match (|| {
+            let reader = image::io::Reader::new(reader).with_guessed_format()?;
+            let inner = reader.decode()?.to_rgba8();
+            let image = Self { inner, path: None };
+            Ok::<Self, ReadErrorSource>(image)
+        })() {
+            Ok(image) => Ok(image),
+            Err(err) => Err(ReadError {
+                path: None,
+                source: err.into(),
+            }),
+        }
     }
 
     #[inline]
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, ReadError> {
-        let file = fs::OpenOptions::new().read(true).open(&path)?;
+    pub fn open(path: impl Into<PathBuf>) -> Result<Self, ReadError> {
+        let path = path.into();
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .open(&path)
+            .map_err(|err| ReadError {
+                path: Some(path.clone()),
+                source: err.into(),
+            })?;
         let reader = BufReader::new(&file);
-        let mut img = Self::from_reader(reader)?;
-        img.path = Some(path.as_ref().to_path_buf());
-        Ok(img)
+        let image = Self::from_reader(reader).map_err(|err| ReadError {
+            path: Some(path.clone()),
+            source: err.source,
+        })?;
+        Ok(Self {
+            path: Some(path.clone()),
+            ..image
+        })
     }
 
     #[inline]
@@ -230,8 +286,13 @@ impl Image {
         rect: &Rect,
         mode: imageops::FillMode,
     ) -> Result<(), FillError> {
+        // use image::GenericImage;
         let color = color.into();
-        imageops::fill_rect(self, color, rect, mode)?;
+        let sub_image = self.sub_image(rect)?;
+        // let rect = self.subimage_rect(rect)?;
+        // let subimage = self.sub_image(rect.left, rect.top, rect.width(), rect.height());
+        imageops::fill_rect(sub_image, color, mode);
+        // imageops::fill_rect(self, color, rect, mode)?;
         Ok(())
     }
 
@@ -254,8 +315,31 @@ impl Image {
         start: impl Into<Point>,
         end: impl Into<Point>,
         axis: super::types::Axis,
-    ) -> Result<(), imageops::FadeError> {
-        imageops::fade_out(self, start.into(), end.into(), axis)
+    ) -> Result<(), FadeError> {
+        use super::types::Axis;
+        let start = start.into();
+        let end = end.into();
+        let switch_direction = match axis {
+            Axis::X => start.x < end.x,
+            Axis::Y => start.y < end.y,
+        };
+
+        match (|| {
+            let sub_image_rect = Rect::from_points(start, end);
+            let sub_image = self.sub_image(&sub_image_rect)?;
+            imageops::fade_out(sub_image, axis, switch_direction)?;
+            Ok::<_, FadeErrorSource>(())
+        })() {
+            Ok(_) => Ok(()),
+            Err(err) => Err(FadeError {
+                size: self.size(),
+                start,
+                end,
+                axis,
+                source: err,
+            }),
+        }
+        // imageops::fade_out(self, start.into(), end.into(), axis)
     }
 
     #[inline]
@@ -302,47 +386,29 @@ impl Image {
     }
 
     #[inline]
-    // pub fn crop(&mut self, top_left: Point, bottom_right: Point) -> Result<(), CropError> {
     pub fn crop(&mut self, rect: &Rect) -> Result<(), CropError> {
-        // let cropped_size = bottom_right.checked_sub(top_left)?;
-        // let cropped_size = Size::try_from(cropped_size)?;
-        // let top_left: Size = Size::try_from(top_left)?;
-        // let rect = Rect::from_points(top_left, bottom_right);
-        let view = self.subimage_rect(rect)?;
-        self.inner = imageops::crop(
-            &mut self.inner,
-            view.left,
-            view.top,
-            view.width(),
-            view.height(),
-            // top_left.width,
-            // top_left.height,
-            // cropped_size.width,
-            // cropped_size.height,
-        )
-        .to_image();
+        // let sub_image = self.sub_image(rect)?;
+        self.inner = self.sub_image(rect)?.to_image();
+        // self.inner = imageops::crop(
+        //     &mut self.inner,
+        //     view.left,
+        //     view.top,
+        //     view.width(),
+        //     view.height(),
+        // )
+        // .to_image();
         Ok(())
     }
 
     #[inline]
     pub fn crop_sides(&mut self, sides: Sides) -> Result<(), CropError> {
         // let cropped_size = self.size().checked_sub(crop_sides)?;
-        let rect = Rect::from(self.size())
-            .checked_sub(sides)
-            .map_err(|err| error::Arithmetic {
-                msg: "todo".to_string(),
-                source: err.into(),
-            })?;
+        let rect = Rect::from(self.size()).checked_sub(sides).unwrap();
+        // .map_err(|err| error::Arithmetic {
+        //     msg: "todo".to_string(),
+        //     source: err.into(),
+        // })?;
         self.crop(&rect)
-        // self.inner = imageops::crop(
-        //     &mut self.inner,
-        //     crop_sides.left,
-        //     crop_sides.top,
-        //     cropped_size.width,
-        //     cropped_size.height,
-        // )
-        // .to_image();
-        // Ok(())
     }
 
     #[inline]
@@ -481,122 +547,136 @@ impl Image {
     }
 }
 
-mod sealed {
-    use super::{Error, Image, SubviewError};
-    use crate::arithmetic::{Cast, CastError};
-    use crate::error;
-    use crate::types::Rect;
+// mod sealed {
+//     use super::{Image, SubviewError};
+//     use crate::arithmetic::{Cast, CastError};
+//     use crate::error;
+//     use crate::types::Rect;
 
-    #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-    #[non_exhaustive]
-    pub struct ImageRect {
-        pub top: u32,
-        pub left: u32,
-        pub bottom: u32,
-        pub right: u32,
-        _sealed: (),
-    }
+//     #[derive(PartialEq, Eq, Copy, Clone, Debug)]
+//     #[non_exhaustive]
+//     pub struct ImageRect {
+//         pub top: u32,
+//         pub left: u32,
+//         pub bottom: u32,
+//         pub right: u32,
+//         _sealed: (),
+//     }
 
-    impl Image {
-        #[inline]
-        pub fn subimage_rect(&mut self, rect: &Rect) -> Result<ImageRect, SubviewError> {
-            use super::OutOfBoundsError;
-            let image_rect: Rect = self.size().into();
+impl Image {
+    #[inline]
+    pub fn sub_image(
+        &mut self,
+        rect: &Rect,
+    ) -> Result<image::SubImage<&mut image::RgbaImage>, SubImageError> {
+        pub struct SubImageRect {
+            top: u32,
+            left: u32,
+            bottom: u32,
+            right: u32,
+        }
 
+        let image_rect: Rect = self.size().into();
+        match (|| {
             if !image_rect.contains(&rect.top_left()) {
-                // return Err(Error::Subview(SubviewError::OutOfBounds(
-                return Err(SubviewError::OutOfBounds(OutOfBoundsError {
+                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
                     bounds: image_rect,
                     point: rect.top_left(),
                 }));
             }
 
             if !image_rect.contains(&rect.bottom_right()) {
-                // return Err(Error::Subview(SubviewError::OutOfBounds(
-                return Err(SubviewError::OutOfBounds(OutOfBoundsError {
+                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
                     bounds: image_rect,
                     point: rect.bottom_right(),
                 }));
             }
 
-            match (|| {
-                Ok::<_, CastError<i64, u32>>(ImageRect {
-                    top: rect.top.cast::<u32>()?,
-                    left: rect.left.cast::<u32>()?,
-                    bottom: rect.bottom.cast::<u32>()?,
-                    right: rect.right.cast::<u32>()?,
-                    _sealed: (),
-                })
-            })() {
-                Ok(rect) => Ok(rect),
-                Err(err) => Err(SubviewError::Arithmetic {
-                    // Err(err) => Err(Error::Arithmetic(error::Arithmetic {
-                    //     msg: format!(
-                    //         "failed to get subview {} into image of size {}",
-                    //         rect,
-                    //         self.size()
-                    //     ),
-                    subview: *rect,
-                    image_size: self.size(),
-                    source: err.into(),
-                }),
+            let sub_image_rect = SubImageRect {
+                top: rect.top.cast::<u32>()?,
+                left: rect.left.cast::<u32>()?,
+                bottom: rect.bottom.cast::<u32>()?,
+                right: rect.right.cast::<u32>()?,
+            };
+            Ok::<_, SubImageErrorSource>(sub_image_rect)
+            // Ok::<_, CastError<i64, u32>>(subview_rect)
+        })() {
+            Ok(sub_image_rect) => {
+                use image::GenericImage;
+                let x = sub_image_rect.left;
+                let y = sub_image_rect.top;
+                let width = sub_image_rect.right - sub_image_rect.left;
+                let height = sub_image_rect.bottom - sub_image_rect.top;
+                Ok(self.inner.sub_image(x, y, width, height))
             }
+            Err(err) => Err(SubImageError {
+                // Err(err) => Err(Error::Arithmetic(error::Arithmetic {
+                //     msg: format!(
+                //         "failed to get subview {} into image of size {}",
+                //         rect,
+                //         self.size()
+                //     ),
+                rect: *rect,
+                size: self.size(),
+                source: err.into(),
+            }),
         }
     }
 }
+// }
 
-pub use sealed::ImageRect;
+// pub use sealed::ImageRect;
 
-impl ImageRect {
-    // pub fn size(&self) -> Result<Size, error::Arithmetic> {
-    #[inline]
-    #[must_use]
-    pub fn width(&self) -> u32 {
-        // safety: this is safe because of the invariant:
-        // left <=  right
-        self.right - self.left
-    }
+// impl ImageRect {
+//     // pub fn size(&self) -> Result<Size, error::Arithmetic> {
+//     #[inline]
+//     #[must_use]
+//     pub fn width(&self) -> u32 {
+//         // safety: this is safe because of the invariant:
+//         // left <= right
+//         self.right - self.left
+//     }
 
-    #[inline]
-    #[must_use]
-    pub fn height(&self) -> u32 {
-        // safety: this is safe because of the invariant:
-        // top <= bottom
-        self.bottom - self.top
-    }
+//     #[inline]
+//     #[must_use]
+//     pub fn height(&self) -> u32 {
+//         // safety: this is safe because of the invariant:
+//         // top <= bottom
+//         self.bottom - self.top
+//     }
 
-    #[inline]
-    #[must_use]
-    pub fn size(&self) -> Size {
-        Size {
-            width: self.width(),
-            height: self.height(),
-        }
+//     #[inline]
+//     #[must_use]
+//     pub fn size(&self) -> Size {
+//         Size {
+//             width: self.width(),
+//             height: self.height(),
+//         }
 
-        // match (|| {
-        //     Ok::<Size, ops::SubError<u32, u32>>(Size {
-        //         width: self.right.checked_sub(self.left)?,
-        //         height: self.bottom.checked_sub(self.top)?,
-        //     })
-        // })() {
-        //     Ok(size) => Ok(size),
-        //     Err(err) => Err(error::Arithmetic {
-        //         msg: format!("failed to compute size for {}", self),
-        //         source: err.into(),
-        //     }),
-        // }
-    }
+//         // match (|| {
+//         //     Ok::<Size, ops::SubError<u32, u32>>(Size {
+//         //         width: self.right.checked_sub(self.left)?,
+//         //         height: self.bottom.checked_sub(self.top)?,
+//         //     })
+//         // })() {
+//         //     Ok(size) => Ok(size),
+//         //     Err(err) => Err(error::Arithmetic {
+//         //         msg: format!("failed to compute size for {}", self),
+//         //         source: err.into(),
+//         //     }),
+//         // }
+//     }
 
-    #[inline]
-    pub fn x_coords(&self) -> std::ops::Range<u32> {
-        self.left..self.right
-    }
+//     #[inline]
+//     pub fn x_coords(&self) -> std::ops::Range<u32> {
+//         self.left..self.right
+//     }
 
-    #[inline]
-    pub fn y_coords(&self) -> std::ops::Range<u32> {
-        self.top..self.bottom
-    }
-}
+//     #[inline]
+//     pub fn y_coords(&self) -> std::ops::Range<u32> {
+//         self.top..self.bottom
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

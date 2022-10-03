@@ -7,73 +7,6 @@ use crate::arithmetic::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute scale factors to scale {size} to {target} with mode {mode:?}")]
-pub struct ScaleFactorsError {
-    size: Size,
-    target: Size,
-    mode: super::ResizeMode,
-    source: ops::DivError<f64, f64>,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-pub enum ScaleToError {
-    #[error(transparent)]
-    ScaleFactors(#[from] ScaleFactorsError),
-
-    #[error(transparent)]
-    ScaleBy(#[from] ScaleByError),
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute crop such that {size} fits {container}")]
-pub struct CropToFitError {
-    size: Size,
-    container: Size,
-    source: CropToFitErrorSource,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-pub enum CropToFitErrorSource {
-    #[error(transparent)]
-    Center(#[from] CenterError),
-
-    #[error(transparent)]
-    Arithmetic(#[from] arithmetic::Error),
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to scale {size} to bounds {bounds:?} with mode {:?}")]
-pub struct ScaleToBoundsError {
-    size: Size,
-    bounds: super::BoundedSize,
-    mode: super::ResizeMode,
-    source: ScaleToError,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to scale {size} by {scalar:?}")]
-pub struct ScaleByError {
-    size: Size,
-    scalar: Option<f64>,
-    source: arithmetic::Error,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute aspect ratio of {size}")]
-pub struct AspectRatioError {
-    size: Size,
-    source: ops::DivError<f64, f64>,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to center {child} in {parent}")]
-pub struct CenterError {
-    child: Size,
-    parent: Size,
-    source: arithmetic::Error,
-}
-
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default, Copy, Clone)]
 pub struct Size {
@@ -594,6 +527,73 @@ impl CheckedSub for Size {
             })),
         }
     }
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute scale factors to scale {size} to {target} with mode {mode:?}")]
+pub struct ScaleFactorsError {
+    size: Size,
+    target: Size,
+    mode: super::ResizeMode,
+    source: ops::DivError<f64, f64>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum ScaleToError {
+    #[error(transparent)]
+    ScaleFactors(#[from] ScaleFactorsError),
+
+    #[error(transparent)]
+    ScaleBy(#[from] ScaleByError),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute crop such that {size} fits {container}")]
+pub struct CropToFitError {
+    size: Size,
+    container: Size,
+    source: CropToFitErrorSource,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum CropToFitErrorSource {
+    #[error(transparent)]
+    Center(#[from] CenterError),
+
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to scale {size} to bounds {bounds:?} with mode {:?}")]
+pub struct ScaleToBoundsError {
+    size: Size,
+    bounds: super::BoundedSize,
+    mode: super::ResizeMode,
+    source: ScaleToError,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to scale {size} by {scalar:?}")]
+pub struct ScaleByError {
+    size: Size,
+    scalar: Option<f64>,
+    source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute aspect ratio of {size}")]
+pub struct AspectRatioError {
+    size: Size,
+    source: ops::DivError<f64, f64>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to center {child} in {parent}")]
+pub struct CenterError {
+    child: Size,
+    parent: Size,
+    source: arithmetic::Error,
 }
 
 #[cfg(test)]

@@ -45,6 +45,16 @@ pub enum Axis {
     Y,
 }
 
+impl std::fmt::Display for Axis {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Axis::X => write!(f, "x axis"),
+            Axis::Y => write!(f, "y axis"),
+        }
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Debug, Copy, Clone)]
 pub enum FitMode {
