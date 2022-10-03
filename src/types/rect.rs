@@ -136,7 +136,7 @@ impl Rect {
         match (|| {
             // safety: this is safe because these invariants hold:
             // 1. top <= bottom
-            // 2. left <=  right
+            // 2. left <= right
             let width = self.right - self.left;
             let height = self.bottom - self.top;
             let width = width.cast::<u32>()?;
@@ -153,20 +153,24 @@ impl Rect {
 
     #[inline]
     pub fn center(&self) -> Result<Point, error::Arithmetic> {
-        let size = self.size()?;
-        let rel_center = Point::from(size)
-            .checked_div(2.0)
-            .map_err(arithmetic::Error::from);
-        rel_center
-            .and_then(|rel_center| {
-                self.top_left()
-                    .checked_add(rel_center)
-                    .map_err(arithmetic::Error::from)
-            })
-            .map_err(|err| error::Arithmetic {
+        // safety: this is safe because these invariants hold:
+        // 1. top <= bottom
+        // 2. left <= right
+        let size = Point {
+            x: self.right - self.left,
+            y: self.bottom - self.top,
+        };
+        match (|| {
+            let rel_center = size.checked_div(2.0)?;
+            let center = self.top_left().checked_add(rel_center)?;
+            Ok::<Point, arithmetic::Error>(center)
+        })() {
+            Ok(center) => Ok(center),
+            Err(err) => Err(error::Arithmetic {
                 msg: format!("failed to compute center point of size {}", size),
                 source: err,
-            })
+            }),
+        }
     }
 
     #[inline]

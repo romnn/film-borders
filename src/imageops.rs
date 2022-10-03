@@ -14,7 +14,6 @@ pub fn find_transparent_components(
     component_threshold: i64,
 ) -> Result<Vec<Rect>, arithmetic::Error> {
     let mut components: Vec<Rect> = Vec::new();
-    // .clamp(0.0, 255.0)
     let alpha_threshold: u8 = (alpha_threshold * 255.0).cast::<u8>()?;
 
     let (w, h) = image.inner.dimensions();

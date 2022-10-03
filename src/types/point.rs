@@ -2,7 +2,7 @@ use super::Size;
 use crate::arithmetic::{
     self,
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
-    Cast, Clamp, Round,
+    Cast, Clamp, ClampMin, Round,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -86,6 +86,19 @@ impl std::fmt::Display for Point {
             .field("x", &self.x)
             .field("y", &self.y)
             .finish()
+    }
+}
+
+impl ClampMin for Point {
+    fn clamp_min<MIN>(self, min: MIN) -> Self
+    where
+        MIN: Into<Self>,
+    {
+        let min = min.into();
+        Self {
+            x: num::traits::clamp_min(self.x, min.x),
+            y: num::traits::clamp_min(self.y, min.y),
+        }
     }
 }
 

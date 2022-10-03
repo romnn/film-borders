@@ -32,7 +32,7 @@ pub use types::*;
 
 use arithmetic::{
     ops::{CheckedAdd, CheckedMul, CheckedSub},
-    Cast,
+    Cast, Round,
 };
 use std::path::Path;
 
@@ -132,19 +132,23 @@ impl ImageBorders {
             .unwrap()
             .checked_add(margin)
             .unwrap();
-        let default_output_size = content_size.checked_mul(1.0 / scale_factor).unwrap();
+        let default_output_size = content_size
+            .scale_by::<_, Round>(1.0 / scale_factor)
+            .unwrap();
 
         // set output size and do not keep aspect ratio
         let output_size = match options.output_size {
             BoundedSize {
                 width: Some(width),
                 height: Some(height),
-            } => Size { width, height },
+            } => Ok(Size { width, height }),
             _ => default_output_size.scale_to_bounds(options.output_size, ResizeMode::Contain),
-        };
+        }
+        .unwrap();
         // bound output size but keep aspect ratio
-        let output_size =
-            output_size.scale_to_bounds(options.output_size_bounds, ResizeMode::Contain);
+        let output_size = output_size
+            .scale_to_bounds(options.output_size_bounds, ResizeMode::Contain)
+            .unwrap();
 
         // create new result image
         let mut result_image = img::Image::with_size(output_size);
@@ -157,17 +161,19 @@ impl ImageBorders {
         });
         result_image.fill(background_color, FillMode::Set);
 
-        let new_content_size = content_size.scale_to(
-            output_size.checked_mul(scale_factor).unwrap(),
-            ResizeMode::Contain,
-        );
+        let new_content_size = content_size
+            .scale_to(
+                output_size.checked_mul(scale_factor).unwrap(),
+                ResizeMode::Contain,
+            )
+            .unwrap();
         let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
         let frame_width = frame_width.checked_mul(scale).unwrap();
         let margin = margin.checked_mul(scale).unwrap();
         crate::debug!(&frame_width);
         crate::debug!(&margin);
 
-        let content_rect = output_size.center(new_content_size);
+        let content_rect = output_size.center(new_content_size).unwrap();
         crate::debug!(&content_rect);
 
         #[cfg(debug_assertions)]
@@ -272,7 +278,7 @@ impl ImageBorders {
                 width: output_size.min_dim(),
                 height: output_size.min_dim(),
             };
-            let preview_rect = output_size.center(preview_size);
+            let preview_rect = output_size.center(preview_size).unwrap();
             result_image.fill_rect(
                 Color::rgba(255, 0, 0, 50),
                 &preview_rect,

@@ -15,6 +15,9 @@ pub enum Error {
     #[error("missing output file path")]
     MissingOutputPath,
 
+    #[error("failed to resize image")]
+    Resize(#[source] error::Arithmetic),
+
     #[error(transparent)]
     Arithmetic(#[from] error::Arithmetic),
 
@@ -140,11 +143,14 @@ impl Image {
     }
 
     #[inline]
-    pub fn resize(&mut self, size: impl Into<Size>, mode: super::ResizeMode) {
+    pub fn resize(&mut self, size: impl Into<Size>, mode: super::ResizeMode) -> Result<(), Error> {
         #[cfg(debug_assertions)]
         let start = chrono::Utc::now().time();
 
-        let size = self.size().scale_to(size.into(), mode);
+        let size = self
+            .size()
+            .scale_to(size.into(), mode)
+            .map_err(Error::Resize)?;
         self.inner = imageops::resize(&self.inner, size.width, size.height, defaults::FILTER_TYPE);
 
         #[cfg(debug_assertions)]
@@ -153,16 +159,18 @@ impl Image {
             size,
             (chrono::Utc::now().time() - start).num_milliseconds(),
         );
+        Ok(())
     }
 
     #[inline]
-    pub fn crop_to_fit<S>(&mut self, container: S, mode: super::CropMode)
-    where
-        S: Into<Size>,
-    {
-        let container = container.into();
-        let crop = self.size().crop_to_fit(container, mode);
+    pub fn crop_to_fit(
+        &mut self,
+        size: impl Into<Size>,
+        mode: super::CropMode,
+    ) -> Result<(), Error> {
+        let crop = self.size().crop_to_fit(size.into(), mode)?;
         self.crop_sides(crop);
+        Ok(())
     }
 
     #[inline]

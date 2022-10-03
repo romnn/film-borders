@@ -364,16 +364,20 @@ impl Border {
         crate::debug!(&target_content_size);
 
         // scale down if larget than target content size
-        let new_content_size =
-            content_size.scale_to_bounds(target_content_size, ResizeMode::Contain);
+        let new_content_size = content_size
+            .scale_to_bounds(target_content_size, ResizeMode::Contain)
+            .unwrap();
         crate::debug!(&new_content_size);
 
         // scale up as little as possible to cover target content size
-        let new_content_size =
-            new_content_size.scale_to_bounds(target_content_size, ResizeMode::Cover);
+        let new_content_size = new_content_size
+            .scale_to_bounds(target_content_size, ResizeMode::Cover)
+            .unwrap();
 
         crate::debug!(&new_content_size);
-        let scale_factor = content_size.scale_factor(new_content_size, ResizeMode::Cover);
+        let scale_factor = content_size
+            .scale_factor(new_content_size, ResizeMode::Cover)
+            .unwrap();
         self.size().scale_by::<_, Round>(scale_factor.0).unwrap()
     }
 
@@ -382,18 +386,6 @@ impl Border {
     pub fn transparent_components(&self) -> &Vec<super::Rect> {
         &self.transparent_components
     }
-
-    // #[inline]
-    // #[must_use]
-    // pub fn size(&self) -> Size {
-    //     self.inner.size()
-    // }
-
-    // #[inline]
-    // #[must_use]
-    // pub fn orientation(&self) -> super::Orientation {
-    //     self.size().orientation()
-    // }
 }
 
 impl std::ops::Deref for Border {
@@ -409,12 +401,6 @@ impl std::ops::DerefMut for Border {
         &mut self.inner
     }
 }
-
-// impl AsRef<image::RgbaImage> for Border {
-//     fn as_ref(&self) -> &image::RgbaImage {
-//         self.inner.as_ref()
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
