@@ -43,7 +43,7 @@ pub trait Arithmetic: AsErr + std::error::Error + 'static {
     fn eq(&self, other: &dyn Arithmetic) -> bool;
 }
 
-impl Eq for dyn Arithmetic + Send + Sync + 'static {}
+// impl Eq for dyn Arithmetic + Send + Sync + 'static {}
 
 impl PartialEq for dyn Arithmetic + Send + Sync + 'static {
     fn eq(&self, other: &Self) -> bool {
@@ -58,8 +58,29 @@ impl PartialEq<&Self> for Box<dyn Arithmetic + Send + Sync + 'static> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Error(pub Box<dyn Arithmetic + Sync + Send + 'static>);
+
+impl std::ops::Deref for Error {
+    type Target = dyn Arithmetic + Sync + Send + 'static;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+// impl Arithmetic for Error {
+//     fn as_any(&self) -> &dyn std::any::Any {
+//         self
+//     }
+
+//     fn eq(&self, other: &dyn Arithmetic) -> bool {
+//         match other.as_any().downcast_ref::<Self>() {
+//             Some(other) => PartialEq::eq(self, other),
+//             None => false,
+//         }
+//     }
+// }
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -104,7 +125,8 @@ pub struct Operation<Lhs, Rhs> {
     pub lhs: Lhs,
     pub rhs: Rhs,
     pub kind: Option<Kind>,
-    pub cause: Option<Box<dyn Arithmetic + Send + Sync + 'static>>,
+    // pub cause: Option<Box<dyn Arithmetic + Send + Sync + 'static>>,
+    pub cause: Option<Error>,
 }
 
 // impl<Lhs, Rhs> Eq for Operation<Lhs, Rhs>

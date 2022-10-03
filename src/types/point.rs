@@ -7,6 +7,14 @@ use crate::arithmetic::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to scale {point} by {scalar:?}")]
+pub struct ScaleByError {
+    point: Point,
+    scalar: Option<f64>,
+    source: arithmetic::Error,
+}
+
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct Point {
@@ -34,19 +42,28 @@ impl Point {
 
 impl Point {
     #[inline]
-    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, arithmetic::Error>
+    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, ScaleByError>
     where
         R: arithmetic::RoundingMode,
         F: arithmetic::Cast + arithmetic::Type,
     {
-        let scalar = scalar.cast::<f64>()?;
-        let x = self.x.cast::<f64>()?;
-        let y = self.y.cast::<f64>()?;
-        let x = CheckedMul::checked_mul(x, scalar)?;
-        let y = CheckedMul::checked_mul(y, scalar)?;
-        let x = R::round(x).cast::<i64>()?;
-        let y = R::round(y).cast::<i64>()?;
-        Ok(Self { x, y })
+        match (|| {
+            let scalar = scalar.cast::<f64>()?;
+            let x = self.x.cast::<f64>()?;
+            let y = self.y.cast::<f64>()?;
+            let x = CheckedMul::checked_mul(x, scalar)?;
+            let y = CheckedMul::checked_mul(y, scalar)?;
+            let x = R::round(x).cast::<i64>()?;
+            let y = R::round(y).cast::<i64>()?;
+            Ok::<Self, arithmetic::Error>(Self { x, y })
+        })() {
+            Ok(point) => Ok(point),
+            Err(err) => Err(ScaleByError {
+                point: self,
+                scalar: scalar.cast::<f64>().ok(),
+                source: err,
+            }),
+        }
     }
 }
 
@@ -123,17 +140,18 @@ impl CheckedAdd for Point {
 
     #[inline]
     fn checked_add(self, rhs: Self) -> Result<Self::Output, Self::Error> {
+        use arithmetic::error::Operation;
         match (|| {
             let x = CheckedAdd::checked_add(self.x, rhs.x)?;
             let y = CheckedAdd::checked_add(self.y, rhs.y)?;
             Ok::<Self, ops::AddError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::AddError(arithmetic::error::Operation {
+            Err(err) => Err(ops::AddError(Operation {
                 lhs: self,
                 rhs,
                 kind: None,
-                cause: Some(Box::new(err)),
+                cause: Some(err.into()),
             })),
         }
     }
@@ -145,17 +163,18 @@ impl CheckedSub for Point {
 
     #[inline]
     fn checked_sub(self, rhs: Self) -> Result<Self, Self::Error> {
+        use arithmetic::error::Operation;
         match (|| {
             let x = CheckedSub::checked_sub(self.x, rhs.x)?;
             let y = CheckedSub::checked_sub(self.y, rhs.y)?;
             Ok::<Self, ops::SubError<i64, i64>>(Self { x, y })
         })() {
             Ok(point) => Ok(point),
-            Err(err) => Err(ops::SubError(arithmetic::error::Operation {
+            Err(err) => Err(ops::SubError(Operation {
                 lhs: self,
                 rhs,
                 kind: None,
-                cause: Some(Box::new(err)),
+                cause: Some(err.into()),
             })),
         }
     }
@@ -167,18 +186,34 @@ where
 {
     type Output = Self;
     type Error = ops::MulError<Self, F>;
+    // type Error = ScaleByError;
 
     #[inline]
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
+        // self.scale_by::<_, Round>(scalar)
+        use arithmetic::error::Operation;
         match self.scale_by::<_, Round>(scalar) {
             Ok(point) => Ok(point),
-            Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
+            // Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Operation {
+            Err(ScaleByError { source, .. }) => Err(ops::MulError(Operation {
                 lhs: self,
                 rhs: scalar,
                 kind: None,
-                cause: Some(err),
+                cause: Some(source),
+                // cause: Some(Box::new(source.into())),
+                // cause: source.into()
             })),
         }
+
+        // match self.scale_by::<_, Round>(scalar) {
+        //     Ok(point) => Ok(point),
+        //     Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
+        //         lhs: self,
+        //         rhs: scalar,
+        //         kind: None,
+        //         cause: Some(err),
+        //     })),
+        // }
     }
 }
 
@@ -188,17 +223,24 @@ where
 {
     type Output = Self;
     type Error = ops::DivError<Self, F>;
+    // type Error = ScaleByError;
 
     #[inline]
     fn checked_div(self, scalar: F) -> Result<Self::Output, Self::Error> {
         let inverse = scalar.inv();
+        // self.scale_by::<_, Round>(inverse)
+
+        use arithmetic::error::Operation;
         match self.scale_by::<_, Round>(inverse) {
             Ok(point) => Ok(point),
-            Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Operation {
+            // Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Operation {
+            Err(ScaleByError { source, .. }) => Err(ops::DivError(Operation {
                 lhs: self,
                 rhs: inverse,
                 kind: None,
-                cause: Some(err),
+                cause: Some(source),
+                // cause: Some(Box::new(source.into())),
+                // cause: source.into()
             })),
         }
     }

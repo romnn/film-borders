@@ -91,6 +91,7 @@ mod sealed {
 
         #[inline]
         fn checked_add(self, rhs: Point) -> Result<Self::Output, Self::Error> {
+            use arithmetic::error::Operation;
             match (|| {
                 let top = CheckedAdd::checked_add(self.top, rhs.y)?;
                 let left = CheckedAdd::checked_add(self.left, rhs.x)?;
@@ -105,11 +106,11 @@ mod sealed {
                 })
             })() {
                 Ok(rect) => Ok(rect),
-                Err(err) => Err(ops::AddError(arithmetic::error::Operation {
+                Err(err) => Err(ops::AddError(Operation {
                     lhs: self,
                     rhs,
                     kind: None,
-                    cause: Some(Box::new(err)),
+                    cause: Some(err.into()),
                 })),
             }
         }
@@ -353,6 +354,7 @@ impl CheckedSub<Sides> for Rect {
 
     #[inline]
     fn checked_sub(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
+        use arithmetic::error::Operation;
         match (|| {
             let top = CheckedAdd::checked_add(self.top, i64::from(rhs.top))?;
             let left = CheckedAdd::checked_add(self.left, i64::from(rhs.left))?;
@@ -366,16 +368,12 @@ impl CheckedSub<Sides> for Rect {
             Ok::<Self, arithmetic::Error>(Self::from_points(top_left, bottom_right))
         })() {
             Ok(rect) => Ok(rect),
-            Err(arithmetic::Error(err)) => {
-                let op_err = arithmetic::error::Operation {
-                    lhs: self,
-                    rhs,
-                    kind: None,
-                    cause: Some(err),
-                };
-
-                Err(ops::SubError(op_err))
-            }
+            Err(err) => Err(ops::SubError(Operation {
+                lhs: self,
+                rhs,
+                kind: None,
+                cause: Some(err),
+            })),
         }
     }
 }
@@ -386,6 +384,7 @@ impl CheckedAdd<Sides> for Rect {
 
     #[inline]
     fn checked_add(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
+        use arithmetic::error::Operation;
         match (|| {
             let top = CheckedSub::checked_sub(self.top, i64::from(rhs.top))?;
             let left = CheckedSub::checked_sub(self.left, i64::from(rhs.left))?;
@@ -399,15 +398,13 @@ impl CheckedAdd<Sides> for Rect {
             Ok::<Self, arithmetic::Error>(Self::from_points(top_left, bottom_right))
         })() {
             Ok(rect) => Ok(rect),
-            Err(arithmetic::Error(err)) => {
-                let op_err = arithmetic::error::Operation {
-                    lhs: self,
-                    rhs,
-                    kind: None,
-                    cause: Some(err),
-                };
-                Err(ops::AddError(op_err))
-            }
+            // Err(arithmetic::Error(err)) => {
+            Err(err) => Err(ops::AddError(Operation {
+                lhs: self,
+                rhs,
+                kind: None,
+                cause: Some(err),
+            })),
         }
     }
 }

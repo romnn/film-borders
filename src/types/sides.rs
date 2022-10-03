@@ -74,6 +74,7 @@ pub mod percent {
 
         #[inline]
         fn checked_mul(self, scalar: u32) -> Result<Self::Output, Self::Error> {
+            use arithmetic::error::Operation;
             match (|| {
                 let top = percent_to_abs(self.top, scalar)?;
                 let left = percent_to_abs(self.left, scalar)?;
@@ -87,7 +88,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
+                Err(err) => Err(ops::MulError(Operation {
                     lhs: self,
                     rhs: scalar,
                     kind: None,
@@ -103,6 +104,7 @@ pub mod percent {
 
         #[inline]
         fn checked_mul(self, size: Size) -> Result<Self::Output, Self::Error> {
+            use arithmetic::error::Operation;
             match (|| {
                 let top = percent_to_abs(self.top, size.height)?;
                 let left = percent_to_abs(self.left, size.width)?;
@@ -116,7 +118,7 @@ pub mod percent {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
+                Err(err) => Err(ops::MulError(Operation {
                     lhs: self,
                     rhs: size,
                     kind: None,
@@ -197,6 +199,7 @@ pub mod abs {
 
         #[inline]
         fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
+            use arithmetic::error::Operation;
             match (|| {
                 let scalar = scalar.cast::<f64>()?;
                 let top = self.top.cast::<f64>()?;
@@ -222,7 +225,7 @@ pub mod abs {
                 })
             })() {
                 Ok(sides) => Ok(sides),
-                Err(arithmetic::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
+                Err(err) => Err(ops::MulError(Operation {
                     lhs: self,
                     rhs: scalar,
                     kind: None,
