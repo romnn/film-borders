@@ -124,12 +124,7 @@ impl Size {
             .checked_div(2.0)
             .unwrap();
         let bottom_right = top_left.checked_add(size).unwrap();
-        super::Rect {
-            top: top_left.y,
-            left: top_left.x,
-            bottom: bottom_right.y,
-            right: bottom_right.x,
-        }
+        super::Rect::from_points(top_left, bottom_right)
     }
 
     #[inline]

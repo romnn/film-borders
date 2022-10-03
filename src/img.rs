@@ -1,4 +1,4 @@
-use super::arithmetic::ops::CheckedSub;
+use super::arithmetic::{ops::CheckedSub, Cast, CastError};
 use super::types::{sides::abs::Sides, Point, Rect, Size};
 use super::{defaults, error, imageops};
 pub use image::ImageFormat;
@@ -111,58 +111,37 @@ impl Image {
         &mut self,
         color: impl Into<image::Rgba<u8>>,
         rect: &Rect,
-        // rect: impl Borrow<Rect>,
-        // top_left: impl Into<Point>,
-        // size: impl Into<Size>,
         mode: imageops::FillMode,
     ) -> Result<(), Error> {
         let color = color.into();
-        // let rect = rect.borrow();
-        // let rect: &Rect = (*rect).into();
-        // #[inline]
-        // pub fn fill_rect<TL, S, C>(&mut self, color: C, top_left: TL, size: S, mode: imageops::FillMode)
-        // where
-        //     TL: Into<Point>,
-        //     S: Into<Size>,
-        //     C: Into<image::Rgba<u8>>,
-        // {
-        imageops::fill_rect(self, color, rect, mode)
-        // top_left.into(), size.into(), mode)
-        // .map_err(|err| error::Arithmetic {
-        //     msg: format!("failed to fill {} with color {:?}", rect, color),
-        //     source: err,
-        // })
-        // Ok(())
+        let rect = self.subimage_rect(rect)?;
+        imageops::fill_rect(self, color, &rect, mode)
     }
 
     #[inline]
-    pub fn resize_to_fit<S>(
+    pub fn resize_to_fit(
         &mut self,
-        container: S,
+        container: impl Into<Size>,
         resize_mode: super::ResizeMode,
         crop_mode: super::CropMode,
-    ) where
-        S: Into<Size>,
-    {
+    ) {
         let container = container.into();
         self.resize(container, resize_mode);
         self.crop_to_fit(container, crop_mode);
     }
 
     #[inline]
-    pub fn fade_out<P1, P2>(&mut self, top_left: P1, bottom_right: P2, axis: super::types::Axis)
-    where
-        P1: Into<Point>,
-        P2: Into<Point>,
-    {
-        imageops::fade_out(self, top_left.into(), bottom_right.into(), axis);
+    pub fn fade_out(
+        &mut self,
+        start: impl Into<Point>,
+        end: impl Into<Point>,
+        axis: super::types::Axis,
+    ) -> Result<(), Error> {
+        imageops::fade_out(self, start.into(), end.into(), axis)
     }
 
     #[inline]
-    pub fn resize<S>(&mut self, size: S, mode: super::ResizeMode)
-    where
-        S: Into<Size>,
-    {
+    pub fn resize(&mut self, size: impl Into<Size>, mode: super::ResizeMode) {
         #[cfg(debug_assertions)]
         let start = chrono::Utc::now().time();
 
@@ -349,6 +328,104 @@ impl Image {
                 .map(|filename| p.with_file_name(filename))
         });
         (path, format)
+    }
+}
+
+mod sealed {
+    use super::{Error, Image};
+    use crate::arithmetic::{Cast, CastError};
+    use crate::error;
+    use crate::types::Rect;
+
+    #[derive(PartialEq, Eq, Copy, Clone, Debug)]
+    #[non_exhaustive]
+    pub struct ImageRect {
+        pub top: u32,
+        pub left: u32,
+        pub bottom: u32,
+        pub right: u32,
+        _sealed: (),
+    }
+
+    impl Image {
+        #[inline]
+        pub fn subimage_rect(&mut self, rect: &Rect) -> Result<ImageRect, Error> {
+            let image_rect: Rect = self.size().into();
+
+            if !image_rect.contains(&rect.top_left()) {
+                return Err(Error::OutOfBounds {
+                    bounds: image_rect,
+                    point: rect.top_left(),
+                });
+            }
+
+            if !image_rect.contains(&rect.bottom_right()) {
+                return Err(Error::OutOfBounds {
+                    bounds: image_rect,
+                    point: rect.bottom_right(),
+                });
+            }
+
+            match (|| {
+                Ok::<_, CastError<i64, u32>>(ImageRect {
+                    top: rect.top.cast::<u32>()?,
+                    left: rect.left.cast::<u32>()?,
+                    bottom: rect.bottom.cast::<u32>()?,
+                    right: rect.right.cast::<u32>()?,
+                    _sealed: (),
+                })
+            })() {
+                Ok(rect) => Ok(rect),
+                Err(err) => Err(Error::Arithmetic(error::Arithmetic {
+                    msg: format!(
+                        "failed to get subview {} into image of size {}",
+                        rect,
+                        self.size()
+                    ),
+                    source: err.into(),
+                })),
+            }
+        }
+    }
+}
+
+pub use sealed::ImageRect;
+
+impl ImageRect {
+    // pub fn size(&self) -> Result<Size, error::Arithmetic> {
+    #[inline]
+    #[must_use]
+    pub fn size(&self) -> Size {
+        // safety: this is safe because these invariants hold:
+        // 1. top <= bottom
+        // 2. left <=  right
+        Size {
+            width: self.right - self.left,
+            height: self.bottom - self.top,
+        }
+
+        // match (|| {
+        //     Ok::<Size, ops::SubError<u32, u32>>(Size {
+        //         width: self.right.checked_sub(self.left)?,
+        //         height: self.bottom.checked_sub(self.top)?,
+        //     })
+        // })() {
+        //     Ok(size) => Ok(size),
+        //     Err(err) => Err(error::Arithmetic {
+        //         msg: format!("failed to compute size for {}", self),
+        //         source: err.into(),
+        //     }),
+        // }
+    }
+
+    #[inline]
+    pub fn x_coords(&self) -> std::ops::Range<u32> {
+        self.left..self.right
+    }
+
+    #[inline]
+    pub fn y_coords(&self) -> std::ops::Range<u32> {
+        self.top..self.bottom
     }
 }
 

@@ -1,6 +1,6 @@
 use super::arithmetic::{ops::CheckedSub, Round};
 use super::img;
-use super::types::{Rect, Point, Size};
+use super::types::{Point, Rect, Size};
 use std::path::Path;
 
 #[derive(thiserror::Error, Debug)]
@@ -110,44 +110,57 @@ impl Border {
 
         // border is portrait now, we stich vertically
         // todo: find optimal overlay patches somehow
-        let top_patch = Rect {
-            top: 0,
-            bottom: f64::from(border_size.height)
-                .checked_mul(0.25)
-                .unwrap()
-                .cast::<i64>()
-                .unwrap(),
-            left: 0,
-            right: i64::from(border_size.width),
+        let top_patch = {
+            let top_left = Point { x: 0, y: 0 };
+            let bottom_right = Point {
+                x: i64::from(border_size.width),
+                y: f64::from(border_size.height)
+                    .checked_mul(0.25)
+                    .unwrap()
+                    .cast::<i64>()
+                    .unwrap(),
+            };
+            Rect::from_points(top_left, bottom_right)
         };
         let top_patch_size = top_patch.size().unwrap();
 
-        let bottom_patch = Rect {
-            top: f64::from(border_size.height)
-                .checked_mul(0.75)
-                .unwrap()
-                .cast::<i64>()
-                .unwrap(),
-            bottom: i64::from(border_size.height),
-            left: 0,
-            right: i64::from(border_size.width),
+        let bottom_patch = {
+            let top_left = Point {
+                x: 0,
+                y: f64::from(border_size.height)
+                    .checked_mul(0.75)
+                    .unwrap()
+                    .cast::<i64>()
+                    .unwrap(),
+            };
+            let bottom_right = Point {
+                x: i64::from(border_size.width),
+                y: i64::from(border_size.height),
+            };
+            Rect::from_points(top_left, bottom_right)
         };
         let bottom_patch_size = bottom_patch.size().unwrap();
 
-        let overlay_patch = Rect {
-            top: f64::from(border_size.height)
-                .checked_mul(0.3)
-                .unwrap()
-                .cast::<i64>()
-                .unwrap(),
-            bottom: f64::from(border_size.height)
-                .checked_mul(0.7)
-                .unwrap()
-                .cast::<i64>()
-                .unwrap(),
-            left: 0,
-            right: i64::from(border_size.width),
+        let overlay_patch = {
+            let top_left = Point {
+                x: 0,
+                y: f64::from(border_size.height)
+                    .checked_mul(0.3)
+                    .unwrap()
+                    .cast::<i64>()
+                    .unwrap(),
+            };
+            let bottom_right = Point {
+                x: i64::from(border_size.width),
+                y: f64::from(border_size.height)
+                    .checked_mul(0.7)
+                    .unwrap()
+                    .cast::<i64>()
+                    .unwrap(),
+            };
+            Rect::from_points(top_left, bottom_right)
         };
+
         let overlay_patch_size = overlay_patch.size().unwrap();
 
         // create buffer for the new border

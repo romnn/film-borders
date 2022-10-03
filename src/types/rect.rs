@@ -11,52 +11,114 @@ struct Bounds {
     y: std::ops::RangeInclusive<i64>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub struct Rect {
-    pub top: i64,
-    pub left: i64,
-    pub bottom: i64,
-    pub right: i64,
-}
+mod sealed {
+    use crate::arithmetic::{
+        self,
+        ops::{self, CheckedAdd},
+    };
+    use crate::error;
+    use crate::types::{Point, Size};
 
-impl arithmetic::Type for Rect {}
-
-impl Rect {
-    #[inline]
-    pub fn new(
-        top_left: impl Into<Point>,
-        size: impl Into<Size>,
-    ) -> Result<Self, error::Arithmetic> {
-        let top_left = top_left.into();
-        let size = size.into();
-        let bottom_right =
-            top_left
-                .checked_add(Point::from(size))
-                .map_err(|err| error::Arithmetic {
-                    msg: format!("failed to create rect at {} of size {}", top_left, size),
-                    source: err.into(),
-                })?;
-        Ok(Self {
-            top: top_left.y,
-            left: top_left.x,
-            bottom: bottom_right.y,
-            right: bottom_right.x,
-        })
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub struct Rect {
+        pub top: i64,
+        pub left: i64,
+        pub bottom: i64,
+        pub right: i64,
+        _sealed: (),
     }
 
-    #[inline]
-    #[must_use]
-    pub fn from_points(p1: impl Into<Point>, p2: impl Into<Point>) -> Self {
-        let p1 = p1.into();
-        let p2 = p2.into();
-        Self {
-            top: p1.y.min(p2.y),
-            bottom: p1.y.max(p2.y),
-            left: p1.x.min(p2.x),
-            right: p1.x.max(p2.x),
+    impl arithmetic::Type for Rect {}
+
+    impl Rect {
+        #[inline]
+        pub fn new(
+            top_left: impl Into<Point>,
+            size: impl Into<Size>,
+        ) -> Result<Self, error::Arithmetic> {
+            let top_left = top_left.into();
+            let size = size.into();
+            let bottom_right =
+                top_left
+                    .checked_add(Point::from(size))
+                    .map_err(|err| error::Arithmetic {
+                        msg: format!("failed to create rect at {} of size {}", top_left, size),
+                        source: err.into(),
+                    })?;
+            Ok(Self {
+                top: top_left.y,
+                left: top_left.x,
+                bottom: bottom_right.y,
+                right: bottom_right.x,
+                _sealed: (),
+            })
+        }
+
+        #[inline]
+        #[must_use]
+        pub fn from_points(p1: impl Into<Point>, p2: impl Into<Point>) -> Self {
+            let p1 = p1.into();
+            let p2 = p2.into();
+            Self {
+                top: p1.y.min(p2.y),
+                bottom: p1.y.max(p2.y),
+                left: p1.x.min(p2.x),
+                right: p1.x.max(p2.x),
+                _sealed: (),
+            }
+        }
+
+        #[inline]
+        #[must_use]
+        pub fn clamp(self, bounds: &Self) -> Self {
+            let top = self.top.clamp(bounds.top, bounds.bottom);
+            let left = self.left.clamp(bounds.left, bounds.right);
+            let bottom = self.bottom.clamp(bounds.top, bounds.bottom);
+            let right = self.right.clamp(bounds.left, bounds.right);
+            Self {
+                top,
+                left,
+                bottom,
+                right,
+                _sealed: (),
+            }
         }
     }
 
+    impl CheckedAdd<Point> for Rect {
+        type Output = Self;
+        type Error = ops::AddError<Self, Point>;
+
+        #[inline]
+        fn checked_add(self, rhs: Point) -> Result<Self::Output, Self::Error> {
+            match (|| {
+                let top = CheckedAdd::checked_add(self.top, rhs.y)?;
+                let left = CheckedAdd::checked_add(self.left, rhs.x)?;
+                let bottom = CheckedAdd::checked_add(self.bottom, rhs.y)?;
+                let right = CheckedAdd::checked_add(self.right, rhs.x)?;
+                Ok::<Self, ops::AddError<i64, i64>>(Self {
+                    top,
+                    left,
+                    bottom,
+                    right,
+                    _sealed: (),
+                })
+            })() {
+                Ok(rect) => Ok(rect),
+                Err(err) => Err(ops::AddError(arithmetic::error::Operation {
+                    lhs: self,
+                    rhs,
+                    kind: None,
+                    cause: Some(Box::new(err)),
+                })),
+            }
+        }
+    }
+}
+
+pub use sealed::Rect;
+
+impl Rect {
     #[inline]
     pub fn pixel_count(&self) -> Result<u64, error::Arithmetic> {
         let size = self.size()?;
@@ -69,50 +131,70 @@ impl Rect {
         })
     }
 
-    #[inline]
-    pub fn x_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
-        match (|| {
-            let left = self.left.cast::<u32>()?;
-            let right = self.right.cast::<u32>()?;
-            Ok::<_, CastError<i64, u32>>(left..right)
-        })() {
-            Ok(range) => Ok(range),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!("failed to get x coordinate range for {}", self),
-                source: err.into(),
-            }),
-        }
-    }
+    // #[inline]
+    // pub fn x_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
+    //     match (|| {
+    //         let left = self.left.cast::<u32>()?;
+    //         let right = self.right.cast::<u32>()?;
+    //         Ok::<_, CastError<i64, u32>>(left..right)
+    //     })() {
+    //         Ok(range) => Ok(range),
+    //         Err(err) => Err(error::Arithmetic {
+    //             msg: format!("failed to get x coordinate range for {}", self),
+    //             source: err.into(),
+    //         }),
+    //     }
+    // }
 
-    #[inline]
-    pub fn y_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
-        match (|| {
-            let top = self.top.cast::<u32>()?;
-            let bottom = self.bottom.cast::<u32>()?;
-            Ok::<_, CastError<i64, u32>>(top..bottom)
-        })() {
-            Ok(range) => Ok(range),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!("failed to get y coordinate range for {}", self),
-                source: err.into(),
-            }),
-        }
-    }
+    // #[inline]
+    // pub fn y_coords(&self) -> Result<std::ops::Range<u32>, error::Arithmetic> {
+    //     match (|| {
+    //         let top = self.top.cast::<u32>()?;
+    //         let bottom = self.bottom.cast::<u32>()?;
+    //         Ok::<_, CastError<i64, u32>>(top..bottom)
+    //     })() {
+    //         Ok(range) => Ok(range),
+    //         Err(err) => Err(error::Arithmetic {
+    //             msg: format!("failed to get y coordinate range for {}", self),
+    //             source: err.into(),
+    //         }),
+    //     }
+    // }
 
     #[inline]
     pub fn size(&self) -> Result<Size, error::Arithmetic> {
-        let top_left = self.top_left();
-        let bottom_right = self.bottom_right();
-        let size = bottom_right
-            .checked_sub(top_left)
-            .map_err(|err| error::Arithmetic {
-                msg: format!(
-                    "failed to compute size from top right {} and bottom left {}",
-                    top_left, bottom_right
-                ),
+        match (|| {
+            // safety: this is safe because these invariants hold:
+            // 1. top <= bottom
+            // 2. left <=  right
+            let width = self.right - self.left;
+            let height = self.bottom - self.top;
+            let width = width.cast::<u32>()?;
+            let height = height.cast::<u32>()?;
+            Ok::<Size, CastError<i64, u32>>(Size { width, height })
+        })() {
+            Ok(size) => Ok(size),
+            Err(err) => Err(error::Arithmetic {
+                msg: format!("failed to compute size for {}", self),
                 source: err.into(),
-            })?;
-        size.try_into()
+            }),
+        }
+        // Size {
+        //     width: self.right - self.left,
+        //     height: self.bottom - self.top,
+        // }
+        // let top_left = self.top_left();
+        // let bottom_right = self.bottom_right();
+        // let size = bottom_right
+        //     .checked_sub(top_left)
+        //     .map_err(|err| error::Arithmetic {
+        //         msg: format!(
+        //             "failed to compute size from top right {} and bottom left {}",
+        //             top_left, bottom_right
+        //         ),
+        //         source: err.into(),
+        //     })?;
+        // size.try_into()
     }
 
     #[inline]
@@ -266,31 +348,10 @@ impl Rect {
 
         Ok(bounds.x.contains(&point.x) && bounds.y.contains(&point.y))
     }
-
-    #[inline]
-    #[must_use]
-    pub fn clip_to(self, bounds: &Self) -> Self {
-        let top = self.top.clamp(bounds.top, bounds.bottom);
-        let left = self.left.clamp(bounds.left, bounds.right);
-        let bottom = self.bottom.clamp(bounds.top, bounds.bottom);
-        let right = self.right.clamp(bounds.left, bounds.right);
-        Self {
-            top,
-            left,
-            bottom,
-            right,
-        }
-    }
 }
 
 impl From<Size> for Rect {
     fn from(size: Size) -> Self {
-        // let top_left = Point::origin();
-        // let bottom_right = Point {
-        //     // Safety: this can never underflow because size is u32
-        //     x: i64::from(size.width), //  - 1,
-        //     y: i64::from(size.height), // - 1,
-        // };
         Self::from_points((0, 0), size)
     }
 }
@@ -298,13 +359,6 @@ impl From<Size> for Rect {
 impl From<Point> for Rect {
     fn from(point: Point) -> Self {
         Self::from_points(point, point)
-        // let Point { x, y } = point;
-        // Self {
-        //     top: y,
-        //     left: x,
-        //     bottom: y,
-        //     right: x,
-        // }
     }
 }
 
@@ -335,35 +389,6 @@ impl std::fmt::Display for Rect {
     }
 }
 
-impl CheckedAdd<Point> for Rect {
-    type Output = Self;
-    type Error = ops::AddError<Self, Point>;
-
-    #[inline]
-    fn checked_add(self, rhs: Point) -> Result<Self::Output, Self::Error> {
-        match (|| {
-            let top = CheckedAdd::checked_add(self.top, rhs.y)?;
-            let left = CheckedAdd::checked_add(self.left, rhs.x)?;
-            let bottom = CheckedAdd::checked_add(self.bottom, rhs.y)?;
-            let right = CheckedAdd::checked_add(self.right, rhs.x)?;
-            Ok::<Self, ops::AddError<i64, i64>>(Self {
-                top,
-                left,
-                bottom,
-                right,
-            })
-        })() {
-            Ok(rect) => Ok(rect),
-            Err(err) => Err(ops::AddError(arithmetic::error::Operation {
-                lhs: self,
-                rhs,
-                kind: None,
-                cause: Some(Box::new(err)),
-            })),
-        }
-    }
-}
-
 impl CheckedSub<Sides> for Rect {
     type Output = Self;
     type Error = ops::SubError<Self, Sides>;
@@ -375,20 +400,24 @@ impl CheckedSub<Sides> for Rect {
             let left = CheckedAdd::checked_add(self.left, i64::from(rhs.left))?;
             let bottom = CheckedSub::checked_sub(self.bottom, i64::from(rhs.bottom))?;
             let right = CheckedSub::checked_sub(self.right, i64::from(rhs.right))?;
-            Ok::<Self, arithmetic::Error>(Self {
-                top,
-                left,
-                bottom,
-                right,
-            })
+            let top_left = Point { x: left, y: top };
+            let bottom_right = Point {
+                x: right,
+                y: bottom,
+            };
+            Ok::<Self, arithmetic::Error>(Self::from_points(top_left, bottom_right))
         })() {
             Ok(rect) => Ok(rect),
-            Err(arithmetic::Error(err)) => Err(ops::SubError(arithmetic::error::Operation {
-                lhs: self,
-                rhs,
-                kind: None,
-                cause: Some(err),
-            })),
+            Err(arithmetic::Error(err)) => {
+                let op_err = arithmetic::error::Operation {
+                    lhs: self,
+                    rhs,
+                    kind: None,
+                    cause: Some(err),
+                };
+
+                Err(ops::SubError(op_err))
+            }
         }
     }
 }
@@ -404,20 +433,23 @@ impl CheckedAdd<Sides> for Rect {
             let left = CheckedSub::checked_sub(self.left, i64::from(rhs.left))?;
             let bottom = CheckedAdd::checked_add(self.bottom, i64::from(rhs.bottom))?;
             let right = CheckedAdd::checked_add(self.right, i64::from(rhs.right))?;
-            Ok::<Self, arithmetic::Error>(Self {
-                top,
-                left,
-                bottom,
-                right,
-            })
+            let top_left = Point { x: left, y: top };
+            let bottom_right = Point {
+                x: right,
+                y: bottom,
+            };
+            Ok::<Self, arithmetic::Error>(Self::from_points(top_left, bottom_right))
         })() {
             Ok(rect) => Ok(rect),
-            Err(arithmetic::Error(err)) => Err(ops::AddError(arithmetic::error::Operation {
-                lhs: self,
-                rhs,
-                kind: None,
-                cause: Some(err),
-            })),
+            Err(arithmetic::Error(err)) => {
+                let op_err = arithmetic::error::Operation {
+                    lhs: self,
+                    rhs,
+                    kind: None,
+                    cause: Some(err),
+                };
+                Err(ops::AddError(op_err))
+            }
         }
     }
 }

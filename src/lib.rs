@@ -224,7 +224,7 @@ impl ImageBorders {
                     crate::debug!("drawing {:?}", &c);
                     let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
                     image_rect = image_rect.extend(3).unwrap();
-                    image_rect = image_rect.clip_to(&border_rect);
+                    image_rect = image_rect.clamp(&border_rect);
                     let image_size = image_rect.size()?;
 
                     let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
@@ -256,7 +256,7 @@ impl ImageBorders {
 
                 let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
                 image_rect = image_rect.extend(3).unwrap();
-                image_rect = image_rect.clip_to(&border_rect);
+                image_rect = image_rect.clamp(&border_rect);
 
                 primary.resize_to_fit(image_rect.size()?, ResizeMode::Cover, CropMode::Center);
 

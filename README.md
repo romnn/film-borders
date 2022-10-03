@@ -24,17 +24,20 @@ sudo cargo flamegraph -o my_flamegraph.svg -- apply --image ./samples/sample1.jp
 
 #### Usage
 ```bash
-film-borders apply --image ~/Downloads/testscan.jpg --width 2000 --height 1500 --border 10 --rotate 90
+film-borders --image ~/Downloads/testscan.jpg --width 2000 --height 1500 --border 10 --rotate 90
 ```
 
 For a list of options, see
 ```bash
-film-borders apply --help
+film-borders --help
 ```
 
 #### TODO
-- lint
-- write a clamp trait
+- consider: where should image rect be used
+- consider: where should into be used, where can be passed by reference
+- add backtraces to all error types
+- make the errors more nuanced, e.g. from what operation they stem from
+
 - add single simple benchmark
 - get out the benchmark data as json or so
 - make a performance tracker via github actions
@@ -43,7 +46,6 @@ film-borders apply --help
   - should test: all border fill modes
   - should test: with single image and multiple images
   - should test: different sets of border configurations
-- add backtraces to all error types
 
 - use impls where possible
 - inline everything
@@ -59,6 +61,8 @@ film-borders apply --help
 - use generic image backend
 
 #### Done
+- write a clamp trait
+- lint
 - remove the apply subcommand
 - make border optional
 - allow custom border images (cli, lib and web)
