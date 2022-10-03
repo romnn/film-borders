@@ -1,5 +1,5 @@
 use super::arithmetic::{ops::CheckedSub, Round};
-use super::img;
+use super::img::{self, Image};
 use super::types::{Point, Rect, Size};
 use std::path::Path;
 
@@ -10,6 +10,9 @@ pub enum Error {
 
     #[error("invalid border: {0}")]
     Invalid(String),
+
+    #[error(transparent)]
+    Image(#[from] img::Error),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -36,7 +39,7 @@ pub enum Kind {
 
 impl Kind {
     #[inline]
-    pub fn into_border(self) -> Result<Border, super::Error> {
+    pub fn into_border(self) -> Result<Border, Error> {
         match self {
             #[cfg(feature = "builtin")]
             Self::Builtin(builtin) => builtin.into_border(),
@@ -57,7 +60,7 @@ impl std::fmt::Debug for Kind {
 
 #[derive(Clone)]
 pub struct Border {
-    inner: img::Image,
+    inner: Image,
     options: Option<Options>,
     transparent_components: Vec<super::Rect>,
 }
@@ -67,13 +70,15 @@ impl Border {
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(
         reader: R,
         options: Option<Options>,
-    ) -> Result<Self, super::Error> {
-        Self::from_image(img::Image::from_reader(reader)?, options)
+    ) -> Result<Self, Error> {
+        let image = Image::from_reader(reader).map_err(img::Error::from)?;
+        Self::from_image(image, options)
     }
 
     #[inline]
-    pub fn open<P: AsRef<Path>>(path: P, options: Option<Options>) -> Result<Self, super::Error> {
-        Self::from_image(img::Image::open(path)?, options)
+    pub fn open<P: AsRef<Path>>(path: P, options: Option<Options>) -> Result<Self, Error> {
+        let image = Image::open(path).map_err(img::Error::from)?;
+        Self::from_image(image, options)
     }
 
     #[inline]
@@ -105,12 +110,12 @@ impl Border {
             height: None,
         });
         crate::debug!(&border_size);
-        border.resize_to_fit(border_size, ResizeMode::Cover)?;
+        border.resize_and_crop(border_size, ResizeMode::Cover)?;
         crate::debug!(&border.content_size());
 
         // border is portrait now, we stich vertically
         // todo: find optimal overlay patches somehow
-        let top_patch = {
+        let top_patch_rect = {
             let top_left = Point { x: 0, y: 0 };
             let bottom_right = Point {
                 x: i64::from(border_size.width),
@@ -122,9 +127,9 @@ impl Border {
             };
             Rect::from_points(top_left, bottom_right)
         };
-        let top_patch_size = top_patch.size().unwrap();
+        let top_patch_size = top_patch_rect.size().unwrap();
 
-        let bottom_patch = {
+        let bottom_patch_rect = {
             let top_left = Point {
                 x: 0,
                 y: f64::from(border_size.height)
@@ -139,9 +144,9 @@ impl Border {
             };
             Rect::from_points(top_left, bottom_right)
         };
-        let bottom_patch_size = bottom_patch.size().unwrap();
+        let bottom_patch_size = bottom_patch_rect.size().unwrap();
 
-        let overlay_patch = {
+        let overlay_patch_rect = {
             let top_left = Point {
                 x: 0,
                 y: f64::from(border_size.height)
@@ -160,13 +165,12 @@ impl Border {
             };
             Rect::from_points(top_left, bottom_right)
         };
-
-        let overlay_patch_size = overlay_patch.size().unwrap();
+        let overlay_patch_size = overlay_patch_rect.size().unwrap();
 
         // create buffer for the new border
         let border_padding = border_size.checked_sub(border.content_size()).unwrap();
         let new_border_size = target_content_size.checked_add(border_padding).unwrap();
-        let mut new_border = img::Image::with_size(new_border_size);
+        let mut new_border = Image::with_size(new_border_size);
         crate::debug!(&new_border.size());
 
         #[cfg(debug_assertions)]
@@ -184,13 +188,15 @@ impl Border {
         }
 
         // draw top patch
-        let mut border_top: img::Image = (*border).clone();
-        border_top.crop(top_patch.top_left(), top_patch.bottom_right());
+        let mut border_top: Image = (*border).clone();
+        border_top.crop(&top_patch_rect);
+        // border_top.crop(top_patch.top_left(), top_patch.bottom_right());
         new_border.overlay(&border_top, Point::origin());
 
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
-        border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
+        border_bottom.crop(&bottom_patch_rect);
+        // border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
         // let bottom_patch_size = bottom_patch.size().unwrap();
         // let top_patch_size = top_patch.size().unwrap();
 
@@ -264,7 +270,7 @@ impl Border {
                         .unwrap(),
                 )
                 .unwrap();
-            let patch_top_left = top_patch
+            let patch_top_left = top_patch_rect
                 .bottom_left()
                 .checked_add(Point {
                     x: 0,
@@ -302,7 +308,7 @@ impl Border {
     }
 
     #[inline]
-    pub fn from_image(inner: img::Image, options: Option<Options>) -> Result<Self, super::Error> {
+    pub fn from_image(inner: Image, options: Option<Options>) -> Result<Self, Error> {
         let mut border = Self {
             inner,
             options,
@@ -313,13 +319,13 @@ impl Border {
     }
 
     #[inline]
-    pub fn resize_to_fit(
+    pub fn resize_and_crop(
         &mut self,
         container: Size,
         resize_mode: super::ResizeMode,
     ) -> Result<(), super::Error> {
         self.inner
-            .resize_to_fit(container, resize_mode, super::CropMode::Center);
+            .resize_and_crop(container, resize_mode, super::CropMode::Center);
         self.compute_transparent_components(self.options)?;
         Ok(())
     }
@@ -389,7 +395,7 @@ impl Border {
 }
 
 impl std::ops::Deref for Border {
-    type Target = img::Image;
+    type Target = Image;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -405,12 +411,12 @@ impl std::ops::DerefMut for Border {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{img, types};
+    use crate::{img::Image, types};
     use anyhow::Result;
     use std::path::{Path, PathBuf};
 
     fn draw_transparent_components(
-        mut border: img::Image,
+        mut border: Image,
         components: &Vec<types::Rect>,
         output: impl AsRef<Path>,
     ) -> Result<()> {
@@ -451,10 +457,10 @@ mod tests {
                     let repo: PathBuf = env!("CARGO_MANIFEST_DIR").into();
                     let border_file = repo.join(&border_path);
                     let options = Options::default();
-                    let img = img::Image::open(&border_file)?;
+                    let img = Image::open(&border_file)?;
                     let border = Border::from_image(img.clone(), Some(options));
                     let components = match border {
-                        Err(crate::Error::Border(Error::BadTransparency(c))) => Ok(c),
+                        Err(Error::BadTransparency(c)) => Ok(c),
                         Err(err) => Err(err),
                         Ok(border) => {
                             Ok(border.transparent_components().to_vec())
@@ -495,7 +501,7 @@ mod tests {
             transparent_component_threshold: 8,
             alpha_threshold: 0.95,
         };
-        let img = img::Image::open(&border_file)?;
+        let img = Image::open(&border_file)?;
         let border = Border::from_image(img, Some(options))?;
 
         for rotation in &[

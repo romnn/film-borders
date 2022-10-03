@@ -405,21 +405,11 @@ where
     F: arithmetic::Cast + arithmetic::Type,
 {
     type Output = Self;
-    // type Error = ops::MulError<Self, F>;
     type Error = error::Arithmetic;
 
     #[inline]
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
         self.scale_by::<_, Round>(scalar)
-        // match self.scale_by::<_, Round>(scalar) {
-        //     Ok(size) => Ok(size),
-        //     Err(::Error(err)) => Err(ops::MulError(arithmetic::error::Operation {
-        //         lhs: self,
-        //         rhs: scalar,
-        //         kind: None,
-        //         cause: Some(err),
-        //     })),
-        // }
     }
 }
 
@@ -428,22 +418,12 @@ where
     F: arithmetic::Cast + arithmetic::Type + num::traits::Inv<Output = F>,
 {
     type Output = Self;
-    // type Error = ops::DivError<Self, F>;
     type Error = error::Arithmetic;
 
     #[inline]
     fn checked_div(self, scalar: F) -> Result<Self::Output, Self::Error> {
         let inverse = scalar.inv();
         self.scale_by::<_, Round>(inverse)
-        // match self.scale_by::<_, Round>(inverse) {
-        //     Ok(size) => Ok(size),
-        //     Err(arithmetic::Error(err)) => Err(ops::DivError(arithmetic::error::Operation {
-        //         lhs: self,
-        //         rhs: inverse,
-        //         kind: None,
-        //         cause: Some(err),
-        //     })),
-        // }
     }
 }
 

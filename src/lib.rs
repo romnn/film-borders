@@ -58,7 +58,7 @@ impl ImageBorders {
 
     #[inline]
     pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
-        let img = Image::from_reader(reader)?;
+        let img = Image::from_reader(reader).unwrap();
         Ok(Self::single(img))
     }
 
@@ -70,7 +70,7 @@ impl ImageBorders {
     /// If the image can not be opened, an error is returned
     ///
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let img = Image::open(path)?;
+        let img = Image::open(path).unwrap();
         Ok(Self::single(img))
     }
 
@@ -88,7 +88,7 @@ impl ImageBorders {
     ) -> Result<img::Image, Error> {
         // prepare images
         let mut images: Vec<img::Image> = self.images.clone();
-        let primary = images.get_mut(0).ok_or(Error::MissingImage)?;
+        let primary = images.get_mut(0).unwrap(); // .ok_or(Error::MissingImage)?;
         primary.rotate(&options.image_rotation);
         if let Some(crop_percent) = options.crop {
             let crop = crop_percent.checked_mul(primary.size()).unwrap();
@@ -98,9 +98,9 @@ impl ImageBorders {
         // prepare the border for the primary image
         let mut border = match border {
             Some(border) => {
-                let mut border = border.into_border()?;
-                border.rotate_to_orientation(primary.orientation())?;
-                border.rotate(&options.border_rotation)?;
+                let mut border = border.into_border().unwrap();
+                border.rotate_to_orientation(primary.orientation()).unwrap();
+                border.rotate(&options.border_rotation).unwrap();
                 Some(border)
             }
             None => None,
@@ -177,22 +177,26 @@ impl ImageBorders {
         crate::debug!(&content_rect);
 
         #[cfg(debug_assertions)]
-        result_image.fill_rect(
-            Color::rgba(0, 0, 255, 100),
-            &content_rect,
-            // content_rect.top_left(),
-            // content_rect.size()?,
-            FillMode::Blend,
-        )?;
+        result_image
+            .fill_rect(
+                Color::rgba(0, 0, 255, 100),
+                &content_rect,
+                // content_rect.top_left(),
+                // content_rect.size()?,
+                FillMode::Blend,
+            )
+            .unwrap();
 
         let content_rect_sub_margin = content_rect.checked_sub(margin).unwrap();
-        result_image.fill_rect(
-            options.frame_color,
-            &content_rect_sub_margin,
-            // content_rect_sub_margin.top_left(),
-            // content_rect_sub_margin.size()?,
-            FillMode::Set,
-        )?;
+        result_image
+            .fill_rect(
+                options.frame_color,
+                &content_rect_sub_margin,
+                // content_rect_sub_margin.top_left(),
+                // content_rect_sub_margin.size()?,
+                FillMode::Set,
+            )
+            .unwrap();
 
         let border_rect = content_rect_sub_margin.checked_sub(frame_width).unwrap();
         crate::debug!(&border_rect);
@@ -214,7 +218,7 @@ impl ImageBorders {
                 let default_component = vec![default_component];
                 let components = match border {
                     Some(ref mut border) => {
-                        border.resize_to_fit(border_size, ResizeMode::Contain)?;
+                        border.resize_and_crop(border_size, ResizeMode::Contain)?;
 
                         let default_image = primary.clone();
                         images.resize(border.transparent_components().len(), default_image);
@@ -234,7 +238,7 @@ impl ImageBorders {
                     let image_size = image_rect.size()?;
 
                     let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
-                    image.resize_to_fit(
+                    image.resize_and_crop(
                         image_size,
                         ResizeMode::Cover,
                         CropMode::Custom {
@@ -254,7 +258,7 @@ impl ImageBorders {
                 let c = match border {
                     Some(ref mut border) => {
                         let border_size = border_rect.size()?;
-                        border.resize_to_fit(border_size, ResizeMode::Contain)?;
+                        border.resize_and_crop(border_size, ResizeMode::Contain)?;
                         border.content_rect()
                     }
                     None => &default_component,
@@ -264,7 +268,7 @@ impl ImageBorders {
                 image_rect = image_rect.extend(3).unwrap();
                 image_rect = image_rect.clamp(&border_rect);
 
-                primary.resize_to_fit(image_rect.size()?, ResizeMode::Cover, CropMode::Center);
+                primary.resize_and_crop(image_rect.size()?, ResizeMode::Cover, CropMode::Center);
 
                 result_image.overlay(&*primary, image_rect.top_left());
                 if let Some(border) = border {

@@ -1,8 +1,16 @@
 use super::border;
 use super::error;
-use super::{img, Error};
+use super::img;
 use std::io;
 use wasm_bindgen::prelude::*;
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    // #[error("point {point} exceeds image bounds {bounds}")]
+    // OutOfBounds { point: Point, bounds: Rect },
+    // #[error("failed to resize image")]
+    // Resize(#[source] error::Arithmetic),
+}
 
 #[wasm_bindgen]
 #[derive(Debug, Copy, Clone)]
@@ -31,12 +39,12 @@ impl std::str::FromStr for Builtin {
 
 impl Builtin {
     #[inline]
-    pub fn into_border(self) -> Result<border::Border, Error> {
+    pub fn into_border(self) -> Result<border::Border, border::Error> {
         match self {
             Self::Border120_1 => {
                 let data = include_bytes!("../borders/border.png");
-                let img = img::Image::from_reader(io::Cursor::new(&data))?;
-                border::Border::from_image(img, None)
+                let reader = io::Cursor::new(&data);
+                border::Border::from_reader(reader, None)
             }
         }
     }

@@ -1,4 +1,4 @@
-use super::arithmetic::{self, ops::CheckedAdd, Cast, Clamp};
+use super::arithmetic::{self, ops::CheckedAdd, Cast, CastError, Clamp};
 use super::types::{Point, Rect, Size};
 use super::{error, img};
 pub use image::imageops::*;
@@ -77,7 +77,7 @@ pub fn fill_rect(
     color: image::Rgba<u8>,
     rect: &Rect,
     mode: FillMode,
-) -> Result<(), img::Error> {
+) -> Result<(), img::SubviewError> {
     let rect = image.subimage_rect(rect)?;
     for x in rect.x_coords() {
         for y in rect.y_coords() {
@@ -91,13 +91,25 @@ pub fn fill_rect(
     Ok(())
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum FadeError {
+    #[error(transparent)]
+    Subview(#[from] img::SubviewError),
+
+    #[error("failed convert {alpha} to alpha value")]
+    InvalidAlpha {
+        alpha: f64,
+        source: CastError<f64, u8>,
+    },
+}
+
 #[inline]
 pub fn fade_out(
     image: &mut img::Image,
     start: impl Into<Point>,
     end: impl Into<Point>,
     axis: super::Axis,
-) -> Result<(), img::Error> {
+) -> Result<(), FadeError> {
     use super::Axis;
 
     let start = start.into();
@@ -120,12 +132,15 @@ pub fn fade_out(
         let mut frac = f64::from(y) / f64::from(h);
         frac = (switch_direction - frac).abs();
         let alpha = 255.0 * frac;
-        let alpha = alpha.cast::<u8>().map_err(|err| {
-            img::Error::Arithmetic(error::Arithmetic {
-                msg: format!("failed to convert {} to alpha value", alpha),
-                source: err.into(),
-            })
-        })?;
+        let alpha = alpha
+            .cast::<u8>()
+            .map_err(|err| FadeError::InvalidAlpha { alpha, source: err })?;
+        // let alpha = alpha.cast::<u8>().map_err(|err| {
+        //     img::Error::Arithmetic(error::Arithmetic {
+        //         msg: format!("failed to convert {} to alpha value", alpha),
+        //         source: err.into(),
+        //     })
+        // })?;
 
         for x in 0..w {
             let (x, y) = match axis {
