@@ -1,5 +1,5 @@
 use super::arithmetic::{self, ops::CheckedSub, Cast, CastError};
-use super::types::{sides::abs::Sides, Point, Rect, Size};
+use super::types::{self, sides::abs::Sides, Point, Rect, Size};
 use super::{defaults, error, imageops};
 pub use image::ImageFormat;
 use std::borrow::Borrow;
@@ -37,13 +37,16 @@ pub enum FillError {
 #[derive(thiserror::Error, Debug)]
 pub enum ResizeError {
     #[error(transparent)]
-    Arithmetic(#[from] error::Arithmetic),
+    ScaleTo(#[from] types::size::ScaleToError),
+    // #[error(transparent)]
+    // Arithmetic(#[from] error::Arithmetic),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum CropError {
     #[error(transparent)]
-    // Arithmetic(#[from] arithmetic::Error),
+    CropToFit(#[from] types::size::CropToFitError),
+    #[error(transparent)]
     Arithmetic(#[from] error::Arithmetic),
     #[error(transparent)]
     Subview(#[from] SubviewError),

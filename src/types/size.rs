@@ -2,11 +2,77 @@ use super::sides::abs::Sides;
 use crate::arithmetic::{
     self,
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
-    Cast, Ceil, Clamp, ClampMin, Round,
+    Cast, CastError, Ceil, Clamp, ClampMin, Round,
 };
-use crate::error;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to compute scale factors to scale {size} to {target} with mode {mode:?}")]
+pub struct ScaleFactorsError {
+    size: Size,
+    target: Size,
+    mode: super::ResizeMode,
+    source: ops::DivError<f64, f64>,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ScaleToError {
+    #[error(transparent)]
+    ScaleFactors(#[from] ScaleFactorsError),
+
+    #[error(transparent)]
+    ScaleBy(#[from] ScaleByError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to compute crop such that {size} fits {container}")]
+pub struct CropToFitError {
+    size: Size,
+    container: Size,
+    source: CropToFitErrorSource,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum CropToFitErrorSource {
+    #[error(transparent)]
+    Center(#[from] CenterError),
+
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to scale {size} to bounds {bounds:?} with mode {:?}")]
+pub struct ScaleToBoundsError {
+    size: Size,
+    bounds: super::BoundedSize,
+    mode: super::ResizeMode,
+    source: ScaleToError,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to scale {size} by {scalar:?}")]
+pub struct ScaleByError {
+    size: Size,
+    scalar: Option<f64>,
+    source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to compute aspect ratio of {size}")]
+pub struct AspectRatioError {
+    size: Size,
+    source: ops::DivError<f64, f64>,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to center {child} in {parent}")]
+pub struct CenterError {
+    child: Size,
+    parent: Size,
+    source: arithmetic::Error,
+}
 
 #[wasm_bindgen]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default, Copy, Clone)]
@@ -33,12 +99,12 @@ impl Size {
         &self,
         size: impl Into<Size>,
         mode: super::ResizeMode,
-    ) -> Result<(f64, f64), error::Arithmetic> {
-        use super::ResizeMode;
-        let size = size.into();
+    ) -> Result<(f64, f64), ScaleFactorsError> {
+        let target = size.into();
         match (|| {
-            let width_ratio = f64::from(size.width).checked_div(f64::from(self.width))?;
-            let height_ratio = f64::from(size.height).checked_div(f64::from(self.height))?;
+            let width_ratio = f64::from(target.width).checked_div(f64::from(self.width))?;
+            let height_ratio = f64::from(target.height).checked_div(f64::from(self.height))?;
+            use super::ResizeMode;
             let factors = match mode {
                 ResizeMode::Fill => (width_ratio, height_ratio),
                 ResizeMode::Cover => (
@@ -53,13 +119,19 @@ impl Size {
             Ok::<(f64, f64), ops::DivError<f64, f64>>(factors)
         })() {
             Ok(factors) => Ok(factors),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!(
-                    "failed to compute scale factors to scale {} to {} with mode {:?}",
-                    self, size, mode
-                ),
-                source: err.into(),
-            }),
+            Err(err) => Err(ScaleFactorsError {
+                size: *self,
+                target,
+                mode,
+                source: err,
+            })
+            // Err(err) => Err(error::Arithmetic {
+            //     msg: format!(
+            //         "failed to compute scale factors to scale {} to {} with mode {:?}",
+            //         self, size, mode
+            //     ),
+            //     source: err.into(),
+            // }),
         }
     }
 
@@ -84,13 +156,17 @@ impl Size {
 
     #[inline]
     #[must_use]
-    pub fn aspect_ratio(&self) -> Result<f64, error::Arithmetic> {
+    pub fn aspect_ratio(&self) -> Result<f64, AspectRatioError> {
         f64::from(self.width)
             .checked_div(f64::from(self.height))
-            .map_err(|err| error::Arithmetic {
-                msg: format!("failed to compute aspect ratio of {}", self),
-                source: err.into(),
+            .map_err(|err| AspectRatioError {
+                size: *self,
+                source: err,
             })
+        // .map_err(|err| error::Arithmetic {
+        //     msg: format!("failed to compute aspect ratio of {}", self),
+        //     source: err.into(),
+        // })
     }
 
     #[inline]
@@ -136,25 +212,30 @@ impl Size {
 
     #[inline]
     #[must_use]
-    pub fn center(self, size: Self) -> Result<super::Rect, error::Arithmetic> {
-        let container: super::Point = self.into();
-        let size: super::Point = size.into();
+    pub fn center(self, size: Self) -> Result<super::Rect, CenterError> {
+        let parent: super::Point = self.into();
+        let child: super::Point = size.into();
         match (|| {
-            let top_left = container.checked_sub(size)?.checked_div(2.0)?;
-            let bottom_right = top_left.checked_add(size)?;
+            let top_left = parent.checked_sub(child)?.checked_div(2.0)?;
+            let bottom_right = top_left.checked_add(child)?;
             let centered = super::Rect::from_points(top_left, bottom_right);
             Ok(centered)
         })() {
             Ok(rect) => Ok(rect),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!("failed to center {} in {}", size, self),
+            Err(err) => Err(CenterError {
+                child: size,
+                parent: self,
                 source: err,
-            }),
+            })
+            // Err(err) => Err(error::Arithmetic {
+            //     msg: format!("failed to center {} in {}", size, self),
+            //     source: err,
+            // }),
         }
     }
 
     #[inline]
-    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, error::Arithmetic>
+    pub fn scale_by<F, R>(self, scalar: F) -> Result<Self, ScaleByError>
     where
         R: arithmetic::RoundingMode,
         F: arithmetic::Cast + arithmetic::Type,
@@ -171,10 +252,15 @@ impl Size {
             Ok::<Self, arithmetic::Error>(Self { width, height })
         })() {
             Ok(scaled_size) => Ok(scaled_size),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!("failed to scale {} by {}", self, scalar),
+            Err(err) => Err(ScaleByError {
+                size: self,
+                scalar: scalar.cast::<f64>().ok(),
                 source: err,
-            }),
+            })
+            // Err(err) => Err(error::Arithmetic {
+            //     msg: format!("failed to scale {} by {}", self, scalar),
+            //     source: err,
+            // }),
         }
     }
 
@@ -183,7 +269,7 @@ impl Size {
         self,
         bounds: super::BoundedSize,
         mode: super::ResizeMode,
-    ) -> Result<Self, error::Arithmetic> {
+    ) -> Result<Self, ScaleToBoundsError> {
         match (|| {
             match bounds {
                 // unbounded
@@ -220,55 +306,70 @@ impl Size {
             }
         })() {
             Ok(scaled_size) => Ok(scaled_size),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!(
-                    "failed to scale {} to bounds {:?} with mode {:?}",
-                    self, bounds, mode
-                ),
-                source: err.into(),
-            }),
+            Err(err) => Err(ScaleToBoundsError {
+                size: self,
+                bounds,
+                mode,
+                source: err,
+            })
+            // Err(err) => Err(error::Arithmetic {
+            //     msg: format!(
+            //         "failed to scale {} to bounds {:?} with mode {:?}",
+            //         self, bounds, mode
+            //     ),
+            //     source: err.into(),
+            // }),
         }
     }
 
     #[inline]
     pub fn scale_to<S: Into<Size>>(
         self,
-        container: S,
+        size: S,
         mode: super::ResizeMode,
-    ) -> Result<Self, error::Arithmetic> {
-        let container = container.into();
-        match (|| {
-            if mode == super::ResizeMode::Fill {
-                Ok(container)
-            } else {
-                let scale = self.scale_factor(container, mode)?;
-                let scaled = self.scale_by::<_, Ceil>(scale.0)?;
-                Ok::<Self, error::Arithmetic>(scaled)
-            }
-        })() {
-            Ok(scaled_size) => Ok(scaled_size),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!(
-                    "failed to scale {} to {} with mode {:?}",
-                    self, container, mode
-                ),
-                source: err.into(),
-            }),
+    ) -> Result<Self, ScaleToError> {
+        let target = size.into();
+        if mode == super::ResizeMode::Fill {
+            Ok(target)
+        } else {
+            let scale = self.scale_factor(target, mode)?;
+            let scaled = self.scale_by::<_, Ceil>(scale.0)?;
+            Ok(scaled)
+            // Ok::<Self, error::Arithmetic>(scaled)
         }
+
+        // match (|| {
+        //     if mode == super::ResizeMode::Fill {
+        //         Ok(container)
+        //     } else {
+        //         let scale = self.scale_factor(container, mode)?;
+        //         let scaled = self.scale_by::<_, Ceil>(scale.0)?;
+        //         Ok::<Self, error::Arithmetic>(scaled)
+        //     }
+        // })() {
+        //     Ok(scaled_size) => Ok(scaled_size),
+        //     Err(err) => Err(error::Arithmetic {
+        //         msg: format!(
+        //             "failed to scale {} to {} with mode {:?}",
+        //             self, container, mode
+        //         ),
+        //         source: err.into(),
+        //     }),
+        // }
     }
 
     #[inline]
     #[must_use]
-    pub fn crop_to_fit(
-        &self,
-        size: Size,
-        mode: super::CropMode,
-    ) -> Result<Sides, error::Arithmetic> {
+    pub fn crop_to_fit(&self, size: Size, mode: super::CropMode) -> Result<Sides, CropToFitError> {
         use super::{CropMode, Point};
 
+        let center = self.center(size).map_err(|err| CropToFitError {
+            size: *self,
+            container: size,
+            source: err.into(),
+        })?;
+        let center_top_left = center.top_left();
         match (|| {
-            let center_top_left = self.center(size)?.top_left();
-
             let top_left: Point = match mode {
                 CropMode::Custom { x, y } => center_top_left.checked_add(Point { x, y })?,
                 CropMode::Right => Point {
@@ -305,16 +406,21 @@ impl Size {
                 bottom: bottom_right_crop.height,
                 right: bottom_right_crop.width,
             };
-            Ok(crop_sides)
+            Ok::<Sides, arithmetic::Error>(crop_sides)
         })() {
             Ok(crop_sides) => Ok(crop_sides),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!(
-                    "failed to compute sides to crop such that {} fits {}",
-                    self, size
-                ),
-                source: err,
-            }),
+            Err(err) => Err(CropToFitError {
+                size: *self,
+                container: size,
+                source: err.into(),
+            })
+            // Err(err) => Err(error::Arithmetic {
+            //     msg: format!(
+            //         "failed to compute sides to crop such that {} fits {}",
+            //         self, size
+            //     ),
+            //     source: err,
+            // }),
         }
     }
 }
@@ -361,26 +467,33 @@ impl From<(u32, u32)> for Size {
 }
 
 impl TryFrom<super::Point> for Size {
-    type Error = error::Arithmetic;
+    type Error = CastError<super::Point, Size>;
 
     #[inline]
     fn try_from(point: super::Point) -> Result<Self, Self::Error> {
-        let size = (|| {
+        match (|| {
             let width = point.x.cast::<u32>()?;
             let height = point.y.cast::<u32>()?;
-            Ok::<Size, arithmetic::CastError<i64, u32>>(Self { width, height })
-        })();
-        size.map_err(|err| arithmetic::CastError {
-            src: point,
-            target: std::marker::PhantomData,
-            cause: Some(Box::new(err)),
-        })
-        .map_err(
-            |err: arithmetic::CastError<super::Point, Size>| error::Arithmetic {
-                msg: format!("failed to convert {} to size", point),
-                source: err.into(),
-            },
-        )
+            Ok::<Size, CastError<i64, u32>>(Self { width, height })
+        })() {
+            Ok(size) => Ok(size),
+            Err(err) => Err(CastError {
+                src: point,
+                target: std::marker::PhantomData,
+                cause: Some(Box::new(err)),
+            }),
+        }
+        // size.map_err(|err| arithmetic::CastError {
+        //     src: point,
+        //     target: std::marker::PhantomData,
+        //     cause: Some(Box::new(err)),
+        // })
+        // .map_err(
+        //     |err: arithmetic::CastError<super::Point, Size>| error::Arithmetic {
+        //         msg: format!("failed to convert {} to size", point),
+        //         source: err.into(),
+        //     },
+        // )
     }
 }
 
@@ -405,7 +518,7 @@ where
     F: arithmetic::Cast + arithmetic::Type,
 {
     type Output = Self;
-    type Error = error::Arithmetic;
+    type Error = ScaleByError;
 
     #[inline]
     fn checked_mul(self, scalar: F) -> Result<Self::Output, Self::Error> {
@@ -418,7 +531,8 @@ where
     F: arithmetic::Cast + arithmetic::Type + num::traits::Inv<Output = F>,
 {
     type Output = Self;
-    type Error = error::Arithmetic;
+    type Error = ScaleByError;
+    // type Error = error::Arithmetic;
 
     #[inline]
     fn checked_div(self, scalar: F) -> Result<Self::Output, Self::Error> {
@@ -434,8 +548,10 @@ impl CheckedSub<Sides> for Size {
     #[inline]
     fn checked_sub(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
         match (|| {
-            let width = CheckedSub::checked_sub(self.width, rhs.width())?;
-            let height = CheckedSub::checked_sub(self.height, rhs.height())?;
+            let mut width = CheckedSub::checked_sub(self.width, rhs.left)?;
+            width = CheckedSub::checked_sub(width, rhs.right)?;
+            let mut height = CheckedSub::checked_sub(self.height, rhs.top)?;
+            height = CheckedSub::checked_sub(height, rhs.bottom)?;
             Ok::<Self, ops::SubError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),
@@ -456,8 +572,10 @@ impl CheckedAdd<Sides> for Size {
     #[inline]
     fn checked_add(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
         match (|| {
-            let width = CheckedAdd::checked_add(self.width, rhs.width())?;
-            let height = CheckedAdd::checked_add(self.height, rhs.height())?;
+            let mut width = CheckedAdd::checked_add(self.width, rhs.left)?;
+            width = CheckedAdd::checked_add(width, rhs.right)?;
+            let mut height = CheckedAdd::checked_add(self.height, rhs.top)?;
+            height = CheckedAdd::checked_add(height, rhs.bottom)?;
             Ok::<Self, ops::AddError<u32, u32>>(Self { width, height })
         })() {
             Ok(size) => Ok(size),

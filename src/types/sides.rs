@@ -157,35 +157,23 @@ pub mod abs {
             }
         }
 
-        #[inline]
-        #[must_use]
-        pub fn height(&self) -> u32 {
-            self.top.checked_add(self.bottom).unwrap()
-        }
+        // #[inline]
+        // #[must_use]
+        // pub fn top_left(&self) -> Point {
+        //     Point {
+        //         x: i64::from(self.left),
+        //         y: i64::from(self.top),
+        //     }
+        // }
 
-        #[inline]
-        #[must_use]
-        pub fn width(&self) -> u32 {
-            self.left.checked_add(self.right).unwrap()
-        }
-
-        #[inline]
-        #[must_use]
-        pub fn top_left(&self) -> Point {
-            Point {
-                x: i64::from(self.left),
-                y: i64::from(self.top),
-            }
-        }
-
-        #[inline]
-        #[must_use]
-        pub fn bottom_right(&self) -> Point {
-            Point {
-                x: i64::from(self.right),
-                y: i64::from(self.bottom),
-            }
-        }
+        // #[inline]
+        // #[must_use]
+        // pub fn bottom_right(&self) -> Point {
+        //     Point {
+        //         x: i64::from(self.right),
+        //         y: i64::from(self.bottom),
+        //     }
+        // }
     }
 
     impl std::fmt::Display for Sides {
