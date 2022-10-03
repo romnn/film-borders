@@ -43,8 +43,6 @@ pub trait Arithmetic: AsErr + std::error::Error + 'static {
     fn eq(&self, other: &dyn Arithmetic) -> bool;
 }
 
-// impl Eq for dyn Arithmetic + Send + Sync + 'static {}
-
 impl PartialEq for dyn Arithmetic + Send + Sync + 'static {
     fn eq(&self, other: &Self) -> bool {
         Arithmetic::eq(self, other)
@@ -68,19 +66,6 @@ impl std::ops::Deref for Error {
         &*self.0
     }
 }
-
-// impl Arithmetic for Error {
-//     fn as_any(&self) -> &dyn std::any::Any {
-//         self
-//     }
-
-//     fn eq(&self, other: &dyn Arithmetic) -> bool {
-//         match other.as_any().downcast_ref::<Self>() {
-//             Some(other) => PartialEq::eq(self, other),
-//             None => false,
-//         }
-//     }
-// }
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -120,31 +105,13 @@ impl Display for Kind {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Operation<Lhs, Rhs> {
     pub lhs: Lhs,
     pub rhs: Rhs,
     pub kind: Option<Kind>,
-    // pub cause: Option<Box<dyn Arithmetic + Send + Sync + 'static>>,
     pub cause: Option<Error>,
 }
-
-// impl<Lhs, Rhs> Eq for Operation<Lhs, Rhs>
-// where
-//     Lhs: Eq,
-//     Rhs: Eq,
-// {
-// }
-
-// impl<Lhs, Rhs> PartialEq for Operation<Lhs, Rhs>
-// where
-//     Lhs: PartialEq,
-//     Rhs: PartialEq,
-// {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.lhs == other.lhs && self.rhs == other.rhs && self.kind == other.kind
-//     }
-// }
 
 pub trait DivideByZero<Rhs>
 where

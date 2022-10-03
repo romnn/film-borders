@@ -23,7 +23,7 @@ where
     }
 }
 
-#[derive(thiserror::Error, PartialEq, Eq, Debug)]
+#[derive(thiserror::Error, PartialEq, Debug)]
 #[error("arithmetic error: {msg}")]
 pub struct Arithmetic {
     pub msg: String,

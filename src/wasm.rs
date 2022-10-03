@@ -8,6 +8,10 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = log)]
     fn console_log_one(msg: &str);
+
+    #[wasm_bindgen(js_namespace = console, js_name = error)]
+    fn console_error_one(msg: &str);
+
 }
 
 pub fn set_panic_hook() {
@@ -17,6 +21,10 @@ pub fn set_panic_hook() {
 
 macro_rules! console_log {
     ($($t:tt)*) => (console_log_one(&format_args!($($t)*).to_string()))
+}
+
+macro_rules! console_error {
+    ($($t:tt)*) => (console_error_one(&format_args!($($t)*).to_string()))
 }
 
 #[inline]

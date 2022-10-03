@@ -93,7 +93,7 @@ macro_rules! impl_float_checked_div {
 
 impl_float_checked_div!(f64);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct DivError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 

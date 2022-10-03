@@ -53,7 +53,7 @@ macro_rules! impl_signed_checked_add {
 
 impl_signed_checked_add!(i64);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct AddError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 

@@ -1,20 +1,40 @@
 use super::arithmetic::{self, ops::CheckedAdd, Cast, CastError, Clamp};
-use super::types::{Point, Rect, Size};
+use super::types::{self, Point, Rect, Size};
 use super::{error, img};
 pub use image::imageops::*;
 use image::{Pixel, Rgba};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed convert {alpha} to alpha value")]
+pub struct AlphaError {
+    alpha: f64,
+    source: CastError<f64, u8>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum TransparentComponentsError {
+    #[error(transparent)]
+    Pad(#[from] types::rect::PadError),
+
+    #[error(transparent)]
+    Alpha(#[from] AlphaError),
+}
+
 #[inline]
 #[must_use]
 pub fn find_transparent_components(
     image: &img::Image,
-    alpha_threshold: f32,
-    component_threshold: i64,
-) -> Result<Vec<Rect>, arithmetic::Error> {
+    alpha_threshold: f64,
+    component_threshold: u32,
+) -> Result<Vec<Rect>, TransparentComponentsError> {
     let mut components: Vec<Rect> = Vec::new();
-    let alpha_threshold: u8 = (alpha_threshold * 255.0).cast::<u8>()?;
+    let alpha_threshold = (alpha_threshold * 255.0);
+    let alpha_threshold = alpha_threshold.cast::<u8>().map_err(|err| AlphaError {
+        alpha: alpha_threshold,
+        source: err,
+    })?;
 
     let (w, h) = image.inner.dimensions();
     for y in 0..h {
@@ -32,7 +52,8 @@ pub fn find_transparent_components(
             let mut updated = None;
             // check if this is a new component
             for c in &mut components {
-                let contained = c.contains_padded(&point, component_threshold)?;
+                // let contained = c.contains_padded(&point, component_threshold)?;
+                let contained = c.padded(component_threshold)?.contains(&point);
                 if contained {
                     // update component
                     updated = Some(*c);
@@ -96,11 +117,13 @@ pub enum FadeError {
     #[error(transparent)]
     Subview(#[from] img::SubviewError),
 
-    #[error("failed convert {alpha} to alpha value")]
-    InvalidAlpha {
-        alpha: f64,
-        source: CastError<f64, u8>,
-    },
+    #[error(transparent)]
+    Alpha(#[from] AlphaError),
+    // #[error("failed convert {alpha} to alpha value")]
+    // InvalidAlpha {
+    //     alpha: f64,
+    //     source: CastError<f64, u8>,
+    // },
 }
 
 #[inline]
@@ -134,7 +157,7 @@ pub fn fade_out(
         let alpha = 255.0 * frac;
         let alpha = alpha
             .cast::<u8>()
-            .map_err(|err| FadeError::InvalidAlpha { alpha, source: err })?;
+            .map_err(|err| AlphaError { alpha, source: err })?;
         // let alpha = alpha.cast::<u8>().map_err(|err| {
         //     img::Error::Arithmetic(error::Arithmetic {
         //         msg: format!("failed to convert {} to alpha value", alpha),

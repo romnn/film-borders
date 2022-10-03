@@ -4,7 +4,60 @@ use crate::arithmetic::{
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
     Cast, CastError,
 };
-use crate::error;
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to create rect at {top_left} of size {size}")]
+pub struct Error {
+    top_left: Point,
+    size: Size,
+    source: ops::AddError<Point, Point>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute pixel count for {rect}")]
+pub struct PixelCountError {
+    rect: Rect,
+    source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute center point of {rect}")]
+pub struct CenterError {
+    rect: Rect,
+    source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum CenterOffsetErrorSource {
+    #[error(transparent)]
+    Center(#[from] CenterError),
+
+    #[error(transparent)]
+    Arithmetic(#[from] ops::SubError<Point, Point>),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute center offset from {parent} to {child}")]
+pub struct CenterOffsetError {
+    parent: Rect,
+    child: Rect,
+    source: CenterOffsetErrorSource,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute size for {rect}")]
+pub struct SizeError {
+    rect: Rect,
+    source: CastError<i64, u32>,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to add padding of {padding} to {rect}")]
+pub struct PadError {
+    rect: Rect,
+    padding: u32,
+    source: ops::AddError<Rect, Sides>,
+}
 
 struct Bounds {
     x: std::ops::RangeInclusive<i64>,
@@ -35,15 +88,16 @@ mod sealed {
         pub fn new(
             top_left: impl Into<Point>,
             size: impl Into<Size>,
-        ) -> Result<Self, error::Arithmetic> {
+        ) -> Result<Self, super::Error> {
             let top_left = top_left.into();
             let size = size.into();
             let bottom_right =
                 top_left
                     .checked_add(Point::from(size))
-                    .map_err(|err| error::Arithmetic {
-                        msg: format!("failed to create rect at {} of size {}", top_left, size),
-                        source: err.into(),
+                    .map_err(|err| super::Error {
+                        top_left,
+                        size,
+                        source: err,
                     })?;
             Ok(Self {
                 top: top_left.y,
@@ -121,76 +175,19 @@ pub use sealed::Rect;
 
 impl Rect {
     #[inline]
-    pub fn pixel_count(&self) -> Result<u64, error::Arithmetic> {
-        let size = self.size()?;
-        let width = u64::from(size.width);
-        let height = u64::from(size.height);
-
-        CheckedMul::checked_mul(width, height).map_err(|err| error::Arithmetic {
-            msg: format!("failed to compute pixel count for size {}", size),
-            source: err.into(),
-        })
+    #[must_use]
+    pub fn width(&self) -> i64 {
+        // safety: this is safe because this invariant holds
+        // left <= right
+        self.right - self.left
     }
 
     #[inline]
-    pub fn size(&self) -> Result<Size, error::Arithmetic> {
-        match (|| {
-            // safety: this is safe because these invariants hold:
-            // 1. top <= bottom
-            // 2. left <= right
-            let width = self.right - self.left;
-            let height = self.bottom - self.top;
-            let width = width.cast::<u32>()?;
-            let height = height.cast::<u32>()?;
-            Ok::<Size, CastError<i64, u32>>(Size { width, height })
-        })() {
-            Ok(size) => Ok(size),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!("failed to compute size for {}", self),
-                source: err.into(),
-            }),
-        }
-    }
-
-    #[inline]
-    pub fn center(&self) -> Result<Point, error::Arithmetic> {
-        // safety: this is safe because these invariants hold:
-        // 1. top <= bottom
-        // 2. left <= right
-        let size = Point {
-            x: self.right - self.left,
-            y: self.bottom - self.top,
-        };
-        match (|| {
-            let rel_center = size.checked_div(2.0)?;
-            let center = self.top_left().checked_add(rel_center)?;
-            Ok::<Point, arithmetic::Error>(center)
-        })() {
-            Ok(center) => Ok(center),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!("failed to compute center point of size {}", size),
-                source: err,
-            }),
-        }
-    }
-
-    #[inline]
-    pub fn center_offset_to(&self, container: &Rect) -> Result<Point, error::Arithmetic> {
-        match (|| {
-            let self_center = self.center()?;
-            let container_center = container.center()?;
-            let offset = container_center.checked_sub(self_center)?;
-            Ok::<Point, arithmetic::Error>(offset)
-        })() {
-            Ok(center) => Ok(center),
-            Err(err) => Err(error::Arithmetic {
-                msg: format!(
-                    "failed to compute center offset from {} to {}",
-                    container, self
-                ),
-                source: err,
-            }),
-        }
+    #[must_use]
+    pub fn height(&self) -> i64 {
+        // safety: this is safe because this invariant holds
+        // top <= bottom
+        self.bottom - self.top
     }
 
     #[inline]
@@ -230,51 +227,79 @@ impl Rect {
     }
 
     #[inline]
-    pub fn has_intersection(&self, other: &Self) -> bool {
-        let self_intersects_other = self.intersects(other);
-        let other_intersects_self = other.intersects(self);
-        self_intersects_other || other_intersects_self
-    }
-
-    #[inline]
-    pub fn has_intersection_padded(
-        &self,
-        other: &Self,
-        padding: i64,
-    ) -> Result<bool, error::Arithmetic> {
-        let self_intersects_other = self.intersects_padded(other, padding)?;
-        let other_intersects_self = other.intersects_padded(self, padding)?;
-        Ok(self_intersects_other || other_intersects_self)
-    }
-
-    #[inline]
-    pub fn intersects(&self, other: &Self) -> bool {
-        let contains_tl = self.contains(&other.top_left());
-        let contains_br = self.contains(&other.bottom_right());
-        contains_tl || contains_br
-    }
-
-    #[inline]
-    pub fn intersects_padded(&self, other: &Self, padding: i64) -> Result<bool, error::Arithmetic> {
-        let contains_tl = self.contains_padded(&other.top_left(), padding)?;
-        let contains_br = self.contains_padded(&other.bottom_right(), padding)?;
-        Ok(contains_tl || contains_br)
-    }
-
-    #[inline]
-    pub fn extend_to(&mut self, point: &Point) {
-        self.top = self.top.min(point.y);
-        self.left = self.left.min(point.x);
-        self.bottom = self.bottom.max(point.y);
-        self.right = self.right.max(point.x);
-    }
-
-    #[inline]
-    pub fn extend(self, value: u32) -> Result<Self, error::Arithmetic> {
-        self.checked_add(Sides::uniform(value))
-            .map_err(|err| error::Arithmetic {
-                msg: format!("failed to extend {} by {}", self, value),
+    pub fn pixel_count(&self) -> Result<u64, PixelCountError> {
+        match (|| {
+            let width = self.width().cast::<u64>()?;
+            let height = self.height().cast::<u64>()?;
+            let pixel_count = CheckedMul::checked_mul(width, height)?;
+            Ok::<u64, arithmetic::Error>(pixel_count)
+        })() {
+            Ok(pixel_count) => Ok(pixel_count),
+            Err(err) => Err(PixelCountError {
+                rect: *self,
                 source: err.into(),
+            }),
+        }
+    }
+
+    #[inline]
+    pub fn size(&self) -> Result<Size, SizeError> {
+        match (|| {
+            let width = self.width().cast::<u32>()?;
+            let height = self.height().cast::<u32>()?;
+            Ok::<Size, CastError<i64, u32>>(Size { width, height })
+        })() {
+            Ok(size) => Ok(size),
+            Err(err) => Err(SizeError {
+                rect: *self,
+                source: err.into(),
+            }),
+        }
+    }
+
+    #[inline]
+    pub fn center(&self) -> Result<Point, CenterError> {
+        let size = Point {
+            x: self.width(),
+            y: self.height(),
+        };
+        match (|| {
+            let rel_center = size.checked_div(2.0)?;
+            let center = self.top_left().checked_add(rel_center)?;
+            Ok::<Point, arithmetic::Error>(center)
+        })() {
+            Ok(center) => Ok(center),
+            Err(err) => Err(CenterError {
+                rect: *self,
+                source: err,
+            }),
+        }
+    }
+
+    #[inline]
+    pub fn center_offset_to(&self, parent: &Rect) -> Result<Point, CenterOffsetError> {
+        match (|| {
+            let child_center = self.center()?;
+            let parent_center = parent.center()?;
+            let offset = parent_center.checked_sub(child_center)?;
+            Ok::<Point, CenterOffsetErrorSource>(offset)
+        })() {
+            Ok(center) => Ok(center),
+            Err(err) => Err(CenterOffsetError {
+                parent: *parent,
+                child: *self,
+                source: err.into(),
+            }),
+        }
+    }
+
+    #[inline]
+    pub fn padded(self, padding: u32) -> Result<Self, PadError> {
+        self.checked_add(Sides::uniform(padding))
+            .map_err(|err| PadError {
+                rect: self,
+                padding,
+                source: err,
             })
     }
 
@@ -288,25 +313,74 @@ impl Rect {
     }
 
     #[inline]
-    pub fn contains_padded(&self, point: &Point, padding: i64) -> Result<bool, error::Arithmetic> {
-        let bounds = (|| {
-            let y_top = CheckedSub::checked_sub(self.top, padding)?;
-            let x_left = CheckedSub::checked_sub(self.left, padding)?;
-            let y_bottom = CheckedAdd::checked_add(self.bottom, padding)?;
-            let x_right = CheckedAdd::checked_add(self.right, padding)?;
-            Ok::<Bounds, arithmetic::Error>(Bounds {
-                x: x_left..=x_right,
-                y: y_top..=y_bottom,
-            })
-        })();
-
-        let bounds = bounds.map_err(|err| error::Arithmetic {
-            msg: format!("failed to add padding of {} to {}", padding, self),
-            source: err,
-        })?;
-
-        Ok(bounds.x.contains(&point.x) && bounds.y.contains(&point.y))
+    pub fn has_intersection(&self, other: &Self) -> bool {
+        let self_intersects_other = self.intersects(other);
+        let other_intersects_self = other.intersects(self);
+        self_intersects_other || other_intersects_self
     }
+
+    // #[inline]
+    // pub fn has_intersection_padded(
+    //     &self,
+    //     other: &Self,
+    //     padding: i64,
+    // ) -> Result<bool, error::Arithmetic> {
+    //     let self_intersects_other = self.intersects_padded(other, padding)?;
+    //     let other_intersects_self = other.intersects_padded(self, padding)?;
+    //     Ok(self_intersects_other || other_intersects_self)
+    // }
+
+    #[inline]
+    pub fn intersects(&self, other: &Self) -> bool {
+        let contains_tl = self.contains(&other.top_left());
+        let contains_br = self.contains(&other.bottom_right());
+        contains_tl || contains_br
+    }
+
+    // #[inline]
+    // pub fn intersects_padded(&self, other: &Self, padding: i64) -> Result<bool, error::Arithmetic> {
+    //     let contains_tl = self.contains_padded(&other.top_left(), padding)?;
+    //     let contains_br = self.contains_padded(&other.bottom_right(), padding)?;
+    //     Ok(contains_tl || contains_br)
+    // }
+
+    #[inline]
+    pub fn extend_to(&mut self, point: &Point) {
+        self.top = self.top.min(point.y);
+        self.left = self.left.min(point.x);
+        self.bottom = self.bottom.max(point.y);
+        self.right = self.right.max(point.x);
+    }
+
+    // #[inline]
+    // pub fn extend(self, value: u32) -> Result<Self, error::Arithmetic> {
+    //     self.checked_add(Sides::uniform(value))
+    //         .map_err(|err| error::Arithmetic {
+    //             msg: format!("failed to extend {} by {}", self, value),
+    //             source: err.into(),
+    //         })
+    // }
+
+    // #[inline]
+    // pub fn contains_padded(&self, point: &Point, padding: i64) -> Result<bool, error::Arithmetic> {
+    //     let bounds = (|| {
+    //         let y_top = CheckedSub::checked_sub(self.top, padding)?;
+    //         let x_left = CheckedSub::checked_sub(self.left, padding)?;
+    //         let y_bottom = CheckedAdd::checked_add(self.bottom, padding)?;
+    //         let x_right = CheckedAdd::checked_add(self.right, padding)?;
+    //         Ok::<Bounds, arithmetic::Error>(Bounds {
+    //             x: x_left..=x_right,
+    //             y: y_top..=y_bottom,
+    //         })
+    //     })();
+
+    //     let bounds = bounds.map_err(|err| error::Arithmetic {
+    //         msg: format!("failed to add padding of {} to {}", padding, self),
+    //         source: err,
+    //     })?;
+
+    //     Ok(bounds.x.contains(&point.x) && bounds.y.contains(&point.y))
+    // }
 }
 
 impl From<Size> for Rect {
@@ -356,16 +430,21 @@ impl CheckedSub<Sides> for Rect {
     fn checked_sub(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
         use arithmetic::error::Operation;
         match (|| {
-            let top = CheckedAdd::checked_add(self.top, i64::from(rhs.top))?;
-            let left = CheckedAdd::checked_add(self.left, i64::from(rhs.left))?;
-            let bottom = CheckedSub::checked_sub(self.bottom, i64::from(rhs.bottom))?;
-            let right = CheckedSub::checked_sub(self.right, i64::from(rhs.right))?;
+            let sides_top = i64::from(rhs.top);
+            let sides_left = i64::from(rhs.left);
+            let sides_bottom = i64::from(rhs.bottom);
+            let sides_right = i64::from(rhs.right);
+            let top = CheckedAdd::checked_add(self.top, sides_top)?;
+            let left = CheckedAdd::checked_add(self.left, sides_left)?;
+            let bottom = CheckedSub::checked_sub(self.bottom, sides_bottom)?;
+            let right = CheckedSub::checked_sub(self.right, sides_right)?;
             let top_left = Point { x: left, y: top };
             let bottom_right = Point {
                 x: right,
                 y: bottom,
             };
-            Ok::<Self, arithmetic::Error>(Self::from_points(top_left, bottom_right))
+            let rect = Self::from_points(top_left, bottom_right);
+            Ok::<Self, arithmetic::Error>(rect)
         })() {
             Ok(rect) => Ok(rect),
             Err(err) => Err(ops::SubError(Operation {
@@ -386,19 +465,23 @@ impl CheckedAdd<Sides> for Rect {
     fn checked_add(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
         use arithmetic::error::Operation;
         match (|| {
-            let top = CheckedSub::checked_sub(self.top, i64::from(rhs.top))?;
-            let left = CheckedSub::checked_sub(self.left, i64::from(rhs.left))?;
-            let bottom = CheckedAdd::checked_add(self.bottom, i64::from(rhs.bottom))?;
-            let right = CheckedAdd::checked_add(self.right, i64::from(rhs.right))?;
+            let sides_top = i64::from(rhs.top);
+            let sides_left = i64::from(rhs.left);
+            let sides_bottom = i64::from(rhs.bottom);
+            let sides_right = i64::from(rhs.right);
+            let top = CheckedSub::checked_sub(self.top, sides_top)?;
+            let left = CheckedSub::checked_sub(self.left, sides_left)?;
+            let bottom = CheckedAdd::checked_add(self.bottom, sides_bottom)?;
+            let right = CheckedAdd::checked_add(self.right, sides_right)?;
             let top_left = Point { x: left, y: top };
             let bottom_right = Point {
                 x: right,
                 y: bottom,
             };
-            Ok::<Self, arithmetic::Error>(Self::from_points(top_left, bottom_right))
+            let rect = Self::from_points(top_left, bottom_right);
+            Ok::<Self, arithmetic::Error>(rect)
         })() {
             Ok(rect) => Ok(rect),
-            // Err(arithmetic::Error(err)) => {
             Err(err) => Err(ops::AddError(Operation {
                 lhs: self,
                 rhs,

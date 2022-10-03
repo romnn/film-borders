@@ -79,7 +79,7 @@ macro_rules! impl_float_checked_mul {
 
 impl_float_checked_mul!(f64);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct MulError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 

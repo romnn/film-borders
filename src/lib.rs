@@ -200,7 +200,7 @@ impl ImageBorders {
 
         let border_rect = content_rect_sub_margin.checked_sub(frame_width).unwrap();
         crate::debug!(&border_rect);
-        let border_size = border_rect.size()?;
+        let border_size = border_rect.size().unwrap();
 
         #[cfg(debug_assertions)]
         result_image.fill_rect(
@@ -210,7 +210,7 @@ impl ImageBorders {
             // border_size,
             FillMode::Blend,
         );
-        let default_component = Rect::new(Point::origin(), border_size)?;
+        let default_component = Rect::new(Point::origin(), border_size).unwrap();
 
         crate::debug!("overlay content");
         match options.mode {
@@ -233,9 +233,9 @@ impl ImageBorders {
                 for (c, image) in components {
                     crate::debug!("drawing {:?}", &c);
                     let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                    image_rect = image_rect.extend(3).unwrap();
+                    image_rect = image_rect.padded(3).unwrap();
                     image_rect = image_rect.clamp(&border_rect);
-                    let image_size = image_rect.size()?;
+                    let image_size = image_rect.size().unwrap();
 
                     let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
                     image.resize_and_crop(
@@ -257,7 +257,7 @@ impl ImageBorders {
             FitMode::Border => {
                 let c = match border {
                     Some(ref mut border) => {
-                        let border_size = border_rect.size()?;
+                        let border_size = border_rect.size().unwrap();
                         border.resize_and_crop(border_size, ResizeMode::Contain)?;
                         border.content_rect()
                     }
@@ -265,10 +265,11 @@ impl ImageBorders {
                 };
 
                 let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                image_rect = image_rect.extend(3).unwrap();
+                image_rect = image_rect.padded(3).unwrap();
                 image_rect = image_rect.clamp(&border_rect);
+                let image_size = image_rect.size().unwrap();
 
-                primary.resize_and_crop(image_rect.size()?, ResizeMode::Cover, CropMode::Center);
+                primary.resize_and_crop(image_size, ResizeMode::Cover, CropMode::Center);
 
                 result_image.overlay(&*primary, image_rect.top_left());
                 if let Some(border) = border {

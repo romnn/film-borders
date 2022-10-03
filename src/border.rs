@@ -17,8 +17,8 @@ pub enum Error {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Options {
-    pub transparent_component_threshold: i64,
-    pub alpha_threshold: f32,
+    pub transparent_component_threshold: u32,
+    pub alpha_threshold: f64,
 }
 
 impl Default for Options {

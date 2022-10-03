@@ -54,7 +54,7 @@ macro_rules! impl_signed_checked_sub {
 
 impl_signed_checked_sub!(i64);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct SubError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 
