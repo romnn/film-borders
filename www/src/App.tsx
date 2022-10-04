@@ -1,7 +1,5 @@
 import React from "react";
-import axios from "axios";
 import { Oval } from "react-loader-spinner";
-import { Buffer } from "buffer";
 import init, {
   Sides,
   FitMode,
@@ -28,8 +26,6 @@ type AppState = {
   outputSizeName: string;
   outputWidth: number;
   outputHeight: number;
-  // outputWidth?: number;
-  // outputHeight?: number;
   frameColor: string;
   backgroundColor: string;
   scaleFactor: number;
@@ -94,7 +90,6 @@ export default class App extends React.Component<AppProps, AppState> {
   protected canvasContainer = React.createRef<HTMLDivElement>();
   protected wasm!: typeof import("filmborders");
   protected worker!: Worker;
-  protected resizeTimer?: ReturnType<typeof setTimeout>;
   protected updateTimer?: ReturnType<typeof setTimeout>;
   protected lastRenderConfigHash?: string;
   protected maxPreviewDim = MAX_PREVIEW_DIM;
@@ -102,7 +97,6 @@ export default class App extends React.Component<AppProps, AppState> {
   constructor(props: AppProps) {
     super(props);
     const outputSizeName = "Match source";
-    // const size = OUTPUT_SIZES[outputSizeName];
     this.state = {
       wasmLoaded: false,
       workerReady: false,
@@ -115,8 +109,8 @@ export default class App extends React.Component<AppProps, AppState> {
       borderOverlayName: undefined,
       canvasScale: 0.0,
       outputSizeName,
-      outputWidth: 0, // size.width,
-      outputHeight: 0, // size.height,
+      outputWidth: 0,
+      outputHeight: 0,
       frameColor: "#000000",
       backgroundColor: "#ffffff",
       scaleFactor: 100.0,
@@ -172,17 +166,6 @@ export default class App extends React.Component<AppProps, AppState> {
     } catch (err: unknown) {
       console.error(`unexpected error when loading image: ${err}`);
       return;
-    }
-  };
-
-  getB64Image = async (url: string): Promise<string> => {
-    try {
-      let image = await axios.get(url, { responseType: "arraybuffer" });
-      let raw = Buffer.from(image.data).toString("base64");
-      return "data:" + image.headers["content-type"] + ";base64," + raw;
-    } catch (error) {
-      console.error(error);
-      throw error;
     }
   };
 
@@ -251,7 +234,6 @@ export default class App extends React.Component<AppProps, AppState> {
       console.log("render");
 
       e?.preventDefault();
-      await this.resize();
 
       let config = {
         borderOverlay: this.state.borderOverlay,
@@ -312,9 +294,6 @@ export default class App extends React.Component<AppProps, AppState> {
         previewCanvas.width,
         previewCanvas.height
       );
-      // console.log(previewCanvas.width, previewCanvas.height);
-      // todo: compute the output width based on the original canvas and the options in rust
-      // console.log(originalCanvas.width, originalCanvas.height);
 
       let borderData = null;
       if (this.state.borderOverlayName === "Custom") {
@@ -337,17 +316,6 @@ export default class App extends React.Component<AppProps, AppState> {
         bounds.width = canvasContainer.clientWidth * scale;
         bounds.height = canvasContainer.clientHeight * scale;
         options.output_size_bounds = bounds;
-
-        // let size = options.output_size;
-        // bounds = options.output_size_bounds;
-        // if (size && size.width && size.height && bounds && bounds.width && bounds.height) {
-        //   let scale = Math.min(
-        //     bounds.width / size.width,
-        //     bounds.height / size.height
-        //   );
-        //   options.output_size.width = Math.floor(size.width * scale);
-        //   options.output_size.height = Math.floor(size.height * scale);
-        // }
       }
 
       await this.worker.postMessage({
@@ -518,25 +486,10 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   renderToCanvas = (img: ImageData, canvas: HTMLCanvasElement | null) => {
-    // console.log(img);
     if (!canvas) return;
     canvas.width = img.width;
     canvas.height = img.height;
     canvas?.getContext("2d")?.putImageData(img, 0, 0);
-    // canvas
-    //   ?.getContext("2d")
-    //   ?.putImageData(
-    //   // ?.drawImage(
-    //     img,
-    //     0,
-    //     0,
-    //     img.width,
-    //     img.height,
-    //     0,
-    //     0,
-    //     canvas.width,
-    //     canvas.height
-    //   );
   };
 
   maxScreenDim = (): number => {
@@ -560,53 +513,27 @@ export default class App extends React.Component<AppProps, AppState> {
     return maxPreviewDim;
   };
 
-  resize = async () => {
-    // let maxScreenDim = Math.max(screenWidth, screenHeight);
-    // let maxScreenDim = Math.max(screenWidth, screenHeight);
-    // let maxImageDim = Math.max(img.width, img.height);
-    // let previewScaledownFac =
-    //   PREVIEW_MAX_RES / Math.min(maxImageDim, maxScreenDim);
-    // canvas.width = width * previewScaledownFac;
-    // canvas.height = height * previewScaledownFac;
-    // let canvasContainer = this.canvasContainer.current;
-    // let canvas = this.canvas.current;
-    // if (!canvasContainer || !canvas) return;
-    // if (canvas.width == 0 || canvas.height == 0) return;
-    // // console.assert(canvasContainer);
-    // // if (!canvasContainer) return;
-    // console.log(canvasContainer.clientWidth, canvas.width);
-    // console.log(canvasContainer.clientHeight, canvas.height);
-    // let canvasScale =
-    //   Math.min(
-    //     canvasContainer.clientWidth / canvas.width, // this.state.outputWidth,
-    //     canvasContainer.clientHeight / canvas.height // this.state.outputHeight
-    //   ) * 0.5; // 0.95;
-    // console.log(canvasScale);
-    // await this.setState({ canvasScale });
-    // // let newWidth = Math.floor(this.state.outputWidth * canvasScale);
-    // // let newHeight = Math.floor(this.state.outputHeight * canvasScale);
-    // let newWidth = Math.floor(canvas.width * canvasScale);
-    // let newHeight = Math.floor(canvas.height * canvasScale);
-    // // resizing causes the canvas to go blank
-    // if (canvas.width !== newWidth || canvas.height !== newHeight) {
-    //   canvas.width = newWidth;
-    //   canvas.height = newHeight;
-    // }
-  };
-
   scheduleUpdate = async (timeout = 100) => {
     clearTimeout(this.updateTimer);
     this.updateTimer = setTimeout(this.update, timeout);
   };
 
-  scheduleResize = async () => {
-    clearTimeout(this.resizeTimer);
-    this.resizeTimer = setTimeout(async () => {
-      console.log("resize");
-      // await this.resize();
-      await this.update(undefined, false);
-    }, 300);
+  handleResize = async () => {
+    await this.scheduleUpdate();
+    // clearTimeout(this.resizeTimer);
+    // this.resizeTimer = setTimeout(async () => {
+    //   console.log("resize");
+    //   await this.update(undefined, false);
+    // }, 300);
   };
+
+  // scheduleResize = async () => {
+  //   clearTimeout(this.resizeTimer);
+  //   this.resizeTimer = setTimeout(async () => {
+  //     console.log("resize");
+  //     await this.update(undefined, false);
+  //   }, 300);
+  // };
 
   componentDidMount = async () => {
     this.worker = new Worker(
@@ -617,7 +544,7 @@ export default class App extends React.Component<AppProps, AppState> {
         if (event.data.status === "ready") {
           console.log("worker ready");
           await this.setState({ workerReady: true });
-          await this.scheduleResize();
+          await this.scheduleUpdate();
         }
       }
       if ("result" in event.data) {
@@ -639,16 +566,11 @@ export default class App extends React.Component<AppProps, AppState> {
     };
 
     await this.init();
-
-    // let sampleImage = await this.getB64Image(
-    //   "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Brad_Pitt_2019_by_Glenn_Francis.jpg/1200px-Brad_Pitt_2019_by_Glenn_Francis.jpg"
-    // );
-
-    window.addEventListener("resize", this.scheduleResize, false);
+    window.addEventListener("resize", this.handleResize, false);
   };
 
   componentWillUnmount() {
-    window.removeEventListener("resize", this.scheduleResize, false);
+    window.removeEventListener("resize", this.handleResize, false);
   }
 
   stripExtension = (filename: string): string => {
@@ -916,6 +838,9 @@ export default class App extends React.Component<AppProps, AppState> {
                 id="outputWidth"
                 type="number"
                 step="1"
+                className={
+                  this.state.outputSizeName === "Match source" ? "hidden" : ""
+                }
                 disabled={
                   this.state.exporting || this.state.outputSizeName !== "Custom"
                 }
@@ -928,6 +853,9 @@ export default class App extends React.Component<AppProps, AppState> {
                 id="outputHeight"
                 type="number"
                 step="1"
+                className={
+                  this.state.outputSizeName === "Match source" ? "hidden" : ""
+                }
                 disabled={
                   this.state.exporting || this.state.outputSizeName !== "Custom"
                 }

@@ -25,9 +25,13 @@ const init_wasm_in_worker = async () => {
       let {options, renderID, save, borderName} = message;
       let image = ImageBorders.from_image_data(imageData);
       let border = new Border(borderData, borderName);
+      try {
       let result = image.add_border(border, Options.deserialize(options));
       self.postMessage({result, renderID, save});
       console.log(`worker: render ${renderID} done`);
+      } catch (err) {
+        console.error("error in worker", err);
+      }
     }
   };
 };
