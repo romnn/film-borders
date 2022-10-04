@@ -320,34 +320,16 @@ impl std::fmt::Display for Rect {
     }
 }
 
-// #[derive(thiserror::Error, Debug)]
-// #[error("failed to resize image with size {size} to {target} with mode {mode:?}")]
-// pub struct ResizeError {
-//     // #[error(transparent)]
-//     // ScaleTo(#[from] types::size::ScaleToError),
-//     size: Size,
-//     target: Size,
-//     mode: super::ResizeMode,
-//     source: types::size::ScaleToError,
-//     // #[error(transparent)]
-//     // Arithmetic(#[from] error::Arithmetic),
-// }
-
 #[derive(thiserror::Error, Debug)]
 pub enum SubSidesError {
-    // #[error(transparent)]
     #[error("subtracting {sides} from {rect} exceeds bounds")]
     OutOfBounds { sides: Sides, rect: Rect },
-    // #[error(transparent)]
-    // Arithmetic(#[from] error::Arithmetic),
     #[error(transparent)]
     Arithmetic(#[from] arithmetic::Error),
-    // Arithmetic(#[from] ops::SubError<Self, Sides>), //arithmetic::Error),
 }
 
 impl CheckedSub<Sides> for Rect {
     type Output = Self;
-    // type Error = ops::SubError<Self, Sides>;
     type Error = SubSidesError;
 
     #[inline]

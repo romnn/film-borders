@@ -115,8 +115,6 @@ pub fn fill_rect(
 
 #[derive(thiserror::Error, Debug)]
 pub enum FadeError {
-    // #[error(transparent)]
-    // Subview(#[from] img::SubviewError),
     #[error(transparent)]
     Alpha(#[from] AlphaError),
 }
@@ -124,26 +122,13 @@ pub enum FadeError {
 #[inline]
 pub fn fade_out(
     mut image: image::SubImage<&mut image::RgbaImage>,
-    // image: &mut img::Image,
-    // start: impl Into<Point>,
-    // end: impl Into<Point>,
     axis: super::Axis,
     switch_direction: bool,
 ) -> Result<(), FadeError> {
     use super::Axis;
 
-    // let start = start.into();
-    // let end = end.into();
-
-    // let switch_direction = match axis {
-    //     Axis::X => start.x < end.x,
-    //     Axis::Y => start.y < end.y,
-    // };
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
-    // let rect = image.subimage_rect(&Rect::from_points(start, end))?;
-    // let size = rect.size();
-    // let size = image.size();
     let (width, height) = image.dimensions();
 
     let (w, h) = match axis {
@@ -157,12 +142,6 @@ pub fn fade_out(
         let alpha = alpha
             .cast::<u8>()
             .map_err(|err| AlphaError { alpha, source: err })?;
-        // let alpha = alpha.cast::<u8>().map_err(|err| {
-        //     img::Error::Arithmetic(error::Arithmetic {
-        //         msg: format!("failed to convert {} to alpha value", alpha),
-        //         source: err.into(),
-        //     })
-        // })?;
 
         for x in 0..w {
             let (x, y) = match axis {
@@ -170,12 +149,10 @@ pub fn fade_out(
                 Axis::Y => (x, y),
             };
 
-            let channels = image
-                // .inner
-                // .get_pixel_mut(rect.left + x, rect.top + y)
-                .get_pixel_mut(x, y)
-                .channels_mut();
+            let p = image.get_pixel(x, y);
+            let channels = p.channels_mut();
             channels[3] = channels[3].min(alpha);
+            image.put_pixel(x, y, p);
         }
     }
     Ok(())

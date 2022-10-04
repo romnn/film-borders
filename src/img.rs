@@ -41,8 +41,6 @@ pub struct FillError {
     rect: Rect,
     size: Size,
     source: SubImageError,
-    // #[error(transparent)]
-    // SubImage(#[from] SubImageError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -67,14 +65,10 @@ pub struct FadeError {
 #[derive(thiserror::Error, Debug)]
 #[error("failed to resize image with size {size} to {target} with mode {mode:?}")]
 pub struct ResizeError {
-    // #[error(transparent)]
-    // ScaleTo(#[from] types::size::ScaleToError),
     size: Size,
     target: Size,
     mode: super::ResizeMode,
     source: types::size::ScaleToError,
-    // #[error(transparent)]
-    // Arithmetic(#[from] error::Arithmetic),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -118,20 +112,10 @@ pub struct CropSidesError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResizeAndCropError {
-    // #[error("failed to resize image")]
     #[error(transparent)]
-    Resize(
-        #[from]
-        // #[source]
-        ResizeError,
-    ),
-    // #[error("failed to crop image")]
+    Resize(#[from] ResizeError),
     #[error(transparent)]
-    Crop(
-        #[from]
-        // #[source]
-        CropToFitError,
-    ),
+    Crop(#[from] CropToFitError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -149,11 +133,6 @@ pub struct SubImageError {
     size: Size,
     rect: Rect,
     source: SubImageErrorSource,
-    // Arithmetic {
-    //     subview: Rect,
-    //     image_size: Size,
-    //     source: arithmetic::Error,
-    // },
 }
 
 #[derive(thiserror::Error, PartialEq, Debug)]
@@ -208,8 +187,6 @@ pub enum Error {
         #[source]
         SaveError,
     ),
-    // #[error(transparent)]
-    // Image(#[from] image::error::ImageError),
 }
 
 #[derive(Clone)]
@@ -310,6 +287,58 @@ impl Image {
     }
 
     #[inline]
+    pub fn sub_image(
+        &mut self,
+        rect: &Rect,
+    ) -> Result<image::SubImage<&mut image::RgbaImage>, SubImageError> {
+        pub struct SubImageRect {
+            top: u32,
+            left: u32,
+            bottom: u32,
+            right: u32,
+        }
+
+        let image_rect: Rect = self.size().into();
+        match (|| {
+            if !image_rect.contains(&rect.top_left()) {
+                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
+                    bounds: image_rect,
+                    point: rect.top_left(),
+                }));
+            }
+
+            if !image_rect.contains(&rect.bottom_right()) {
+                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
+                    bounds: image_rect,
+                    point: rect.bottom_right(),
+                }));
+            }
+
+            let sub_image_rect = SubImageRect {
+                top: rect.top.cast::<u32>()?,
+                left: rect.left.cast::<u32>()?,
+                bottom: rect.bottom.cast::<u32>()?,
+                right: rect.right.cast::<u32>()?,
+            };
+            Ok::<_, SubImageErrorSource>(sub_image_rect)
+        })() {
+            Ok(sub_image_rect) => {
+                use image::GenericImage;
+                let x = sub_image_rect.left;
+                let y = sub_image_rect.top;
+                let width = sub_image_rect.right - sub_image_rect.left;
+                let height = sub_image_rect.bottom - sub_image_rect.top;
+                Ok(self.inner.sub_image(x, y, width, height))
+            }
+            Err(err) => Err(SubImageError {
+                rect: *rect,
+                size: self.size(),
+                source: err.into(),
+            }),
+        }
+    }
+
+    #[inline]
     pub fn fill(
         &mut self,
         color: impl Into<image::Rgba<u8>>,
@@ -326,7 +355,6 @@ impl Image {
         rect: &Rect,
         mode: imageops::FillMode,
     ) -> Result<(), FillError> {
-        // use image::GenericImage;
         let size = self.size();
         let color = color.into();
         let sub_image = self.sub_image(rect).map_err(|err| FillError {
@@ -334,10 +362,7 @@ impl Image {
             rect: *rect,
             source: err,
         })?;
-        // let rect = self.subimage_rect(rect)?;
-        // let subimage = self.sub_image(rect.left, rect.top, rect.width(), rect.height());
         imageops::fill_rect(sub_image, color, mode);
-        // imageops::fill_rect(self, color, rect, mode)?;
         Ok(())
     }
 
@@ -384,7 +409,6 @@ impl Image {
                 source: err,
             }),
         }
-        // imageops::fade_out(self, start.into(), end.into(), axis)
     }
 
     #[inline]
@@ -452,7 +476,6 @@ impl Image {
 
     #[inline]
     pub fn crop(&mut self, rect: &Rect) -> Result<(), CropRectError> {
-        // let sub_image = self.sub_image(rect)?;
         let size = self.size();
         self.inner = self
             .sub_image(rect)
@@ -462,20 +485,11 @@ impl Image {
                 source: err.into(),
             })?
             .to_image();
-        // self.inner = imageops::crop(
-        //     &mut self.inner,
-        //     view.left,
-        //     view.top,
-        //     view.width(),
-        //     view.height(),
-        // )
-        // .to_image();
         Ok(())
     }
 
     #[inline]
     pub fn crop_sides(&mut self, sides: Sides) -> Result<(), CropSidesError> {
-        // let cropped_size = self.size().checked_sub(crop_sides)?;
         match (|| {
             let rect = Rect::from(self.size()).checked_sub(sides)?;
             self.crop(&rect).map_err(Box::new)?;
@@ -517,10 +531,10 @@ impl Image {
         quality: impl Into<Option<u8>>,
     ) -> Result<(), SaveError> {
         let path = path.as_ref();
-        let format = ImageFormat::from_path(path)?; // .map_err(SaveError::from)?;
+        let format = ImageFormat::from_path(path)?;
 
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?; // .map_err(SaveError::from)?;
+            fs::create_dir_all(parent)?;
         }
         let mut file = fs::OpenOptions::new()
             .read(false)
@@ -528,7 +542,6 @@ impl Image {
             .create(true)
             .truncate(true)
             .open(path)?;
-        // .map_err(SaveError::from)?;
         self.encode_to(&mut file, format, quality)
     }
 
@@ -557,41 +570,31 @@ impl Image {
             ImageOutputFormat::Png => {
                 codecs::png::PngEncoder::new(w).write_image(data, width, height, color)
             }
-            // .map_err(SaveError::from),
             ImageOutputFormat::Jpeg(_) => {
                 let quality = quality.unwrap_or(defaults::JPEG_QUALITY);
                 codecs::jpeg::JpegEncoder::new_with_quality(w, quality)
                     .write_image(data, width, height, color)
-                // .map_err(SaveError::from)
             }
             ImageOutputFormat::Gif => {
                 codecs::gif::GifEncoder::new(w).encode(data, width, height, color)
             }
-            // .map_err(SaveError::from),
             ImageOutputFormat::Ico => {
                 codecs::ico::IcoEncoder::new(w).write_image(data, width, height, color)
             }
-            // .map_err(SaveError::from),
             ImageOutputFormat::Bmp => {
                 codecs::bmp::BmpEncoder::new(w).write_image(data, width, height, color)
             }
-            // .map_err(SaveError::from),
             ImageOutputFormat::Tiff => {
                 codecs::tiff::TiffEncoder::new(w).write_image(data, width, height, color)
             }
-            // .map_err(SaveError::from),
-            ImageOutputFormat::Unsupported(msg) => {
-                // Err(SaveError::from(image::error::ImageError::Unsupported(
-                Err(image::error::ImageError::Unsupported(
-                    image::error::UnsupportedError::from_format_and_kind(
-                        image::error::ImageFormatHint::Unknown,
-                        image::error::UnsupportedErrorKind::Format(
-                            image::error::ImageFormatHint::Name(msg),
-                        ),
+            ImageOutputFormat::Unsupported(msg) => Err(image::error::ImageError::Unsupported(
+                image::error::UnsupportedError::from_format_and_kind(
+                    image::error::ImageFormatHint::Unknown,
+                    image::error::UnsupportedErrorKind::Format(
+                        image::error::ImageFormatHint::Name(msg),
                     ),
-                ))
-            }
-            // _ => Err(SaveError::from(image::error::ImageError::Unsupported(
+                ),
+            )),
             _ => Err(image::error::ImageError::Unsupported(
                 image::error::UnsupportedError::from_format_and_kind(
                     image::error::ImageFormatHint::Unknown,
@@ -625,137 +628,6 @@ impl Image {
         (path, format)
     }
 }
-
-// mod sealed {
-//     use super::{Image, SubviewError};
-//     use crate::arithmetic::{Cast, CastError};
-//     use crate::error;
-//     use crate::types::Rect;
-
-//     #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-//     #[non_exhaustive]
-//     pub struct ImageRect {
-//         pub top: u32,
-//         pub left: u32,
-//         pub bottom: u32,
-//         pub right: u32,
-//         _sealed: (),
-//     }
-
-impl Image {
-    #[inline]
-    pub fn sub_image(
-        &mut self,
-        rect: &Rect,
-    ) -> Result<image::SubImage<&mut image::RgbaImage>, SubImageError> {
-        pub struct SubImageRect {
-            top: u32,
-            left: u32,
-            bottom: u32,
-            right: u32,
-        }
-
-        let image_rect: Rect = self.size().into();
-        match (|| {
-            if !image_rect.contains(&rect.top_left()) {
-                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
-                    bounds: image_rect,
-                    point: rect.top_left(),
-                }));
-            }
-
-            if !image_rect.contains(&rect.bottom_right()) {
-                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
-                    bounds: image_rect,
-                    point: rect.bottom_right(),
-                }));
-            }
-
-            let sub_image_rect = SubImageRect {
-                top: rect.top.cast::<u32>()?,
-                left: rect.left.cast::<u32>()?,
-                bottom: rect.bottom.cast::<u32>()?,
-                right: rect.right.cast::<u32>()?,
-            };
-            Ok::<_, SubImageErrorSource>(sub_image_rect)
-            // Ok::<_, CastError<i64, u32>>(subview_rect)
-        })() {
-            Ok(sub_image_rect) => {
-                use image::GenericImage;
-                let x = sub_image_rect.left;
-                let y = sub_image_rect.top;
-                let width = sub_image_rect.right - sub_image_rect.left;
-                let height = sub_image_rect.bottom - sub_image_rect.top;
-                Ok(self.inner.sub_image(x, y, width, height))
-            }
-            Err(err) => Err(SubImageError {
-                // Err(err) => Err(Error::Arithmetic(error::Arithmetic {
-                //     msg: format!(
-                //         "failed to get subview {} into image of size {}",
-                //         rect,
-                //         self.size()
-                //     ),
-                rect: *rect,
-                size: self.size(),
-                source: err.into(),
-            }),
-        }
-    }
-}
-// }
-
-// pub use sealed::ImageRect;
-
-// impl ImageRect {
-//     // pub fn size(&self) -> Result<Size, error::Arithmetic> {
-//     #[inline]
-//     #[must_use]
-//     pub fn width(&self) -> u32 {
-//         // safety: this is safe because of the invariant:
-//         // left <= right
-//         self.right - self.left
-//     }
-
-//     #[inline]
-//     #[must_use]
-//     pub fn height(&self) -> u32 {
-//         // safety: this is safe because of the invariant:
-//         // top <= bottom
-//         self.bottom - self.top
-//     }
-
-//     #[inline]
-//     #[must_use]
-//     pub fn size(&self) -> Size {
-//         Size {
-//             width: self.width(),
-//             height: self.height(),
-//         }
-
-//         // match (|| {
-//         //     Ok::<Size, ops::SubError<u32, u32>>(Size {
-//         //         width: self.right.checked_sub(self.left)?,
-//         //         height: self.bottom.checked_sub(self.top)?,
-//         //     })
-//         // })() {
-//         //     Ok(size) => Ok(size),
-//         //     Err(err) => Err(error::Arithmetic {
-//         //         msg: format!("failed to compute size for {}", self),
-//         //         source: err.into(),
-//         //     }),
-//         // }
-//     }
-
-//     #[inline]
-//     pub fn x_coords(&self) -> std::ops::Range<u32> {
-//         self.left..self.right
-//     }
-
-//     #[inline]
-//     pub fn y_coords(&self) -> std::ops::Range<u32> {
-//         self.top..self.bottom
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
