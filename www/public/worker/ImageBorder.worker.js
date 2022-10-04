@@ -1,33 +1,32 @@
 const href = location.href;
-const workerPath = "/worker/ImageBorder.worker.js";
-const baseURL = href.replace(workerPath, "");
+const workerPath = '/worker/ImageBorder.worker.js';
+const baseURL = href.replace(workerPath, '');
 
 importScripts(`${baseURL}/wasm/filmborders.js`);
 
 const init_wasm_in_worker = async () => {
   await wasm_bindgen(`${baseURL}/wasm/filmborders_bg.wasm`);
-  const { ImageBorders, Builtin, Border, Options } = wasm_bindgen;
+  const {ImageBorders, Builtin, Border, Options} = wasm_bindgen;
 
-  let imageData = null; // ImageData
-  let borderData = null; // ImageData
+  let imageData = null;   // ImageData
+  let borderData = null;  // ImageData
 
-  self.postMessage({ status: "ready" });
+  self.postMessage({status: 'ready'});
 
   self.onmessage = async (event) => {
     let message = event.data;
 
     console.log(`worker: received message: ${message}`);
-    if ("imageData" in message) {
+    if ('imageData' in message) {
       imageData = message.imageData;
       borderData = message.borderData;
     }
-    if ("applyOptions" in message) {
-      let { applyOptions, renderID, save, borderName } = message;
+    if ('options' in message) {
+      let {options, renderID, save, borderName} = message;
       let image = ImageBorders.from_image_data(imageData);
-      let options = Options.deserialize(message.applyOptions);
       let border = new Border(borderData, borderName);
-      let result = image.add_border(border, options);
-      self.postMessage({ result, renderID, save });
+      let result = image.add_border(border, Options.deserialize(options));
+      self.postMessage({result, renderID, save});
       console.log(`worker: render ${renderID} done`);
     }
   };

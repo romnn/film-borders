@@ -26,8 +26,10 @@ type AppState = {
   borderOverlayName?: string;
   canvasScale: number;
   outputSizeName: string;
-  outputWidth?: number;
-  outputHeight?: number;
+  outputWidth: number;
+  outputHeight: number;
+  // outputWidth?: number;
+  // outputHeight?: number;
   frameColor: string;
   backgroundColor: string;
   scaleFactor: number;
@@ -47,7 +49,7 @@ type AppState = {
   borderRotationName?: string;
 };
 
-const PREVIEW_MAX_RES = 1000;
+const MAX_PREVIEW_DIM = 1000;
 const DEFAULT_BORDER_WIDTH_PERCENT = 1;
 
 const OUTPUT_SIZES_KEYS: string[] = [
@@ -95,6 +97,7 @@ export default class App extends React.Component<AppProps, AppState> {
   protected resizeTimer?: ReturnType<typeof setTimeout>;
   protected updateTimer?: ReturnType<typeof setTimeout>;
   protected lastRenderConfigHash?: string;
+  protected maxPreviewDim = MAX_PREVIEW_DIM;
 
   constructor(props: AppProps) {
     super(props);
@@ -112,8 +115,8 @@ export default class App extends React.Component<AppProps, AppState> {
       borderOverlayName: undefined,
       canvasScale: 0.0,
       outputSizeName,
-      outputWidth: undefined, // size.width,
-      outputHeight: undefined, // size.height,
+      outputWidth: 0, // size.width,
+      outputHeight: 0, // size.height,
       frameColor: "#000000",
       backgroundColor: "#ffffff",
       scaleFactor: 100.0,
@@ -188,8 +191,10 @@ export default class App extends React.Component<AppProps, AppState> {
 
     // output size
     let output_size = new BoundedSize();
-    output_size.width = this.state.outputWidth;
-    output_size.height = this.state.outputHeight;
+    if (this.state.outputSizeName !== "Match source") {
+      output_size.width = this.state.outputWidth;
+      output_size.height = this.state.outputHeight;
+    }
     options.output_size = output_size;
 
     // fit mode
@@ -228,10 +233,10 @@ export default class App extends React.Component<AppProps, AppState> {
 
     // border width
     let frameWidth = new Sides();
-    frameWidth.top = this.state.frameWidthTop ?? 0.0;
-    frameWidth.right = this.state.frameWidthRight ?? 0.0;
-    frameWidth.bottom = this.state.frameWidthBottom ?? 0.0;
-    frameWidth.left = this.state.frameWidthLeft ?? 0.0;
+    frameWidth.top = (this.state.frameWidthTop ?? 0.0) / 100.0;
+    frameWidth.right = (this.state.frameWidthRight ?? 0.0) / 100.0;
+    frameWidth.bottom = (this.state.frameWidthBottom ?? 0.0) / 100.0;
+    frameWidth.left = (this.state.frameWidthLeft ?? 0.0) / 100.0;
     options.frame_width = frameWidth;
 
     // rotation
@@ -307,9 +312,9 @@ export default class App extends React.Component<AppProps, AppState> {
         previewCanvas.width,
         previewCanvas.height
       );
-      console.log(previewCanvas.width, previewCanvas.height);
+      // console.log(previewCanvas.width, previewCanvas.height);
       // todo: compute the output width based on the original canvas and the options in rust
-      console.log(originalCanvas.width, originalCanvas.height);
+      // console.log(originalCanvas.width, originalCanvas.height);
 
       let borderData = null;
       if (this.state.borderOverlayName === "Custom") {
@@ -323,15 +328,31 @@ export default class App extends React.Component<AppProps, AppState> {
 
       await this.worker.postMessage({ imageData, borderData });
       let options = await this.getOptions();
-      let size = new BoundedSize();
-      size.width = canvas.width;
-      size.height = canvas.height;
-      options.output_size = size;
 
-      // console.log(options);
+      let canvasContainer = this.canvasContainer.current;
+
+      if (canvasContainer) {
+        let bounds = new BoundedSize();
+        let scale = 0.95;
+        bounds.width = canvasContainer.clientWidth * scale;
+        bounds.height = canvasContainer.clientHeight * scale;
+        options.output_size_bounds = bounds;
+
+        // let size = options.output_size;
+        // bounds = options.output_size_bounds;
+        // if (size && size.width && size.height && bounds && bounds.width && bounds.height) {
+        //   let scale = Math.min(
+        //     bounds.width / size.width,
+        //     bounds.height / size.height
+        //   );
+        //   options.output_size.width = Math.floor(size.width * scale);
+        //   options.output_size.height = Math.floor(size.height * scale);
+        // }
+      }
+
       await this.worker.postMessage({
         borderName: this.state.borderOverlay,
-        applyOptions: options.serialize(),
+        options: options.serialize(),
         renderID,
         save: false,
       });
@@ -384,14 +405,14 @@ export default class App extends React.Component<AppProps, AppState> {
     // size.width = resultCanvas.width;
     // size.height = resultCanvas.height;
     // options.output_size = size;
-    options.output_size.width = this.state.outputWidth;
-    options.output_size.height = this.state.outputHeight;
+    // options.output_size.width = this.state.outputWidth;
+    // options.output_size.height = this.state.outputHeight;
     options.preview = false;
 
     // console.log(options);
     await this.worker.postMessage({
       borderName: this.state.borderOverlay,
-      applyOptions: options.serialize(),
+      options: options.serialize(),
       renderID,
       save: true,
     });
@@ -423,8 +444,8 @@ export default class App extends React.Component<AppProps, AppState> {
       img.onload = () => {
         let width = img.width;
         let height = img.height;
-        canvas.width = width;
-        canvas.height = height;
+        // canvas.width = width;
+        // canvas.height = height;
         canvas
           .getContext("2d")
           ?.drawImage(
@@ -457,28 +478,24 @@ export default class App extends React.Component<AppProps, AppState> {
 
         let originalCanvas = this.originalCanvas.current;
         let previewCanvas = this.previewCanvas.current;
-        let canvas = this.canvas.current;
-        if (!previewCanvas || !originalCanvas || !canvas) return reject();
+        // let canvas = this.canvas.current;
+        // if (!previewCanvas || !originalCanvas || !canvas) return reject();
+        if (!previewCanvas || !originalCanvas) return reject();
 
-        const screenWidth =
-          window.innerWidth ||
-          document.documentElement.clientWidth ||
-          document.body.clientWidth;
-        const screenHeight =
-          window.innerHeight ||
-          document.documentElement.clientHeight ||
-          document.body.clientHeight;
-        let maxScreenDim = Math.max(screenWidth, screenHeight);
-        let maxImageDim = Math.max(img.width, img.height);
-        let previewScaledownFac =
-          PREVIEW_MAX_RES / Math.min(maxImageDim, maxScreenDim);
+        this.maxPreviewDim = this.computeMaxPreviewDim(width, height);
+        let maxImageDim = Math.max(width, height);
+        let previewScale = this.maxPreviewDim / maxImageDim;
 
-        canvas.width = width * previewScaledownFac;
-        canvas.height = height * previewScaledownFac;
+        // canvas.width = width * previewScaledownFac;
+        // canvas.height = height * previewScaledownFac;
+
         originalCanvas.width = width;
         originalCanvas.height = height;
-        previewCanvas.width = canvas.width;
-        previewCanvas.height = canvas.height;
+        previewCanvas.width = width * previewScale;
+        previewCanvas.height = height * previewScale;
+
+        // previewCanvas.width = canvas.width;
+        // previewCanvas.height = canvas.height;
 
         previewCanvas
           .getContext("2d")
@@ -501,29 +518,80 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   renderToCanvas = (img: ImageData, canvas: HTMLCanvasElement | null) => {
+    // console.log(img);
+    if (!canvas) return;
+    canvas.width = img.width;
+    canvas.height = img.height;
     canvas?.getContext("2d")?.putImageData(img, 0, 0);
+    // canvas
+    //   ?.getContext("2d")
+    //   ?.putImageData(
+    //   // ?.drawImage(
+    //     img,
+    //     0,
+    //     0,
+    //     img.width,
+    //     img.height,
+    //     0,
+    //     0,
+    //     canvas.width,
+    //     canvas.height
+    //   );
+  };
+
+  maxScreenDim = (): number => {
+    const screenWidth =
+      window.innerWidth ||
+      document.documentElement.clientWidth ||
+      document.body.clientWidth;
+    const screenHeight =
+      window.innerHeight ||
+      document.documentElement.clientHeight ||
+      document.body.clientHeight;
+
+    return Math.max(screenWidth, screenHeight);
+  };
+
+  computeMaxPreviewDim = (imgWidth: number, imgHeight: number): number => {
+    let maxScreenDim = this.maxScreenDim();
+    let maxImageDim = Math.max(imgWidth, imgHeight);
+    let maxPreviewDim = Math.min(MAX_PREVIEW_DIM, maxScreenDim);
+    maxPreviewDim = Math.min(maxPreviewDim, maxImageDim);
+    return maxPreviewDim;
   };
 
   resize = async () => {
-    let canvasContainer = this.canvasContainer.current;
-    console.assert(canvasContainer);
-    if (!canvasContainer) return;
-    let canvasScale =
-      Math.min(
-        canvasContainer.clientWidth / this.state.outputWidth,
-        canvasContainer.clientHeight / this.state.outputHeight
-      ) * 0.95;
-    await this.setState({ canvasScale });
-    let canvas = this.canvas.current;
-    console.assert(canvas);
-    if (!canvas) return;
-    let newWidth = Math.floor(this.state.outputWidth * canvasScale);
-    let newHeight = Math.floor(this.state.outputHeight * canvasScale);
-    // resizing causes the canvas to go blank
-    if (canvas.width !== newWidth || canvas.height !== newHeight) {
-      canvas.width = newWidth;
-      canvas.height = newHeight;
-    }
+    // let maxScreenDim = Math.max(screenWidth, screenHeight);
+    // let maxScreenDim = Math.max(screenWidth, screenHeight);
+    // let maxImageDim = Math.max(img.width, img.height);
+    // let previewScaledownFac =
+    //   PREVIEW_MAX_RES / Math.min(maxImageDim, maxScreenDim);
+    // canvas.width = width * previewScaledownFac;
+    // canvas.height = height * previewScaledownFac;
+    // let canvasContainer = this.canvasContainer.current;
+    // let canvas = this.canvas.current;
+    // if (!canvasContainer || !canvas) return;
+    // if (canvas.width == 0 || canvas.height == 0) return;
+    // // console.assert(canvasContainer);
+    // // if (!canvasContainer) return;
+    // console.log(canvasContainer.clientWidth, canvas.width);
+    // console.log(canvasContainer.clientHeight, canvas.height);
+    // let canvasScale =
+    //   Math.min(
+    //     canvasContainer.clientWidth / canvas.width, // this.state.outputWidth,
+    //     canvasContainer.clientHeight / canvas.height // this.state.outputHeight
+    //   ) * 0.5; // 0.95;
+    // console.log(canvasScale);
+    // await this.setState({ canvasScale });
+    // // let newWidth = Math.floor(this.state.outputWidth * canvasScale);
+    // // let newHeight = Math.floor(this.state.outputHeight * canvasScale);
+    // let newWidth = Math.floor(canvas.width * canvasScale);
+    // let newHeight = Math.floor(canvas.height * canvasScale);
+    // // resizing causes the canvas to go blank
+    // if (canvas.width !== newWidth || canvas.height !== newHeight) {
+    //   canvas.width = newWidth;
+    //   canvas.height = newHeight;
+    // }
   };
 
   scheduleUpdate = async (timeout = 100) => {
@@ -535,7 +603,7 @@ export default class App extends React.Component<AppProps, AppState> {
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(async () => {
       console.log("resize");
-      await this.resize();
+      // await this.resize();
       await this.update(undefined, false);
     }, 300);
   };
@@ -553,16 +621,17 @@ export default class App extends React.Component<AppProps, AppState> {
         }
       }
       if ("result" in event.data) {
+        let result = event.data.result;
         if (event.data.save) {
           let resultCanvas = this.resultCanvas.current;
           if (resultCanvas) {
-            await this.renderToCanvas(event.data.result, resultCanvas);
+            await this.renderToCanvas(result, resultCanvas);
             await this.save(resultCanvas);
             await this.update(undefined);
           }
           await this.setState({ exporting: false });
         } else {
-          await this.renderToCanvas(event.data.result, this.canvas.current);
+          await this.renderToCanvas(result, this.canvas.current);
         }
         console.timeEnd(event.data.renderID);
         await this.setState({ rendering: false });
@@ -799,10 +868,6 @@ export default class App extends React.Component<AppProps, AppState> {
                 disabled={this.state.exporting}
                 onChange={this.updateBorderOverlay}
               >
-                <option value="Match source" key="Match">
-                  Match source
-                </option>
-
                 {Object.values(Builtin)
                   .filter((r) => typeof r == "string")
                   .map((option) => (
