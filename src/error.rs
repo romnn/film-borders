@@ -24,24 +24,6 @@ where
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("missing border")]
-    MissingBorder,
-
-    #[error("missing input image")]
-    MissingImage,
-
-    #[error("image error: {0}")]
-    Image(#[from] super::img::Error),
-
-    #[error("border error: {0}")]
-    Border(#[from] super::border::Error),
-
-    #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
 pub enum ParseEnum {
     #[error("unknown enum variant: `{0}`")]
     Unknown(String),

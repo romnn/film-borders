@@ -120,6 +120,18 @@ pub struct CropSidesError {
 }
 
 #[derive(thiserror::Error, Debug)]
+pub enum CropError {
+    #[error(transparent)]
+    CropSides(#[from] CropSidesError),
+
+    #[error(transparent)]
+    CropRect(#[from] CropRectError),
+
+    #[error(transparent)]
+    CropToFit(#[from] CropToFitError),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum ResizeAndCropError {
     #[error(transparent)]
     Resize(#[from] ResizeError),
@@ -153,47 +165,54 @@ pub struct OutOfBoundsError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("failed to resize image")]
-    Resize(#[source] ResizeError),
+    // #[error("failed to resize image")]
+    #[error(transparent)]
+    Resize(#[from] ResizeError),
 
-    #[error("failed to crop image")]
-    Crop(#[source] CropRectError),
+    //     #[error("failed to crop image")]
+    #[error(transparent)]
+    Crop(#[from] CropError),
 
     #[error(transparent)]
     ResizeAndCrop(#[from] ResizeAndCropError),
 
-    #[error("failed to get subview of image")]
+    // #[error("failed to get subview of image")]
+    #[error(transparent)]
     SubImage(
         #[from]
-        #[source]
+        // #[source]
         SubImageError,
     ),
 
-    #[error("failed to fill image")]
+    // #[error("failed to fill image")]
+    #[error(transparent)]
     Fill(
         #[from]
-        #[source]
+        // #[source]
         FillError,
     ),
 
-    #[error("failed to fade out image")]
+    // #[error("failed to fade out image")]
+    #[error(transparent)]
     FadeOut(
         #[from]
-        #[source]
+        // #[source]
         imageops::FadeError,
     ),
 
-    #[error("failed to read image")]
+    // #[error("failed to read image")]
+    #[error(transparent)]
     Read(
         #[from]
-        #[source]
+        // #[source]
         ReadError,
     ),
 
-    #[error("failed to save image")]
+    // #[error("failed to save image")]
+    #[error(transparent)]
     Save(
         #[from]
-        #[source]
+        // #[source]
         SaveError,
     ),
 }
@@ -468,16 +487,15 @@ impl Image {
         size: impl Into<Size>,
         mode: super::CropMode,
     ) -> Result<(), CropToFitError> {
-        let size = self.size();
         let target = size.into();
         match (|| {
-            let rect = size.crop_to_fit(target, mode)?;
+            let rect = self.size().crop_to_fit(target, mode)?;
             self.crop(&rect).map_err(Box::new)?;
             Ok::<_, CropErrorSource>(())
         })() {
             Ok(_) => Ok(()),
             Err(err) => Err(CropToFitError {
-                size,
+                size: self.size(),
                 target,
                 source: err,
             }),

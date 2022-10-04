@@ -540,23 +540,6 @@ pub enum ScaleToError {
 }
 
 #[derive(thiserror::Error, PartialEq, Debug)]
-pub enum CropToFitErrorSource {
-    #[error(transparent)]
-    Center(#[from] CenterError),
-
-    #[error(transparent)]
-    Arithmetic(#[from] arithmetic::Error),
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute crop such that {size} fits {container}")]
-pub struct CropToFitError {
-    size: Size,
-    container: Size,
-    source: CropToFitErrorSource,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
 #[error("failed to scale {size} to bounds {bounds:?} with mode {:?}")]
 pub struct ScaleToBoundsError {
     size: Size,
@@ -571,6 +554,33 @@ pub struct ScaleByError {
     size: Size,
     scalar: Option<f64>,
     source: arithmetic::Error,
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum ScaleError {
+    #[error(transparent)]
+    ScaleBy(#[from] ScaleByError),
+    #[error(transparent)]
+    ScaleTo(#[from] ScaleToError),
+    #[error(transparent)]
+    ScaleToBounds(#[from] ScaleToBoundsError),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+pub enum CropToFitErrorSource {
+    #[error(transparent)]
+    Center(#[from] CenterError),
+
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute crop such that {size} fits {container}")]
+pub struct CropToFitError {
+    size: Size,
+    container: Size,
+    source: CropToFitErrorSource,
 }
 
 #[derive(thiserror::Error, PartialEq, Debug)]

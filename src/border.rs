@@ -1,15 +1,105 @@
 use super::arithmetic::{ops::CheckedSub, Round};
+use super::imageops;
 use super::img::{self, Image};
-use super::types::{Point, Rect, Size};
+use super::types::{self, Point, Rect, Size};
+use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("border must contain at least one transparent area, found {0:?}")]
-    BadTransparency(Vec<super::Rect>),
+pub enum TransparentComponentsError {
+    #[error(transparent)]
+    TransparentComponents(#[from] imageops::TransparentComponentsError),
 
-    #[error("invalid border: {0}")]
-    Invalid(String),
+    #[error("invalid transparent components")]
+    Invalid(
+        #[from]
+        #[source]
+        InvalidTransparentComponentsError,
+    ),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub struct InvalidTransparentComponentsError {
+    required: (Ordering, usize),
+    components: Vec<Rect>,
+}
+
+impl std::fmt::Display for InvalidTransparentComponentsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let (predicate, required) = self.required;
+        let (predicate_string, required) = match predicate {
+            Ordering::Less => ("at most", required - 1),
+            Ordering::Equal => ("exactly", required),
+            Ordering::Greater => ("at least", required + 1),
+        };
+        write!(
+            f,
+            "have {} components ({:?}), but {} {} are required",
+            self.components.len(),
+            self.components,
+            predicate_string,
+            required
+        )
+    }
+}
+
+//     #[error("have {components:?} ({num_components}) but at least {required} are required")]
+//     AtLeast {
+//         required: usize,
+//         components: Vec<super::Rect>,
+//         num_components: usize,
+//     },
+
+//     #[error("have {components:?} ({num_components}) but exactly {required} is required")]
+//     Exact {
+//         required: usize,
+//         components: Vec<super::Rect>,
+//         num_components: usize,
+//     },
+// }
+
+// #[derive(thiserror::Error, Debug)]
+// pub enum InsufficientTransparentComponentsError {
+//     #[error("have {components:?} ({num_components}) but at least {required} are required")]
+//     AtLeast {
+//         required: usize,
+//         components: Vec<super::Rect>,
+//         num_components: usize,
+//     },
+
+//     #[error("have {components:?} ({num_components}) but exactly {required} is required")]
+//     Exact {
+//         required: usize,
+//         components: Vec<super::Rect>,
+//         num_components: usize,
+//     },
+// }
+
+#[derive(thiserror::Error, Debug)]
+pub enum CustomBorderError {
+    #[error("invalid transparent components")]
+    Invalid(
+        #[from]
+        #[source]
+        InvalidTransparentComponentsError,
+    ),
+
+    #[error(transparent)]
+    Border(#[from] Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    // #[error("insufficient transparent components")]
+    // InsufficientTransparentComponents(
+    //     #[from]
+    //     #[source]
+    //     InsufficientTransparentComponentsError,
+    // ),
+    // #[error(transparent)]
+    // TransparentComponents(#[from] TransparentComponentsError),
+    #[error(transparent)]
+    TransparentComponents(#[from] TransparentComponentsError),
 
     #[error(transparent)]
     Image(#[from] img::Error),
@@ -62,7 +152,7 @@ impl std::fmt::Debug for Kind {
 pub struct Border {
     inner: Image,
     options: Option<Options>,
-    transparent_components: Vec<super::Rect>,
+    transparent_components: Vec<Rect>,
 }
 
 impl Border {
@@ -72,52 +162,61 @@ impl Border {
         options: Option<Options>,
     ) -> Result<Self, Error> {
         let image = Image::from_reader(reader).map_err(img::Error::from)?;
-        Self::from_image(image, options)
+        Self::from_image(image, options).map_err(Error::from)
     }
 
     #[inline]
     pub fn open(path: impl Into<PathBuf>, options: Option<Options>) -> Result<Self, Error> {
         let image = Image::open(path.into()).map_err(img::Error::from)?;
-        Self::from_image(image, options)
+        Self::from_image(image, options).map_err(Error::from)
     }
 
-    // #[inline]
-    // pub fn custom_border_size_for(
-    //     mut border: Self,
-    //     content_size: Size,
-    // ) -> Result<Size, super::Error> {
-    // }
+    #[inline]
+    pub fn from_image(
+        inner: Image,
+        options: Option<Options>,
+    ) -> Result<Self, TransparentComponentsError> {
+        let mut border = Self {
+            inner,
+            options,
+            transparent_components: Vec::new(),
+        };
+        border.compute_transparent_components(options)?;
+        Ok(border)
+    }
 
     #[inline]
-    pub fn new(
+    pub fn custom(
         mut border: Self,
         content_size: Size,
-        stich_direction: Option<super::Orientation>,
-    ) -> Result<Self, super::Error> {
+        stich_direction: Option<types::Orientation>,
+    ) -> Result<Self, CustomBorderError> {
         use super::arithmetic::{
             ops::{CheckedAdd, CheckedDiv, CheckedMul},
             Cast,
         };
-        use super::{BoundedSize, Orientation, Rect, ResizeMode};
 
-        let comps = border.transparent_components().len();
-        if comps != 1 {
-            return Err(Error::Invalid(format!(
-                "border must only have one transparent area, found {}",
-                comps
-            ))
-            .into());
+        let components = border.transparent_components().to_vec();
+        if components.len() != 1 {
+            return Err(CustomBorderError::Invalid(
+                InvalidTransparentComponentsError {
+                    required: (Ordering::Equal, 1),
+                    components,
+                },
+            ));
         }
         // by default, use the longer dimension to stich
-        let stich_direction = stich_direction.unwrap_or(Orientation::Portrait);
+        let stich_direction = stich_direction.unwrap_or(types::Orientation::Portrait);
         border.rotate_to_orientation(stich_direction)?;
         let target_content_size = content_size.rotate_to_orientation(stich_direction);
-        let border_size = border.size_for(BoundedSize {
+        let border_size = border.size_for(types::BoundedSize {
             width: Some(target_content_size.width),
             height: None,
         });
         crate::debug!(&border_size);
-        border.resize_and_crop(border_size, ResizeMode::Cover)?;
+        border
+            .resize_and_crop(border_size, types::ResizeMode::Cover)
+            .unwrap();
         crate::debug!(&border.content_size());
 
         // border is portrait now, we stich vertically
@@ -182,30 +281,21 @@ impl Border {
 
         #[cfg(debug_assertions)]
         {
-            use super::imageops::FillMode;
-            new_border.fill(super::Color::rgba(0, 100, 0, 255), FillMode::Set);
-            // todo: this might be wrong
-            new_border.fill_rect(
-                super::Color::clear(),
-                border.content_rect(),
-                // border.content_rect().top_left(),
-                // target_content_size,
-                FillMode::Set,
-            );
+            use imageops::FillMode;
+            let green = types::Color::rgba(0, 100, 0, 255);
+            let clear = types::Color::clear();
+            new_border.fill(green, FillMode::Set);
+            new_border.fill_rect(clear, border.content_rect(), FillMode::Set);
         }
 
         // draw top patch
         let mut border_top: Image = (*border).clone();
         border_top.crop(&top_patch_rect);
-        // border_top.crop(top_patch.top_left(), top_patch.bottom_right());
         new_border.overlay(&border_top, Point::origin());
 
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
         border_bottom.crop(&bottom_patch_rect);
-        // border_bottom.crop(bottom_patch.top_left(), bottom_patch.bottom_right());
-        // let bottom_patch_size = bottom_patch.size().unwrap();
-        // let top_patch_size = top_patch.size().unwrap();
 
         let bottom_patch_top_left: Point = Point::from(new_border_size)
             .checked_sub(bottom_patch_size.into())
@@ -260,8 +350,8 @@ impl Border {
 
         for i in 0..num_patches {
             let mut border_overlay_patch = border.inner.clone();
-            border_overlay_patch.crop_to_fit(patch_size, super::CropMode::Center);
-            let axis = super::Axis::Y;
+            border_overlay_patch.crop_to_fit(patch_size, types::CropMode::Center);
+            let axis = types::Axis::Y;
             border_overlay_patch.fade_out(fade_size, Point::origin(), axis);
             border_overlay_patch.fade_out(
                 Point::from(patch_size)
@@ -287,68 +377,63 @@ impl Border {
             new_border.overlay(&border_overlay_patch, patch_top_left);
         }
 
-        let mut new_border = Self::from_image(new_border, border.options)?;
+        let mut new_border = Self::from_image(new_border, border.options).unwrap();
 
         // match orientation to target content size
-        new_border.rotate_to_orientation(content_size.orientation())?;
+        new_border
+            .rotate_to_orientation(content_size.orientation())
+            .unwrap();
         Ok(new_border)
     }
 
     #[inline]
-    fn compute_transparent_components(&mut self, options: Option<Options>) -> Result<(), Error> {
-        use super::imageops::find_transparent_components;
-
+    fn compute_transparent_components(
+        &mut self,
+        options: Option<Options>,
+    ) -> Result<(), TransparentComponentsError> {
         let options = options.unwrap_or_default();
-        self.transparent_components = find_transparent_components(
+        self.transparent_components = imageops::find_transparent_components(
             &self.inner,
             options.alpha_threshold,
             options.transparent_component_threshold,
-        )
-        .unwrap();
+        )?;
 
         if self.transparent_components.is_empty() {
-            return Err(Error::BadTransparency(self.transparent_components.clone()));
+            return Err(TransparentComponentsError::Invalid(
+                InvalidTransparentComponentsError {
+                    required: (Ordering::Greater, 0),
+                    components: self.transparent_components.clone(),
+                },
+            ));
         }
         self.transparent_components
-            .sort_by_key(|b| std::cmp::Reverse(b.pixel_count().unwrap()));
+            .sort_by_key(|b| std::cmp::Reverse(b.pixel_count().unwrap_or(0)));
         Ok(())
-    }
-
-    #[inline]
-    pub fn from_image(inner: Image, options: Option<Options>) -> Result<Self, Error> {
-        let mut border = Self {
-            inner,
-            options,
-            transparent_components: Vec::new(),
-        };
-        border.compute_transparent_components(options)?;
-        Ok(border)
     }
 
     #[inline]
     pub fn resize_and_crop(
         &mut self,
         container: Size,
-        resize_mode: super::ResizeMode,
-    ) -> Result<(), super::Error> {
+        resize_mode: types::ResizeMode,
+    ) -> Result<(), Error> {
+        let crop_mode = super::CropMode::Center;
         self.inner
-            .resize_and_crop(container, resize_mode, super::CropMode::Center);
-        self.compute_transparent_components(self.options)?;
+            .resize_and_crop(container, resize_mode, crop_mode)
+            .map_err(img::Error::from);
+        self.compute_transparent_components(self.options).unwrap();
         Ok(())
     }
 
     #[inline]
-    pub fn rotate(&mut self, angle: &super::Rotation) -> Result<(), super::Error> {
+    pub fn rotate(&mut self, angle: &types::Rotation) -> Result<(), Error> {
         self.inner.rotate(angle);
         self.compute_transparent_components(self.options)?;
         Ok(())
     }
 
     #[inline]
-    pub fn rotate_to_orientation(
-        &mut self,
-        orientation: super::Orientation,
-    ) -> Result<(), super::Error> {
+    pub fn rotate_to_orientation(&mut self, orientation: types::Orientation) -> Result<(), Error> {
         self.inner.rotate_to_orientation(orientation);
         self.compute_transparent_components(self.options)?;
         Ok(())
@@ -356,7 +441,7 @@ impl Border {
 
     #[inline]
     #[must_use]
-    pub fn content_rect(&self) -> &super::Rect {
+    pub fn content_rect(&self) -> &Rect {
         self.transparent_components.first().unwrap()
     }
 
@@ -368,9 +453,7 @@ impl Border {
 
     #[inline]
     #[must_use]
-    pub fn size_for<S: Into<super::BoundedSize>>(&self, target_content_size: S) -> Size {
-        use super::ResizeMode;
-
+    pub fn size_for<S: Into<types::BoundedSize>>(&self, target_content_size: S) -> Size {
         let content_size = self.content_size();
         let target_content_size = target_content_size.into();
         crate::debug!(&content_size);
@@ -378,25 +461,25 @@ impl Border {
 
         // scale down if larget than target content size
         let new_content_size = content_size
-            .scale_to_bounds(target_content_size, ResizeMode::Contain)
+            .scale_to_bounds(target_content_size, types::ResizeMode::Contain)
             .unwrap();
         crate::debug!(&new_content_size);
 
         // scale up as little as possible to cover target content size
         let new_content_size = new_content_size
-            .scale_to_bounds(target_content_size, ResizeMode::Cover)
+            .scale_to_bounds(target_content_size, types::ResizeMode::Cover)
             .unwrap();
 
         crate::debug!(&new_content_size);
         let scale_factor = content_size
-            .scale_factor(new_content_size, ResizeMode::Cover)
+            .scale_factor(new_content_size, types::ResizeMode::Cover)
             .unwrap();
         self.size().scale_by::<_, Round>(scale_factor.0).unwrap()
     }
 
     #[inline]
     #[must_use]
-    pub fn transparent_components(&self) -> &Vec<super::Rect> {
+    pub fn transparent_components(&self) -> &Vec<Rect> {
         &self.transparent_components
     }
 }
@@ -427,7 +510,7 @@ mod tests {
         components: &Vec<types::Rect>,
         output: impl AsRef<Path>,
     ) -> Result<()> {
-        use crate::imageops::FillMode;
+        use imageops::FillMode;
 
         let red = types::Color::rgba(255, 0, 0, 125);
         for c in components {
@@ -467,7 +550,7 @@ mod tests {
                     let img = Image::open(&border_file)?;
                     let border = Border::from_image(img.clone(), Some(options));
                     let components = match border {
-                        Err(Error::BadTransparency(c)) => Ok(c),
+                        Err(TransparentComponentsError::Invalid(InvalidTransparentComponentsError { components, .. })) => Ok(components),
                         Err(err) => Err(err),
                         Ok(border) => {
                             Ok(border.transparent_components().to_vec())

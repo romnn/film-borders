@@ -40,11 +40,8 @@ film-borders --help
 
 #### TODO
 
-- subimage rect could also directly return a mutable sub image using crop?
-- crop sides should really only be used for the user right?
-- crop to fit should return rect?
-- add builder for image such that path can be set more easily
-- consider: where should image rect be used
+- error handling for lib and border
+- make debug statements console log when on wasm target
 - consider: where should into be used, where can be passed by reference
 - add backtraces to all error types
 - make the errors more nuanced, e.g. from what operation they stem from
@@ -62,18 +59,23 @@ film-borders --help
 - use impls where possible
 - inline everything
 - add more benchmarks
-- split the types into multiple files
 - add documentation
-- make all ops checked
 - add more tests
 - add examples
-- implement scale border mode (not sophisticated)
 - update the website
 - add rendering text
 - use generic image backend
 
 #### Done
 
+- add builder for image such that path can be set more easily
+- crop sides should really only be used for the user right?
+- subimage rect could also directly return a mutable sub image using crop?
+- consider: where should image rect be used
+- make all ops checked
+- implement scale border mode (not sophisticated)
+- split the types into multiple files
+- crop to fit should return rect?
 - write a clamp trait
 - lint
 - remove the apply subcommand

@@ -1,4 +1,4 @@
-use crate::{border, builtin, img, options};
+use crate::{border, builtin, error::Report, img, options};
 use image::{DynamicImage, ImageBuffer};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
@@ -160,7 +160,7 @@ impl ImageBorders {
     }
 
     #[inline]
-    pub fn add_border(
+    pub fn render(
         &mut self,
         border: Border,
         options: &options::Options,
@@ -175,7 +175,7 @@ impl ImageBorders {
                 let image = Image::from_image_data(&data)?;
                 let border = border::Border::from_image(image.inner, None)
                     .map(border::Kind::Custom)
-                    .map_err(|err| JsValue::from_str(&err.to_string()))?;
+                    .map_err(|err| JsValue::from_str(&err.report()))?;
                 Some(border)
             }
         };
@@ -183,8 +183,8 @@ impl ImageBorders {
 
         let result = self
             .inner
-            .add_border(border, options)
-            .map_err(|err| JsValue::from_str(&err.to_string()))?;
+            .render(border, options)
+            .map_err(|err| JsValue::from_str(&err.report()))?;
         let size = result.size();
         // convert the raw pixels back to an ImageData object
         ImageData::new_with_u8_clamped_array_and_sh(

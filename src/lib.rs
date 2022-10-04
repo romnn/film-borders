@@ -22,7 +22,6 @@ pub mod types;
 pub mod wasm;
 
 pub use border::Border;
-pub use error::Error;
 pub use image::ImageFormat;
 pub use imageops::FillMode;
 pub use img::Image;
@@ -40,8 +39,101 @@ use std::path::{Path, PathBuf};
 pub struct ResultSize {
     output_size: Size,
     content_size: Size,
-    margin: Sides,
+    margins: Sides,
     frame_width: Sides,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum PreparePrimaryError {
+    #[error("{msg}")]
+    Arithmetic {
+        msg: String,
+        source: arithmetic::Error,
+    },
+    #[error(transparent)]
+    Image(#[from] img::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ResultSizeError {
+    #[error("{msg}")]
+    Arithmetic {
+        msg: String,
+        source: arithmetic::Error,
+    },
+    #[error("{msg}")]
+    Scale {
+        msg: String,
+        source: types::size::ScaleError,
+    },
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    // #[error("missing border")]
+    // MissingBorder,
+    #[error("missing input image")]
+    MissingImage,
+
+    #[error("failed to read image")]
+    Read(
+        #[from]
+        #[source]
+        img::ReadError,
+    ),
+
+    #[error("render error")]
+    Render(
+        #[from]
+        #[source]
+        RenderError,
+    ),
+    // #[error("image error: {0}")]
+    // Image(#[from] super::img::Error),
+
+    // #[error("border error: {0}")]
+    // Border(#[from] super::border::Error),
+
+    // #[error("io error: {0}")]
+    // Io(#[from] std::io::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum RenderError {
+    #[error("missing input image")]
+    MissingImage,
+
+    #[error("failed to compute result size")]
+    ResultSize(
+        #[from]
+        #[source]
+        ResultSizeError,
+    ),
+
+    #[error("failed to prepare primary image")]
+    PreparePrimary(
+        #[from]
+        #[source]
+        PreparePrimaryError,
+    ),
+
+    #[error(transparent)]
+    Border(#[from] border::Error),
+
+    #[error(transparent)]
+    CustomBorder(#[from] border::CustomBorderError),
+
+    #[error("{msg}")]
+    Center {
+        msg: String,
+        source: types::size::CenterError,
+    },
+
+    #[error("{msg}")]
+    Arithmetic {
+        msg: String,
+        source: arithmetic::Error,
+    },
 }
 
 pub struct ImageBorders {
@@ -65,8 +157,8 @@ impl ImageBorders {
     }
 
     #[inline]
-    pub fn from_reader<R: std::io::BufRead + std::io::Seek>(reader: R) -> Result<Self, Error> {
-        let img = Image::from_reader(reader).unwrap();
+    pub fn from_reader(reader: impl std::io::BufRead + std::io::Seek) -> Result<Self, Error> {
+        let img = Image::from_reader(reader)?;
         Ok(Self::single(img))
     }
 
@@ -78,78 +170,8 @@ impl ImageBorders {
     /// If the image can not be opened, an error is returned
     ///
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, Error> {
-        let img = Image::open(path).unwrap();
+        let img = Image::open(path)?;
         Ok(Self::single(img))
-    }
-
-    #[inline]
-    pub fn compute_result_size(
-        border: &mut Option<border::Border>,
-        primary: &img::Image,
-        options: &Options,
-    ) -> Result<ResultSize, Error> {
-        let original_content_size = match border {
-            Some(ref mut border) => match options.mode {
-                FitMode::Image => border.size_for(primary.size()),
-                FitMode::Border => {
-                    // create a new custom border
-                    *border = Border::new(border.clone(), primary.size(), None)?;
-                    border.size()
-                }
-            },
-            None => primary.size(),
-        };
-        crate::debug!("image with border size: {}", &original_content_size);
-
-        let scale_factor = options.scale_factor.clamp(0.0, 1.0);
-        let margin_factor = f64::from(options.margin).max(0.0);
-
-        let base = original_content_size.min_dim();
-        let frame_width: Sides = options.frame_width.checked_mul(base).unwrap();
-        let margin = (margin_factor * f64::from(base)).cast::<u32>().unwrap();
-        let margin: Sides = Sides::uniform(margin);
-
-        let content_size = original_content_size
-            .checked_add(frame_width)
-            .unwrap()
-            .checked_add(margin)
-            .unwrap();
-        let default_output_size = content_size
-            .scale_by::<_, Round>(1.0 / scale_factor)
-            .unwrap();
-
-        // set output size and do not keep aspect ratio
-        let output_size = match options.output_size {
-            BoundedSize {
-                width: Some(width),
-                height: Some(height),
-            } => Ok(Size { width, height }),
-            _ => default_output_size.scale_to_bounds(options.output_size, ResizeMode::Contain),
-        }
-        .unwrap();
-        // bound output size but keep aspect ratio
-        let output_size = output_size
-            .scale_to_bounds(options.output_size_bounds, ResizeMode::Contain)
-            .unwrap();
-
-        let new_content_size = content_size
-            .scale_to(
-                output_size.checked_mul(scale_factor).unwrap(),
-                ResizeMode::Contain,
-            )
-            .unwrap();
-        let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
-        let frame_width: Sides = frame_width.checked_mul(scale).unwrap();
-        let margin: Sides = margin.checked_mul(scale).unwrap();
-        // crate::debug!(&frame_width);
-        // crate::debug!(&margin);
-
-        Ok(ResultSize {
-            content_size: new_content_size,
-            margin,
-            frame_width,
-            output_size,
-        })
     }
 
     #[inline]
@@ -159,88 +181,63 @@ impl ImageBorders {
     ///
     /// If the border can not be added, an error is returned.
     ///
-    pub fn add_border(
+    pub fn render(
         &mut self,
-        border: Option<border::Kind>,
+        border_kind: Option<border::Kind>,
         options: &Options,
-    ) -> Result<img::Image, Error> {
-        // prepare images
+    ) -> Result<img::Image, RenderError> {
         let mut images: Vec<img::Image> = self.images.clone();
-        let primary = images.get_mut(0).unwrap(); // .ok_or(Error::MissingImage)?;
-        primary.rotate(&options.image_rotation);
-        if let Some(crop_percent) = options.crop {
-            let crop = crop_percent.checked_mul(primary.size()).unwrap();
-            primary.crop_sides(crop);
-        };
+        let primary = images.get_mut(0).ok_or(RenderError::MissingImage)?;
 
-        // prepare the border for the primary image
-        let mut border = match border {
-            Some(border) => {
-                let mut border = border.into_border().unwrap();
-                border.rotate_to_orientation(primary.orientation()).unwrap();
-                border.rotate(&options.border_rotation).unwrap();
-                Some(border)
-            }
-            None => None,
-        };
+        prepare_primary(primary, options)?;
+        let mut border = border_for_primary(border_kind, primary, options)?;
 
-        let result_size = Self::compute_result_size(&mut border, &*primary, options)?;
+        let result_size = compute_result_size(&border, &*primary, options)?;
         crate::debug!(&result_size);
 
         // create new result image
-        let mut result_image = img::Image::with_size(result_size.output_size);
-        result_image.path = primary.path.clone();
+        let mut result_image = img::Image {
+            path: primary.path.clone(),
+            ..img::Image::with_size(result_size.output_size)
+        };
 
-        let background_color = options.background_color.unwrap_or(if options.preview {
-            Color::gray()
-        } else {
-            Color::white()
-        });
-        result_image.fill(background_color, FillMode::Set);
+        result_image.fill(options.background_color(), FillMode::Set);
 
         let content_rect = result_size
             .output_size
             .center(result_size.content_size)
-            .unwrap();
+            .map_err(|err| RenderError::Center {
+                msg: "failed to center content size".to_string(),
+                source: err.into(),
+            })?;
         crate::debug!(&content_rect);
 
         #[cfg(debug_assertions)]
-        result_image
-            .fill_rect(
-                Color::rgba(0, 0, 255, 100),
-                &content_rect,
-                // content_rect.top_left(),
-                // content_rect.size()?,
-                FillMode::Blend,
-            )
-            .unwrap();
+        {
+            let color = Color::rgba(0, 0, 255, 100);
+            result_image
+                .fill_rect(color, &content_rect, FillMode::Blend)
+                .unwrap();
+        }
 
-        let content_rect_sub_margin = content_rect.checked_sub(result_size.margin).unwrap();
+        let content_rect_sub_margins = content_rect.checked_sub(result_size.margins).unwrap();
         result_image
             .fill_rect(
                 options.frame_color,
-                &content_rect_sub_margin,
-                // content_rect_sub_margin.top_left(),
-                // content_rect_sub_margin.size()?,
+                &content_rect_sub_margins,
                 FillMode::Set,
             )
             .unwrap();
 
-        let border_rect = content_rect_sub_margin
+        let border_rect = content_rect_sub_margins
             .checked_sub(result_size.frame_width)
             .unwrap();
         crate::debug!(&border_rect);
         let border_size = border_rect.size().unwrap();
 
         #[cfg(debug_assertions)]
-        result_image.fill_rect(
-            Color::rgba(0, 255, 0, 100),
-            &border_rect,
-            // border_rect.top_left(),
-            // border_size,
-            FillMode::Blend,
-        );
-        let default_component = Rect::new(Point::origin(), border_size).unwrap();
+        result_image.fill_rect(Color::rgba(0, 255, 0, 100), &border_rect, FillMode::Blend);
+        let default_component = Rect::from(border_size);
 
         crate::debug!("overlay content");
         match options.mode {
@@ -268,14 +265,20 @@ impl ImageBorders {
                     let image_size = image_rect.size().unwrap();
 
                     let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
-                    image.resize_and_crop(
-                        image_size,
-                        ResizeMode::Cover,
-                        CropMode::Custom {
-                            x: center_offset.x,
-                            y: center_offset.y,
-                        },
-                    );
+
+                    // result_image.fill_rect(Color::rgba(0, 255, 0, 255), &image_rect, FillMode::Blend);
+
+                    image
+                        .resize_and_crop(
+                            image_size,
+                            ResizeMode::Cover,
+                            CropMode::Custom {
+                                x: center_offset.x,
+                                y: center_offset.y,
+                            },
+                        )
+                        .unwrap();
+                    assert_eq!(image_size, image.size());
 
                     result_image.overlay(image, image_rect.top_left());
                 }
@@ -309,22 +312,185 @@ impl ImageBorders {
         };
 
         if options.preview {
-            let preview_size = Size {
-                width: result_size.output_size.min_dim(),
-                height: result_size.output_size.min_dim(),
-            };
-            let preview_rect = result_size.output_size.center(preview_size).unwrap();
-            result_image.fill_rect(
-                Color::rgba(255, 0, 0, 50),
-                &preview_rect,
-                // preview_rect.top_left(),
-                // preview_rect.size()?,
-                FillMode::Blend,
-            );
+            overlay_visible_area(&mut result_image)?;
         }
 
         Ok(result_image)
     }
+}
+
+#[inline]
+fn compute_result_size(
+    border: &Option<border::Border>,
+    primary: &img::Image,
+    options: &Options,
+) -> Result<ResultSize, ResultSizeError> {
+    let original_content_size = match border {
+        Some(border) => match options.mode {
+            FitMode::Image => border.size_for(primary.size()),
+            FitMode::Border => border.size(),
+        },
+        None => primary.size(),
+    };
+    crate::debug!("image with border size: {}", &original_content_size);
+
+    let scale_factor = options.scale_factor.clamp(0.0, 1.0);
+    let margin_factor = f64::from(options.margin).max(0.0);
+
+    let base = original_content_size.min_dim();
+    let frame_width: Sides =
+        options
+            .frame_width
+            .checked_mul(base)
+            .map_err(|err| ResultSizeError::Arithmetic {
+                msg: "failed to compute original frame width".to_string(),
+                source: err.into(),
+            })?;
+    let margin = (margin_factor * f64::from(base))
+        .cast::<u32>()
+        .map_err(|err| ResultSizeError::Arithmetic {
+            msg: "failed to compute original margin width".to_string(),
+            source: err.into(),
+        })?;
+
+    let margins: Sides = Sides::uniform(margin);
+
+    let content_size = original_content_size
+        .checked_add(frame_width)
+        .and_then(|size| size.checked_add(margins))
+        .map_err(|err| ResultSizeError::Arithmetic {
+            msg: "failed to compute content size".to_string(),
+            source: err.into(),
+        })?;
+    let default_output_size = content_size
+        .scale_by::<_, Round>(1.0 / scale_factor)
+        .map_err(|err| ResultSizeError::Scale {
+            msg: "failed to compute default output size".to_string(),
+            source: err.into(),
+        })?;
+
+    // set output size and do not keep aspect ratio
+    let output_size = match options.output_size {
+        BoundedSize {
+            width: Some(width),
+            height: Some(height),
+        } => Size { width, height },
+        _ => {
+            let size = default_output_size
+                .scale_to_bounds(options.output_size, ResizeMode::Contain)
+                .map_err(|err| ResultSizeError::Scale {
+                    msg: "failed to compute output size".to_string(),
+                    source: err.into(),
+                })?;
+            size
+        }
+    };
+    // bound output size but keep aspect ratio
+    let output_size = output_size
+        .scale_to_bounds(options.output_size_bounds, ResizeMode::Contain)
+        .map_err(|err| ResultSizeError::Scale {
+            msg: "failed to bound output size".to_string(),
+            source: err.into(),
+        })?;
+
+    let new_content_size_scale =
+        output_size
+            .checked_mul(scale_factor)
+            .map_err(|err| ResultSizeError::Arithmetic {
+                msg: "failed to compute scaled content size".to_string(),
+                source: err.into(),
+            })?;
+
+    let new_content_size = content_size
+        .scale_to(new_content_size_scale, ResizeMode::Contain)
+        .map_err(|err| ResultSizeError::Scale {
+            msg: "failed to compute scaled content size".to_string(),
+            source: err.into(),
+        })?;
+
+    let old_base = content_size.min_dim();
+    let new_base = new_content_size.min_dim();
+    let scale = f64::from(new_base) / f64::from(base);
+
+    let frame_width =
+        frame_width
+            .checked_mul(scale)
+            .map_err(|err| ResultSizeError::Arithmetic {
+                msg: "failed to compute scaled frame width".to_string(),
+                source: err.into(),
+            })?;
+
+    let margins = margins
+        .checked_mul(scale)
+        .map_err(|err| ResultSizeError::Arithmetic {
+            msg: "failed to compute scaled margins".to_string(),
+            source: err.into(),
+        })?;
+
+    Ok(ResultSize {
+        content_size: new_content_size,
+        margins,
+        frame_width,
+        output_size,
+    })
+}
+
+#[inline]
+fn border_for_primary(
+    border_kind: Option<border::Kind>,
+    primary: &img::Image,
+    options: &Options,
+) -> Result<Option<Border>, RenderError> {
+    let mut border = match border_kind {
+        Some(border_kind) => {
+            // prepare the border for the primary image
+            let mut border = border_kind.into_border()?;
+            border.rotate_to_orientation(primary.orientation())?;
+            border.rotate(&options.border_rotation)?;
+            Some(border)
+        }
+        None => None,
+    };
+
+    if let Some(ref mut border) = border {
+        if let FitMode::Border = options.mode {
+            *border = Border::custom(border.clone(), primary.size(), None)?;
+        }
+    }
+    Ok(border)
+}
+
+#[inline]
+fn prepare_primary(primary: &mut img::Image, options: &Options) -> Result<(), PreparePrimaryError> {
+    primary.rotate(&options.image_rotation);
+    if let Some(crop_percent) = options.crop {
+        let crop = crop_percent.checked_mul(primary.size()).map_err(|err| {
+            PreparePrimaryError::Arithmetic {
+                msg: "failed to compute crop from relative crop".to_string(),
+                source: err.into(),
+            }
+        })?;
+        primary
+            .crop_sides(crop)
+            .map_err(img::CropError::from)
+            .map_err(img::Error::from)?;
+    };
+    Ok(())
+}
+
+#[inline]
+fn overlay_visible_area(image: &mut img::Image) -> Result<(), RenderError> {
+    let size = image.size();
+    let preview_size = Size {
+        width: size.min_dim(),
+        height: size.min_dim(),
+    };
+    let preview_rect = size.center(preview_size).unwrap();
+    let transparent_red = Color::rgba(255, 0, 0, 50);
+    image
+        .fill_rect(transparent_red, &preview_rect, FillMode::Blend)
+        .unwrap();
+    Ok(())
 }
 
 #[cfg(test)]
@@ -366,7 +532,7 @@ mod tests {
                     assert!(input.is_file());
                     let mut borders = ImageBorders::open(&input)?;
                     let border = border::Kind::Builtin(builtin::Builtin::Border120_1);
-                    let result = borders.add_border(Some(border), options)?;
+                    let result = borders.render(Some(border), options)?;
                     result.save_with_filename(&output, None)?;
                     assert!(output.is_file());
                     Ok(())
@@ -408,7 +574,7 @@ mod tests {
         let input = Cursor::new(&bytes);
         let mut borders = ImageBorders::from_reader(input)?;
         let border = border::Kind::Builtin(builtin::Builtin::Border120_1);
-        let result = borders.add_border(Some(border), &OPTIONS)?;
+        let result = borders.render(Some(border), &OPTIONS)?;
         let mut output = Cursor::new(Vec::new());
         result.encode_to(&mut output, ImageFormat::Png, None)?;
         assert!(output.position() > 100);
@@ -425,7 +591,7 @@ mod tests {
         assert!(border_file.is_file());
         let border = border::Kind::Custom(Border::open(&border_file, None)?);
         let mut borders = ImageBorders::open(&input)?;
-        let result = borders.add_border(Some(border), &OPTIONS)?;
+        let result = borders.render(Some(border), &OPTIONS)?;
         result.save_with_filename(&output, None)?;
         assert!(output.is_file());
         Ok(())

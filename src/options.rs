@@ -1,3 +1,4 @@
+use super::types;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -56,5 +57,15 @@ impl Options {
     #[inline]
     pub fn serialize(&self) -> Result<String, JsValue> {
         serde_json::to_string(&self).map_err(|err| JsValue::from_str(&err.to_string()))
+    }
+}
+
+impl Options {
+    pub fn background_color(&self) -> types::Color {
+        self.background_color.unwrap_or(if self.preview {
+            types::Color::gray()
+        } else {
+            types::Color::white()
+        })
     }
 }
