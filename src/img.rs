@@ -24,7 +24,7 @@ pub struct ReadError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum SaveError {
+pub enum SaveErrorSource {
     #[error("missing output file path")]
     MissingOutputPath,
 
@@ -33,6 +33,15 @@ pub enum SaveError {
 
     #[error(transparent)]
     Image(#[from] image::error::ImageError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to save image to {path:?} with format {format:?} and quality {quality:?}")]
+pub struct SaveError {
+    path: Option<PathBuf>,
+    format: Option<ImageFormat>,
+    quality: Option<u8>,
+    source: SaveErrorSource,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -448,6 +457,7 @@ impl Image {
         overlay_image: &impl std::ops::Deref<Target = image::RgbaImage>,
         offset: impl Into<Point>,
     ) {
+        // todo: should we check that offset + overlay_image is within bounds?
         let offset: Point = offset.into();
         imageops::overlay(&mut self.inner, &**overlay_image, offset.x, offset.y);
     }
@@ -531,24 +541,42 @@ impl Image {
         quality: impl Into<Option<u8>>,
     ) -> Result<(), SaveError> {
         let path = path.as_ref();
-        let format = ImageFormat::from_path(path)?;
+        let quality = quality.into();
+        match (|| {
+            let format = ImageFormat::from_path(path)?;
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut file = fs::OpenOptions::new()
+                .read(false)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(path)?;
+            self.encode_to(&mut file, format, quality)?;
 
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            Ok::<_, SaveErrorSource>(())
+        })() {
+            Ok(_) => Ok(()),
+            Err(err) => Err(SaveError {
+                path: Some(path.to_path_buf()),
+                format: ImageFormat::from_path(path).ok(),
+                quality,
+                source: err,
+            }),
         }
-        let mut file = fs::OpenOptions::new()
-            .read(false)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)?;
-        self.encode_to(&mut file, format, quality)
     }
 
     #[inline]
     pub fn save(&self, quality: impl Into<Option<u8>>) -> Result<(), SaveError> {
+        let quality = quality.into();
         let (default_output, _) = self.output_path(None);
-        let path = default_output.ok_or(SaveError::MissingOutputPath)?;
+        let path = default_output.ok_or(SaveError {
+            path: None,
+            format: None,
+            quality,
+            source: SaveErrorSource::MissingOutputPath,
+        })?;
         self.save_with_filename(path, quality)
     }
 
@@ -558,7 +586,7 @@ impl Image {
         w: &mut (impl std::io::Write + Seek),
         format: ImageFormat,
         quality: impl Into<Option<u8>>,
-    ) -> Result<(), SaveError> {
+    ) -> Result<(), image::ImageError> {
         use image::{codecs, ImageEncoder, ImageOutputFormat};
 
         let data = self.inner.as_raw().as_ref();

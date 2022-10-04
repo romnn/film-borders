@@ -149,7 +149,7 @@ pub fn fade_out(
                 Axis::Y => (x, y),
             };
 
-            let p = image.get_pixel(x, y);
+            let mut p = image.get_pixel(x, y);
             let channels = p.channels_mut();
             channels[3] = channels[3].min(alpha);
             image.put_pixel(x, y, p);
