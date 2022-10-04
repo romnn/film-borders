@@ -36,9 +36,13 @@ pub enum SaveError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum FillError {
-    #[error(transparent)]
-    SubImage(#[from] SubImageError),
+#[error("failed to fill {rect} of image with size {size}")]
+pub struct FillError {
+    rect: Rect,
+    size: Size,
+    source: SubImageError,
+    // #[error(transparent)]
+    // SubImage(#[from] SubImageError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -61,36 +65,72 @@ pub struct FadeError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum ResizeError {
-    #[error(transparent)]
-    ScaleTo(#[from] types::size::ScaleToError),
+#[error("failed to resize image with size {size} to {target} with mode {mode:?}")]
+pub struct ResizeError {
+    // #[error(transparent)]
+    // ScaleTo(#[from] types::size::ScaleToError),
+    size: Size,
+    target: Size,
+    mode: super::ResizeMode,
+    source: types::size::ScaleToError,
     // #[error(transparent)]
     // Arithmetic(#[from] error::Arithmetic),
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum CropError {
+pub enum CropErrorSource {
     #[error(transparent)]
     CropToFit(#[from] types::size::CropToFitError),
-    // #[error(transparent)]
-    // Arithmetic(#[from] error::Arithmetic),
+
     #[error(transparent)]
     SubImage(#[from] SubImageError),
+
+    #[error(transparent)]
+    Sides(#[from] types::rect::SubSidesError),
+
+    #[error(transparent)]
+    CropRect(#[from] Box<CropRectError>),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to crop image with size {size} to fit {target}")]
+pub struct CropToFitError {
+    size: Size,
+    target: Size,
+    source: CropErrorSource,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to crop image with size {size} to {rect}")]
+pub struct CropRectError {
+    size: Size,
+    rect: Rect,
+    source: CropErrorSource,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to crop image with size {size} by {sides}")]
+pub struct CropSidesError {
+    size: Size,
+    sides: Sides,
+    source: CropErrorSource,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResizeAndCropError {
-    #[error("failed to resize image")]
+    // #[error("failed to resize image")]
+    #[error(transparent)]
     Resize(
         #[from]
-        #[source]
+        // #[source]
         ResizeError,
     ),
-    #[error("failed to crop image")]
+    // #[error("failed to crop image")]
+    #[error(transparent)]
     Crop(
         #[from]
-        #[source]
-        CropError,
+        // #[source]
+        CropToFitError,
     ),
 }
 
@@ -129,7 +169,7 @@ pub enum Error {
     Resize(#[source] ResizeError),
 
     #[error("failed to crop image")]
-    Crop(#[source] CropError),
+    Crop(#[source] CropRectError),
 
     #[error(transparent)]
     ResizeAndCrop(#[from] ResizeAndCropError),
@@ -287,8 +327,13 @@ impl Image {
         mode: imageops::FillMode,
     ) -> Result<(), FillError> {
         // use image::GenericImage;
+        let size = self.size();
         let color = color.into();
-        let sub_image = self.sub_image(rect)?;
+        let sub_image = self.sub_image(rect).map_err(|err| FillError {
+            size,
+            rect: *rect,
+            source: err,
+        })?;
         // let rect = self.subimage_rect(rect)?;
         // let subimage = self.sub_image(rect.left, rect.top, rect.width(), rect.height());
         imageops::fill_rect(sub_image, color, mode);
@@ -351,27 +396,25 @@ impl Image {
         #[cfg(debug_assertions)]
         let start = chrono::Utc::now().time();
 
-        let size = self.size().scale_to(size.into(), mode)?;
+        let size = size.into();
+        let resized = self
+            .size()
+            .scale_to(size, mode)
+            .map_err(|err| ResizeError {
+                size: self.size(),
+                target: size,
+                mode,
+                source: err,
+            })?;
         let filter = defaults::FILTER_TYPE;
-        self.inner = imageops::resize(&self.inner, size.width, size.height, filter);
+        self.inner = imageops::resize(&self.inner, resized.width, resized.height, filter);
 
         #[cfg(debug_assertions)]
         crate::debug!(
             "fitting to {} took {:?} msec",
-            size,
+            resized,
             (chrono::Utc::now().time() - start).num_milliseconds(),
         );
-        Ok(())
-    }
-
-    #[inline]
-    pub fn crop_to_fit(
-        &mut self,
-        size: impl Into<Size>,
-        mode: super::CropMode,
-    ) -> Result<(), CropError> {
-        let crop = self.size().crop_to_fit(size.into(), mode)?;
-        self.crop_sides(crop);
         Ok(())
     }
 
@@ -386,9 +429,39 @@ impl Image {
     }
 
     #[inline]
-    pub fn crop(&mut self, rect: &Rect) -> Result<(), CropError> {
+    pub fn crop_to_fit(
+        &mut self,
+        size: impl Into<Size>,
+        mode: super::CropMode,
+    ) -> Result<(), CropToFitError> {
+        let size = self.size();
+        let target = size.into();
+        match (|| {
+            let rect = size.crop_to_fit(target, mode)?;
+            self.crop(&rect).map_err(Box::new)?;
+            Ok::<_, CropErrorSource>(())
+        })() {
+            Ok(_) => Ok(()),
+            Err(err) => Err(CropToFitError {
+                size,
+                target,
+                source: err,
+            }),
+        }
+    }
+
+    #[inline]
+    pub fn crop(&mut self, rect: &Rect) -> Result<(), CropRectError> {
         // let sub_image = self.sub_image(rect)?;
-        self.inner = self.sub_image(rect)?.to_image();
+        let size = self.size();
+        self.inner = self
+            .sub_image(rect)
+            .map_err(|err| CropRectError {
+                size,
+                rect: *rect,
+                source: err.into(),
+            })?
+            .to_image();
         // self.inner = imageops::crop(
         //     &mut self.inner,
         //     view.left,
@@ -401,14 +474,20 @@ impl Image {
     }
 
     #[inline]
-    pub fn crop_sides(&mut self, sides: Sides) -> Result<(), CropError> {
+    pub fn crop_sides(&mut self, sides: Sides) -> Result<(), CropSidesError> {
         // let cropped_size = self.size().checked_sub(crop_sides)?;
-        let rect = Rect::from(self.size()).checked_sub(sides).unwrap();
-        // .map_err(|err| error::Arithmetic {
-        //     msg: "todo".to_string(),
-        //     source: err.into(),
-        // })?;
-        self.crop(&rect)
+        match (|| {
+            let rect = Rect::from(self.size()).checked_sub(sides)?;
+            self.crop(&rect).map_err(Box::new)?;
+            Ok::<_, CropErrorSource>(())
+        })() {
+            Ok(_) => Ok(()),
+            Err(err) => Err(CropSidesError {
+                sides,
+                size: self.size(),
+                source: err,
+            }),
+        }
     }
 
     #[inline]

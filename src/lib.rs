@@ -36,6 +36,14 @@ use arithmetic::{
 };
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
+pub struct ResultSize {
+    output_size: Size,
+    content_size: Size,
+    margin: Sides,
+    frame_width: Sides,
+}
+
 pub struct ImageBorders {
     images: Vec<img::Image>,
 }
@@ -75,37 +83,11 @@ impl ImageBorders {
     }
 
     #[inline]
-    /// Add (optional) border to image
-    ///
-    /// # Errors
-    ///
-    /// If the border can not be added, an error is returned.
-    ///
-    pub fn add_border(
-        &mut self,
-        border: Option<border::Kind>,
+    pub fn compute_result_size(
+        border: &mut Option<border::Border>,
+        primary: &img::Image,
         options: &Options,
-    ) -> Result<img::Image, Error> {
-        // prepare images
-        let mut images: Vec<img::Image> = self.images.clone();
-        let primary = images.get_mut(0).unwrap(); // .ok_or(Error::MissingImage)?;
-        primary.rotate(&options.image_rotation);
-        if let Some(crop_percent) = options.crop {
-            let crop = crop_percent.checked_mul(primary.size()).unwrap();
-            primary.crop_sides(crop);
-        };
-
-        // prepare the border for the primary image
-        let mut border = match border {
-            Some(border) => {
-                let mut border = border.into_border().unwrap();
-                border.rotate_to_orientation(primary.orientation()).unwrap();
-                border.rotate(&options.border_rotation).unwrap();
-                Some(border)
-            }
-            None => None,
-        };
-
+    ) -> Result<ResultSize, Error> {
         let original_content_size = match border {
             Some(ref mut border) => match options.mode {
                 FitMode::Image => border.size_for(primary.size()),
@@ -150,8 +132,63 @@ impl ImageBorders {
             .scale_to_bounds(options.output_size_bounds, ResizeMode::Contain)
             .unwrap();
 
+        let new_content_size = content_size
+            .scale_to(
+                output_size.checked_mul(scale_factor).unwrap(),
+                ResizeMode::Contain,
+            )
+            .unwrap();
+        let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
+        let frame_width: Sides = frame_width.checked_mul(scale).unwrap();
+        let margin: Sides = margin.checked_mul(scale).unwrap();
+        // crate::debug!(&frame_width);
+        // crate::debug!(&margin);
+
+        Ok(ResultSize {
+            content_size: new_content_size,
+            margin,
+            frame_width,
+            output_size,
+        })
+    }
+
+    #[inline]
+    /// Add (optional) border to image
+    ///
+    /// # Errors
+    ///
+    /// If the border can not be added, an error is returned.
+    ///
+    pub fn add_border(
+        &mut self,
+        border: Option<border::Kind>,
+        options: &Options,
+    ) -> Result<img::Image, Error> {
+        // prepare images
+        let mut images: Vec<img::Image> = self.images.clone();
+        let primary = images.get_mut(0).unwrap(); // .ok_or(Error::MissingImage)?;
+        primary.rotate(&options.image_rotation);
+        if let Some(crop_percent) = options.crop {
+            let crop = crop_percent.checked_mul(primary.size()).unwrap();
+            primary.crop_sides(crop);
+        };
+
+        // prepare the border for the primary image
+        let mut border = match border {
+            Some(border) => {
+                let mut border = border.into_border().unwrap();
+                border.rotate_to_orientation(primary.orientation()).unwrap();
+                border.rotate(&options.border_rotation).unwrap();
+                Some(border)
+            }
+            None => None,
+        };
+
+        let result_size = Self::compute_result_size(&mut border, &*primary, options)?;
+        crate::debug!(&result_size);
+
         // create new result image
-        let mut result_image = img::Image::with_size(output_size);
+        let mut result_image = img::Image::with_size(result_size.output_size);
         result_image.path = primary.path.clone();
 
         let background_color = options.background_color.unwrap_or(if options.preview {
@@ -161,19 +198,10 @@ impl ImageBorders {
         });
         result_image.fill(background_color, FillMode::Set);
 
-        let new_content_size = content_size
-            .scale_to(
-                output_size.checked_mul(scale_factor).unwrap(),
-                ResizeMode::Contain,
-            )
+        let content_rect = result_size
+            .output_size
+            .center(result_size.content_size)
             .unwrap();
-        let scale = f64::from(new_content_size.min_dim()) / f64::from(content_size.min_dim());
-        let frame_width = frame_width.checked_mul(scale).unwrap();
-        let margin = margin.checked_mul(scale).unwrap();
-        crate::debug!(&frame_width);
-        crate::debug!(&margin);
-
-        let content_rect = output_size.center(new_content_size).unwrap();
         crate::debug!(&content_rect);
 
         #[cfg(debug_assertions)]
@@ -187,7 +215,7 @@ impl ImageBorders {
             )
             .unwrap();
 
-        let content_rect_sub_margin = content_rect.checked_sub(margin).unwrap();
+        let content_rect_sub_margin = content_rect.checked_sub(result_size.margin).unwrap();
         result_image
             .fill_rect(
                 options.frame_color,
@@ -198,7 +226,9 @@ impl ImageBorders {
             )
             .unwrap();
 
-        let border_rect = content_rect_sub_margin.checked_sub(frame_width).unwrap();
+        let border_rect = content_rect_sub_margin
+            .checked_sub(result_size.frame_width)
+            .unwrap();
         crate::debug!(&border_rect);
         let border_size = border_rect.size().unwrap();
 
@@ -280,10 +310,10 @@ impl ImageBorders {
 
         if options.preview {
             let preview_size = Size {
-                width: output_size.min_dim(),
-                height: output_size.min_dim(),
+                width: result_size.output_size.min_dim(),
+                height: result_size.output_size.min_dim(),
             };
-            let preview_rect = output_size.center(preview_size).unwrap();
+            let preview_rect = result_size.output_size.center(preview_size).unwrap();
             result_image.fill_rect(
                 Color::rgba(255, 0, 0, 50),
                 &preview_rect,

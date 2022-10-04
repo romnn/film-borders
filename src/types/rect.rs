@@ -320,9 +320,35 @@ impl std::fmt::Display for Rect {
     }
 }
 
+// #[derive(thiserror::Error, Debug)]
+// #[error("failed to resize image with size {size} to {target} with mode {mode:?}")]
+// pub struct ResizeError {
+//     // #[error(transparent)]
+//     // ScaleTo(#[from] types::size::ScaleToError),
+//     size: Size,
+//     target: Size,
+//     mode: super::ResizeMode,
+//     source: types::size::ScaleToError,
+//     // #[error(transparent)]
+//     // Arithmetic(#[from] error::Arithmetic),
+// }
+
+#[derive(thiserror::Error, Debug)]
+pub enum SubSidesError {
+    // #[error(transparent)]
+    #[error("subtracting {sides} from {rect} exceeds bounds")]
+    OutOfBounds { sides: Sides, rect: Rect },
+    // #[error(transparent)]
+    // Arithmetic(#[from] error::Arithmetic),
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+    // Arithmetic(#[from] ops::SubError<Self, Sides>), //arithmetic::Error),
+}
+
 impl CheckedSub<Sides> for Rect {
     type Output = Self;
-    type Error = ops::SubError<Self, Sides>;
+    // type Error = ops::SubError<Self, Sides>;
+    type Error = SubSidesError;
 
     #[inline]
     fn checked_sub(self, rhs: Sides) -> Result<Self::Output, Self::Error> {
@@ -336,21 +362,34 @@ impl CheckedSub<Sides> for Rect {
             let left = CheckedAdd::checked_add(self.left, sides_left)?;
             let bottom = CheckedSub::checked_sub(self.bottom, sides_bottom)?;
             let right = CheckedSub::checked_sub(self.right, sides_right)?;
+
             let top_left = Point { x: left, y: top };
             let bottom_right = Point {
                 x: right,
                 y: bottom,
             };
-            let rect = Self::from_points(top_left, bottom_right);
-            Ok::<Self, arithmetic::Error>(rect)
+            Ok::<_, arithmetic::Error>((top_left, bottom_right))
         })() {
-            Ok(rect) => Ok(rect),
-            Err(err) => Err(ops::SubError(Operation {
-                lhs: self,
-                rhs,
-                kind: None,
-                cause: Some(err),
-            })),
+            Ok((top_left, bottom_right)) => {
+                // check if invariants were violated
+                if top_left.x > bottom_right.x || top_left.y > bottom_right.y {
+                    Err(SubSidesError::OutOfBounds {
+                        sides: rhs,
+                        rect: self,
+                    })
+                } else {
+                    let rect = Self::from_points(top_left, bottom_right);
+                    Ok(rect)
+                }
+            }
+            Err(err) => Err(SubSidesError::Arithmetic(arithmetic::Error::from(
+                ops::SubError(Operation {
+                    lhs: self,
+                    rhs,
+                    kind: None,
+                    cause: Some(err),
+                }),
+            ))),
         }
     }
 }

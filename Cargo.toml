@@ -74,6 +74,7 @@ rustflags = ["-Clink-arg=-fuse-ld=lld", "-Clink-arg=-Wl,--no-rosegment"]
 
 [dependencies]
 wasm-bindgen = { version = "0.2", optional = false }
+js-sys = "0.3"
 console_error_panic_hook = { version = "0.1", optional = true }
 image = "0"
 clap = { version = "3", features = ["derive"] }
@@ -103,6 +104,7 @@ criterion = "0.4"
 [dependencies.web-sys]
 version = "0.3"
 features = [
+  "console",
   "Document",
   "Element",
   "HtmlElement",

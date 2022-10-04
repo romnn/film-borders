@@ -1,4 +1,4 @@
-use super::sides::abs::Sides;
+use super::{sides::abs::Sides, Point, Rect};
 use crate::arithmetic::{
     self,
     ops::{self, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
@@ -69,8 +69,8 @@ impl Size {
 
     #[inline]
     #[must_use]
-    pub fn contains(&self, point: &super::Point) -> bool {
-        let rect = super::Rect::from(*self);
+    pub fn contains(&self, point: &Point) -> bool {
+        let rect = Rect::from(*self);
         rect.contains(&point)
     }
 
@@ -141,12 +141,12 @@ impl Size {
     #[inline]
     #[must_use]
     pub fn center(self, size: Self) -> Result<super::Rect, CenterError> {
-        let parent: super::Point = self.into();
-        let child: super::Point = size.into();
+        let parent: Point = self.into();
+        let child: Point = size.into();
         match (|| {
             let top_left = parent.checked_sub(child)?.checked_div(2.0)?;
             let bottom_right = top_left.checked_add(child)?;
-            let centered = super::Rect::from_points(top_left, bottom_right);
+            let centered = Rect::from_points(top_left, bottom_right);
             Ok(centered)
         })() {
             Ok(rect) => Ok(rect),
@@ -252,8 +252,9 @@ impl Size {
     }
 
     #[inline]
-    pub fn crop_to_fit(&self, size: Size, mode: super::CropMode) -> Result<Sides, CropToFitError> {
-        use super::{CropMode, Point};
+    // pub fn crop_to_fit(&self, size: Size, mode: super::CropMode) -> Result<Sides, CropToFitError> {
+    pub fn crop_to_fit(&self, size: Size, mode: super::CropMode) -> Result<Rect, CropToFitError> {
+        use super::CropMode;
 
         let center = self.center(size).map_err(|err| CropToFitError {
             size: *self,
@@ -263,6 +264,12 @@ impl Size {
 
         let center_top_left = center.top_left();
         match (|| {
+            // let center = self.center(size)?;
+            // .map_err(|err| CropToFitError {
+            //     size: *self,
+            //     container: size,
+            //     source: err.into(),
+            // })?;
             let top_left: Point = match mode {
                 CropMode::Custom { x, y } => center_top_left.checked_add(Point { x, y })?,
                 CropMode::Right => Point {
@@ -288,20 +295,34 @@ impl Size {
             let max_top_left = max_top_left.clamp_min((0, 0));
             let top_left = top_left.clamp((0, 0), max_top_left);
 
-            let top_left_crop: Size = top_left.try_into()?;
-            let bottom_right_crop = top_left_crop.checked_add(size)?;
-            let bottom_right_crop = bottom_right_crop.clamp((0, 0), *self);
-            let bottom_right_crop = self.checked_sub(bottom_right_crop)?;
+            // let top_left_crop: Size = top_left.try_into()?;
+            // dbg!(size);
+            let bottom_right = top_left.checked_add(Point::from(size))?;
+            let bottom_right = bottom_right.clamp((0, 0), *self);
+            // let crop_size = top_left_crop.checked_add(size)?;
+            // let crop_size = crop_size.clamp((0, 0), *self);
+            // let crop_size = self.checked_sub(crop_size)?;
 
-            let crop_sides = Sides {
-                top: top_left_crop.height,
-                left: top_left_crop.width,
-                bottom: bottom_right_crop.height,
-                right: bottom_right_crop.width,
-            };
-            Ok::<Sides, arithmetic::Error>(crop_sides)
+            // let crop_sides = Sides {
+            //     top: top_left_crop.height,
+            //     left: top_left_crop.width,
+            //     bottom: bottom_right_crop.height,
+            //     right: bottom_right_crop.width,
+            // };
+            let crop_rect = Rect::from_points(top_left, bottom_right);
+            Ok::<_, arithmetic::Error>(crop_rect)
+            // Ok::<_, arithmetic::Error>((top_left, crop_size))
         })() {
-            Ok(crop_sides) => Ok(crop_sides),
+            Ok(crop_rect) => Ok(crop_rect),
+            // Ok((top_left, size)) => {
+            //     dbg!(top_left);
+            //     dbg!(size);
+            //     Rect::new(top_left, size).map_err(|err| CropToFitError {
+            //         size: *self,
+            //         container: size,
+            //         source: err.into(),
+            //     })
+            // }
             Err(err) => Err(CropToFitError {
                 size: *self,
                 container: size,
@@ -352,11 +373,11 @@ impl From<(u32, u32)> for Size {
     }
 }
 
-impl TryFrom<super::Point> for Size {
-    type Error = CastError<super::Point, Size>;
+impl TryFrom<Point> for Size {
+    type Error = CastError<Point, Size>;
 
     #[inline]
-    fn try_from(point: super::Point) -> Result<Self, Self::Error> {
+    fn try_from(point: Point) -> Result<Self, Self::Error> {
         match (|| {
             let width = point.x.cast::<u32>()?;
             let height = point.y.cast::<u32>()?;
@@ -548,20 +569,23 @@ pub enum ScaleToError {
 }
 
 #[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to compute crop such that {size} fits {container}")]
-pub struct CropToFitError {
-    size: Size,
-    container: Size,
-    source: CropToFitErrorSource,
-}
-
-#[derive(thiserror::Error, PartialEq, Debug)]
 pub enum CropToFitErrorSource {
     #[error(transparent)]
     Center(#[from] CenterError),
 
     #[error(transparent)]
+    Rect(#[from] super::rect::Error),
+
+    #[error(transparent)]
     Arithmetic(#[from] arithmetic::Error),
+}
+
+#[derive(thiserror::Error, PartialEq, Debug)]
+#[error("failed to compute crop such that {size} fits {container}")]
+pub struct CropToFitError {
+    size: Size,
+    container: Size,
+    source: CropToFitErrorSource,
 }
 
 #[derive(thiserror::Error, PartialEq, Debug)]
@@ -615,12 +639,7 @@ mod tests {
             width: 10,
             height: 10,
         };
-        let expected = Sides {
-            top: 0,
-            left: 0,
-            bottom: 0,
-            right: 0,
-        };
+        let expected = Rect::new((0, 0), size).unwrap();
         assert_eq!(
             container.crop_to_fit(size, CropMode::Center).ok(),
             Some(expected),
@@ -665,94 +684,95 @@ mod tests {
             width: 4,
             height: 4,
         };
+        dbg!(Rect::new((3, 3), size).unwrap());
         assert_eq!(
             container.crop_to_fit(size, CropMode::Center).ok(),
-            Some(Sides {
-                top: 3,
-                left: 3,
-                bottom: 3,
-                right: 3,
-            }),
+            Some(Rect::new((3, 3), size).unwrap()) // Some(Rect {
+                                                   //     top: 3,
+                                                   //     left: 3,
+                                                   //     bottom: 7,
+                                                   //     right: 7,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Left).ok(),
-            Some(Sides {
-                top: 3,
-                left: 0,
-                bottom: 3,
-                right: 6,
-            }),
+            Some(Rect::new((0, 3), size).unwrap()) // Some(Rect {
+                                                   //     top: 3,
+                                                   //     left: 0,
+                                                   //     bottom: 7,
+                                                   //     right: 6,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Right).ok(),
-            Some(Sides {
-                top: 3,
-                left: 6,
-                bottom: 3,
-                right: 0,
-            }),
+            Some(Rect::new((6, 3), size).unwrap()) // Some(Rect {
+                                                   //     top: 3,
+                                                   //     left: 6,
+                                                   //     bottom: 7,
+                                                   //     right: 0,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Top).ok(),
-            Some(Sides {
-                top: 0,
-                left: 3,
-                bottom: 6,
-                right: 3,
-            }),
+            Some(Rect::new((3, 0), size).unwrap()) // Some(Rect {
+                                                   //     top: 0,
+                                                   //     left: 3,
+                                                   //     bottom: 4,
+                                                   //     right: 7,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Bottom).ok(),
-            Some(Sides {
-                top: 6,
-                left: 3,
-                bottom: 0,
-                right: 3,
-            }),
+            Some(Rect::new((3, 6), size).unwrap()) // Some(Rect {
+                                                   //     top: 6,
+                                                   //     left: 3,
+                                                   //     bottom: 0,
+                                                   //     right: 7,
+                                                   // }),
         );
         assert_eq!(
             container
                 .crop_to_fit(size, CropMode::Custom { x: 2, y: 1 })
                 .ok(),
-            Some(Sides {
-                top: 4,
-                left: 5,
-                bottom: 2,
-                right: 1,
-            }),
+            Some(Rect::new((5, 4), size).unwrap()) // Some(Rect {
+                                                   //     top: 4,
+                                                   //     left: 5,
+                                                   //     bottom: 8,
+                                                   //     right: 9,
+                                                   // }),
         );
         assert_eq!(
             container
                 .crop_to_fit(size, CropMode::Custom { x: -1, y: -2 })
                 .ok(),
-            Some(Sides {
-                top: 1,
-                left: 2,
-                bottom: 5,
-                right: 4,
-            }),
+            Some(Rect::new((2, 1), size).unwrap()) // Some(Rect {
+                                                   //     top: 1,
+                                                   //     left: 2,
+                                                   //     bottom: 5,
+                                                   //     right: 4,
+                                                   // }),
         );
         assert_eq!(
             container
                 .crop_to_fit(size, CropMode::Custom { x: 100, y: 100 })
                 .ok(),
-            Some(Sides {
-                top: 6,
-                left: 6,
-                bottom: 0,
-                right: 0,
-            }),
+            Some(Rect::new((6, 6), size).unwrap()) // Some(Rect {
+                                                   //     top: 6,
+                                                   //     left: 6,
+                                                   //     bottom: 0,
+                                                   //     right: 0,
+                                                   // }),
         );
         assert_eq!(
             container
                 .crop_to_fit(size, CropMode::Custom { x: -100, y: -100 })
                 .ok(),
-            Some(Sides {
-                top: 0,
-                left: 0,
-                bottom: 6,
-                right: 6,
-            }),
+            Some(Rect::new((0, 0), size).unwrap()) // Some(Rect {
+                                                   //     top: 0,
+                                                   //     left: 0,
+                                                   //     bottom: 6,
+                                                   //     right: 6,
+                                                   // }),
         );
     }
 
@@ -766,12 +786,13 @@ mod tests {
             width: 20,
             height: 20,
         };
-        let expected = Sides {
-            top: 0,
-            left: 0,
-            bottom: 0,
-            right: 0,
-        };
+        let expected = Rect::new((0, 0), container).unwrap();
+        // let expected = Rect {
+        //     top: 0,
+        //     left: 0,
+        //     bottom: 0,
+        //     right: 0,
+        // };
         assert_eq!(
             container.crop_to_fit(size, CropMode::Center).ok(),
             Some(expected),
@@ -830,70 +851,70 @@ mod tests {
         };
         assert_eq!(
             container.crop_to_fit(size, CropMode::Center).ok(),
-            Some(Sides {
-                top: 5,
-                left: 5,
-                bottom: 5,
-                right: 5,
-            }),
+            Some(Rect::new((5, 5), size).unwrap()) // Some(Rect {
+                                                   //     top: 5,
+                                                   //     left: 5,
+                                                   //     bottom: 5,
+                                                   //     right: 5,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Left).ok(),
-            Some(Sides {
-                top: 5,
-                left: 0,
-                bottom: 5,
-                right: 10,
-            }),
+            Some(Rect::new((0, 5), size).unwrap()) // Some(Rect {
+                                                   //     top: 5,
+                                                   //     left: 0,
+                                                   //     bottom: 5,
+                                                   //     right: 10,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Right).ok(),
-            Some(Sides {
-                top: 5,
-                left: 10,
-                bottom: 5,
-                right: 0,
-            }),
+            Some(Rect::new((10, 5), size).unwrap()) // Some(Rect {
+                                                    //     top: 5,
+                                                    //     left: 10,
+                                                    //     bottom: 5,
+                                                    //     right: 0,
+                                                    // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Top).ok(),
-            Some(Sides {
-                top: 0,
-                left: 5,
-                bottom: 10,
-                right: 5,
-            }),
+            Some(Rect::new((5, 0), size).unwrap()) // Some(Rect {
+                                                   //     top: 0,
+                                                   //     left: 5,
+                                                   //     bottom: 10,
+                                                   //     right: 5,
+                                                   // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Bottom).ok(),
-            Some(Sides {
-                top: 10,
-                left: 5,
-                bottom: 0,
-                right: 5,
-            }),
+            Some(Rect::new((5, 10), size).unwrap()) // Some(Rect {
+                                                    //     top: 10,
+                                                    //     left: 5,
+                                                    //     bottom: 0,
+                                                    //     right: 5,
+                                                    // }),
         );
         assert_eq!(
             container
                 .crop_to_fit(size, CropMode::Custom { x: 2, y: 1 })
                 .ok(),
-            Some(Sides {
-                top: 6,
-                left: 7,
-                bottom: 4,
-                right: 3,
-            }),
+            Some(Rect::new((7, 6), size).unwrap()) // Some(Rect {
+                                                   //     top: 6,
+                                                   //     left: 7,
+                                                   //     bottom: 4,
+                                                   //     right: 3,
+                                                   // }),
         );
         assert_eq!(
             container
                 .crop_to_fit(size, CropMode::Custom { x: 100, y: 100 })
                 .ok(),
-            Some(Sides {
-                top: 10,
-                left: 10,
-                bottom: 0,
-                right: 0,
-            }),
+            Some(Rect::new((10, 10), size).unwrap()) // Some(Rect {
+                                                     //     top: 10,
+                                                     //     left: 10,
+                                                     //     bottom: 0,
+                                                     //     right: 0,
+                                                     // }),
         );
         let container = Size {
             width: 0,
@@ -905,21 +926,21 @@ mod tests {
         };
         assert_eq!(
             container.crop_to_fit(size, CropMode::Center).ok(),
-            Some(Sides {
-                top: 0,
-                left: 0,
-                bottom: 0,
-                right: 0,
-            }),
+            Some(Rect::new((0, 0), (0, 0)).unwrap()) // Some(Rect {
+                                                     //     top: 0,
+                                                     //     left: 0,
+                                                     //     bottom: 0,
+                                                     //     right: 0,
+                                                     // }),
         );
         assert_eq!(
             container.crop_to_fit(size, CropMode::Left).ok(),
-            Some(Sides {
-                top: 0,
-                left: 0,
-                bottom: 0,
-                right: 0,
-            }),
+            Some(Rect::new((0, 0), (0, 0)).unwrap()) // Some(Rect {
+                                                     //     top: 0,
+                                                     //     left: 0,
+                                                     //     bottom: 0,
+                                                     //     right: 0,
+                                                     // }),
         );
     }
 

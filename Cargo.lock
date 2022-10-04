@@ -355,6 +355,7 @@ dependencies = [
  "console_error_panic_hook",
  "criterion",
  "image",
+ "js-sys",
  "lazy_static",
  "num",
  "pretty_assertions",

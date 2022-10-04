@@ -2,30 +2,40 @@ use crate::{border, builtin, img, options};
 use image::{DynamicImage, ImageBuffer};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
+use web_sys::{console, CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn console_log_one(msg: &str);
+// #[wasm_bindgen]
+// extern "C" {
+//     #[wasm_bindgen(js_namespace = console, js_name = log)]
+//     fn console_log_one(msg: &str);
 
-    #[wasm_bindgen(js_namespace = console, js_name = error)]
-    fn console_error_one(msg: &str);
+//     #[wasm_bindgen(js_namespace = console, js_name = error)]
+//     fn console_error_one(msg: &str);
 
-}
+//     #[wasm_bindgen(js_namespace = console, js_name = log)]
+//     fn console_log_json(value: &JsValue);
+// }
 
 pub fn set_panic_hook() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
 
-macro_rules! console_log {
-    ($($t:tt)*) => (console_log_one(&format_args!($($t)*).to_string()))
+macro_rules! console_log_json {
+    ($json:expr) => {{
+        if let Ok(json) = js_sys::JSON::parse($json) {
+            web_sys::console::log_1(&json);
+        }
+    }};
 }
 
-macro_rules! console_error {
-    ($($t:tt)*) => (console_error_one(&format_args!($($t)*).to_string()))
-}
+// macro_rules! console_log {
+//     ($($t:tt)*) => (console_log_one(&format_args!($($t)*).to_string()))
+// }
+
+// macro_rules! console_error {
+//     ($($t:tt)*) => (console_error_one(&format_args!($($t)*).to_string()))
+// }
 
 #[inline]
 fn image_from_image_data(img: &ImageData) -> Result<DynamicImage, JsValue> {
@@ -155,8 +165,10 @@ impl ImageBorders {
         border: Border,
         options: &options::Options,
     ) -> Result<ImageData, JsValue> {
-        console_log!("border: {:?}", &border);
-        console_log!("options: {:?}", &options);
+        // console::log("border: {:?}", &border);
+        if let Ok(options) = options.serialize() {
+            console_log_json!(&options);
+        }
         let border = match border.custom {
             None => border.builtin.map(border::Kind::Builtin),
             Some(data) => {
@@ -167,7 +179,7 @@ impl ImageBorders {
                 Some(border)
             }
         };
-        console_log!("selected border: {:?}", &border);
+        // console_log!("selected border: {:?}", &border);
 
         let result = self
             .inner

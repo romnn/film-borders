@@ -81,6 +81,13 @@ impl Border {
         Self::from_image(image, options)
     }
 
+    // #[inline]
+    // pub fn custom_border_size_for(
+    //     mut border: Self,
+    //     content_size: Size,
+    // ) -> Result<Size, super::Error> {
+    // }
+
     #[inline]
     pub fn new(
         mut border: Self,
