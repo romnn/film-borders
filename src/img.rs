@@ -1,6 +1,7 @@
 use super::arithmetic::{self, ops::CheckedSub, Cast, CastError};
 use super::types::{self, sides::abs::Sides, Point, Rect, Size};
 use super::{defaults, error, imageops};
+use crate::{debug, debug::Instant};
 pub use image::ImageFormat;
 use std::borrow::Borrow;
 use std::fs;
@@ -44,7 +45,7 @@ pub struct SaveError {
     source: SaveErrorSource,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to fill {rect} of image with size {size}")]
 pub struct FillError {
     rect: Rect,
@@ -52,7 +53,7 @@ pub struct FillError {
     source: SubImageError,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum FadeErrorSource {
     #[error(transparent)]
     SubImage(#[from] SubImageError),
@@ -61,7 +62,7 @@ pub enum FadeErrorSource {
     Fade(#[from] imageops::FadeError),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to fade out image with size {} from {start} to {end} along {axis}")]
 pub struct FadeError {
     size: Size,
@@ -71,7 +72,7 @@ pub struct FadeError {
     source: FadeErrorSource,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to resize image with size {size} to {target} with mode {mode:?}")]
 pub struct ResizeError {
     size: Size,
@@ -80,7 +81,7 @@ pub struct ResizeError {
     source: types::size::ScaleToError,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum CropErrorSource {
     #[error(transparent)]
     CropToFit(#[from] types::size::CropToFitError),
@@ -95,7 +96,7 @@ pub enum CropErrorSource {
     CropRect(#[from] Box<CropRectError>),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to crop image with size {size} to fit {target}")]
 pub struct CropToFitError {
     size: Size,
@@ -103,7 +104,7 @@ pub struct CropToFitError {
     source: CropErrorSource,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to crop image with size {size} to {rect}")]
 pub struct CropRectError {
     size: Size,
@@ -111,7 +112,7 @@ pub struct CropRectError {
     source: CropErrorSource,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to crop image with size {size} by {sides}")]
 pub struct CropSidesError {
     size: Size,
@@ -119,7 +120,7 @@ pub struct CropSidesError {
     source: CropErrorSource,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum CropError {
     #[error(transparent)]
     CropSides(#[from] CropSidesError),
@@ -131,7 +132,7 @@ pub enum CropError {
     CropToFit(#[from] CropToFitError),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum ResizeAndCropError {
     #[error(transparent)]
     Resize(#[from] ResizeError),
@@ -139,7 +140,7 @@ pub enum ResizeAndCropError {
     Crop(#[from] CropToFitError),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum SubImageErrorSource {
     #[error(transparent)]
     OutOfBounds(#[from] OutOfBoundsError),
@@ -148,7 +149,7 @@ pub enum SubImageErrorSource {
     Cast(#[from] CastError<i64, u32>),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 #[error("failed to get sub image {rect} for image with size {size}")]
 pub struct SubImageError {
     size: Size,
@@ -156,7 +157,7 @@ pub struct SubImageError {
     source: SubImageErrorSource,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("point {point} exceeds image bounds {bounds}")]
 pub struct OutOfBoundsError {
     point: Point,
@@ -377,6 +378,13 @@ impl Image {
     }
 
     #[inline]
+    pub fn clip_alpha(&mut self, rect: &Rect, min: u8, max: u8) -> Result<(), SubImageError> {
+        let sub_image = self.sub_image(rect)?;
+        imageops::clip_alpha(sub_image, min, max);
+        Ok(())
+    }
+
+    #[inline]
     pub fn fill_rect(
         &mut self,
         color: impl Into<image::Rgba<u8>>,
@@ -445,8 +453,8 @@ impl Image {
         size: impl Into<Size>,
         mode: super::ResizeMode,
     ) -> Result<(), ResizeError> {
-        #[cfg(debug_assertions)]
-        let start = chrono::Utc::now().time();
+        #[allow(unused_variables)]
+        let start = Instant::now();
 
         let size = size.into();
         let resized = self
@@ -461,11 +469,12 @@ impl Image {
         let filter = defaults::FILTER_TYPE;
         self.inner = imageops::resize(&self.inner, resized.width, resized.height, filter);
 
-        #[cfg(debug_assertions)]
-        crate::debug!(
-            "fitting to {} took {:?} msec",
+        debug!(
+            "fitting to",
             resized,
-            (chrono::Utc::now().time() - start).num_milliseconds(),
+            "took",
+            start.elapsed_millis(),
+            "msec"
         );
         Ok(())
     }

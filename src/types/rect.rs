@@ -15,18 +15,22 @@ mod sealed {
         self,
         ops::{self, CheckedAdd},
     };
-    use crate::error;
     use crate::types::{Point, Size};
+    use serde::Serialize;
+    use wasm_bindgen::prelude::*;
 
-    #[derive(PartialEq, Eq, Clone, Copy)]
+    #[wasm_bindgen]
+    #[derive(Serialize, PartialEq, Eq, Clone, Copy)]
     pub struct Rect {
         pub top: i64,
         pub left: i64,
         pub bottom: i64,
         pub right: i64,
+        #[serde(skip_serializing)]
         _sealed: (),
     }
 
+    impl crate::debug::Private for Rect {}
     impl arithmetic::Type for Rect {}
 
     impl Rect {
@@ -320,7 +324,7 @@ impl std::fmt::Display for Rect {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum SubSidesError {
     #[error("subtracting {sides} from {rect} exceeds bounds")]
     OutOfBounds { sides: Sides, rect: Rect },
@@ -411,7 +415,7 @@ impl CheckedAdd<Sides> for Rect {
     }
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to create rect at {top_left} of size {size}")]
 pub struct Error {
     top_left: Point,
@@ -419,21 +423,21 @@ pub struct Error {
     source: ops::AddError<Point, Point>,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute pixel count for {rect}")]
 pub struct PixelCountError {
     rect: Rect,
     source: arithmetic::Error,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute center point of {rect}")]
 pub struct CenterError {
     rect: Rect,
     source: arithmetic::Error,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 pub enum CenterOffsetErrorSource {
     #[error(transparent)]
     Center(#[from] CenterError),
@@ -442,7 +446,7 @@ pub enum CenterOffsetErrorSource {
     Arithmetic(#[from] ops::SubError<Point, Point>),
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute center offset from {parent} to {child}")]
 pub struct CenterOffsetError {
     parent: Rect,
@@ -450,14 +454,14 @@ pub struct CenterOffsetError {
     source: CenterOffsetErrorSource,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute size for {rect}")]
 pub struct SizeError {
     rect: Rect,
     source: CastError<i64, u32>,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to add padding of {padding} to {rect}")]
 pub struct PadError {
     rect: Rect,

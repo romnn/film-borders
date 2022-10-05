@@ -30,17 +30,21 @@ pub use sides::{abs::Sides, percent::Sides as SidesPercent};
 pub use types::*;
 
 use arithmetic::{
-    ops::{CheckedAdd, CheckedMul, CheckedSub},
+    ops::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
     Cast, Round,
 };
+use serde::Serialize;
 use std::path::{Path, PathBuf};
+use wasm_bindgen::prelude::*;
 
-#[derive(Debug)]
+#[wasm_bindgen]
+#[derive(Serialize, PartialEq, Clone, Debug)]
 pub struct ResultSize {
     output_size: Size,
     content_size: Size,
     margins: Sides,
     frame_width: Sides,
+    scale_factor: f32,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -66,6 +70,8 @@ pub enum ResultSizeError {
         msg: String,
         source: types::size::ScaleError,
     },
+    #[error(transparent)]
+    Border(#[from] border::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -193,7 +199,7 @@ impl ImageBorders {
         let mut border = border_for_primary(border_kind, primary, options)?;
 
         let result_size = compute_result_size(&border, &*primary, options)?;
-        crate::debug!(&result_size);
+        debug!(&result_size);
 
         // create new result image
         let mut result_image = img::Image {
@@ -210,14 +216,16 @@ impl ImageBorders {
                 msg: "failed to center content size".to_string(),
                 source: err.into(),
             })?;
-        crate::debug!(&content_rect);
+        debug!(&content_rect);
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "debug")]
         {
-            let color = Color::rgba(0, 0, 255, 100);
+            let blue = Color::rgba(0, 0, 255, 100);
             result_image
-                .fill_rect(color, &content_rect, FillMode::Blend)
+                .fill_rect(blue, &content_rect, FillMode::Blend)
                 .unwrap();
+
+            draw_text_mut(&mut result_image, "content size", content_rect.top_left()).unwrap();
         }
 
         let content_rect_sub_margins = content_rect.checked_sub(result_size.margins).unwrap();
@@ -232,14 +240,17 @@ impl ImageBorders {
         let border_rect = content_rect_sub_margins
             .checked_sub(result_size.frame_width)
             .unwrap();
-        crate::debug!(&border_rect);
+        debug!(&border_rect);
         let border_size = border_rect.size().unwrap();
 
-        #[cfg(debug_assertions)]
-        result_image.fill_rect(Color::rgba(0, 255, 0, 100), &border_rect, FillMode::Blend);
+        #[cfg(feature = "debug")]
+        {
+            let green = Color::rgba(0, 255, 0, 100);
+            result_image.fill_rect(green, &border_rect, FillMode::Blend);
+        }
         let default_component = Rect::from(border_size);
 
-        crate::debug!("overlay content");
+        debug!("overlay content");
         match options.mode {
             FitMode::Image => {
                 let default_component = vec![default_component];
@@ -258,7 +269,7 @@ impl ImageBorders {
                 };
 
                 for (c, image) in components {
-                    crate::debug!("drawing {:?}", &c);
+                    debug!("drawing", &c);
                     let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
                     image_rect = image_rect.padded(3).unwrap();
                     image_rect = image_rect.clamp(&border_rect);
@@ -266,7 +277,25 @@ impl ImageBorders {
 
                     let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
 
-                    // result_image.fill_rect(Color::rgba(0, 255, 0, 255), &image_rect, FillMode::Blend);
+                    #[cfg(feature = "debug")]
+                    {
+                        let red = Color::rgba(255, 255, 0, 100);
+                        result_image.fill_rect(red, &image_rect, FillMode::Blend);
+
+                        let mut image = image.clone();
+                        image.clip_alpha(&Rect::from(image.size()), 0, 60);
+                        image.resize(image_size, ResizeMode::Cover);
+                        let offset = image_size.center(image.size()).unwrap();
+                        debug!(&offset);
+
+                        result_image.overlay(
+                            &image,
+                            image_rect
+                                .top_left()
+                                .checked_add(offset.top_left())
+                                .unwrap(),
+                        );
+                    }
 
                     image
                         .resize_and_crop(
@@ -292,7 +321,7 @@ impl ImageBorders {
                     Some(ref mut border) => {
                         let border_size = border_rect.size().unwrap();
                         border.resize_and_crop(border_size, ResizeMode::Contain)?;
-                        border.content_rect()
+                        border.content_rect().map_err(border::Error::from)?
                     }
                     None => &default_component,
                 };
@@ -320,24 +349,30 @@ impl ImageBorders {
 }
 
 #[inline]
-fn compute_result_size(
+fn compute_pre_result_size(
     border: &Option<border::Border>,
     primary: &img::Image,
+    // mode: FitMode,
+    // frame_width:
     options: &Options,
 ) -> Result<ResultSize, ResultSizeError> {
+    let scale_factor = options.scale_factor.clamp(0.0, 1.0);
+    let margin_factor = f64::from(options.margin).max(0.0);
+    // let scale_factor = 1.0;
+    // let margin_factor = 0.2;
+
     let original_content_size = match border {
         Some(border) => match options.mode {
-            FitMode::Image => border.size_for(primary.size()),
+            FitMode::Image => border.size_for(primary.size())?,
             FitMode::Border => border.size(),
         },
         None => primary.size(),
     };
-    crate::debug!("image with border size: {}", &original_content_size);
-
-    let scale_factor = options.scale_factor.clamp(0.0, 1.0);
-    let margin_factor = f64::from(options.margin).max(0.0);
+    debug!(&primary.size());
+    debug!(&original_content_size);
 
     let base = original_content_size.min_dim();
+
     let frame_width: Sides =
         options
             .frame_width
@@ -346,15 +381,24 @@ fn compute_result_size(
                 msg: "failed to compute original frame width".to_string(),
                 source: err.into(),
             })?;
-    let margin = (margin_factor * f64::from(base))
-        .cast::<u32>()
-        .map_err(|err| ResultSizeError::Arithmetic {
-            msg: "failed to compute original margin width".to_string(),
-            source: err.into(),
-        })?;
+    // let frame_width = Sides::uniform(0);
+    debug!(&frame_width);
 
-    let margins: Sides = Sides::uniform(margin);
+    let margin = (|| {
+        let margin = CheckedMul::checked_mul(margin_factor, f64::from(base))?;
+        let margin = margin.cast::<u32>()?;
+        Ok::<_, arithmetic::Error>(margin)
+    })();
+    let margin = margin.map_err(|err| ResultSizeError::Arithmetic {
+        msg: "failed to compute original margin width".to_string(),
+        source: err.into(),
+    })?;
+    let margins = Sides::uniform(margin);
+    debug!(&margins);
 
+    // assert_eq!(margins, frame_width);
+
+    // debug!("original_content_size", original_content_size);
     let content_size = original_content_size
         .checked_add(frame_width)
         .and_then(|size| size.checked_add(margins))
@@ -362,12 +406,19 @@ fn compute_result_size(
             msg: "failed to compute content size".to_string(),
             source: err.into(),
         })?;
+    debug!(&content_size);
+    // assert_eq!(
+    //     content_size.aspect_ratio(),
+    //     original_content_size.aspect_ratio()
+    // );
+
     let default_output_size = content_size
         .scale_by::<_, Round>(1.0 / scale_factor)
         .map_err(|err| ResultSizeError::Scale {
             msg: "failed to compute default output size".to_string(),
             source: err.into(),
         })?;
+    debug!(&default_output_size);
 
     // set output size and do not keep aspect ratio
     let output_size = match options.output_size {
@@ -393,45 +444,106 @@ fn compute_result_size(
             source: err.into(),
         })?;
 
-    let new_content_size_scale =
-        output_size
-            .checked_mul(scale_factor)
-            .map_err(|err| ResultSizeError::Arithmetic {
-                msg: "failed to compute scaled content size".to_string(),
-                source: err.into(),
-            })?;
+    debug!(&output_size);
+    Ok(ResultSize {
+        content_size,
+        margins,
+        frame_width,
+        output_size,
+        scale_factor,
+    })
+}
 
-    let new_content_size = content_size
-        .scale_to(new_content_size_scale, ResizeMode::Contain)
-        .map_err(|err| ResultSizeError::Scale {
+#[inline]
+fn compute_result_size(
+    border: &Option<border::Border>,
+    primary: &img::Image,
+    options: &Options,
+) -> Result<ResultSize, ResultSizeError> {
+    let pre_result_size = compute_pre_result_size(border, primary, options)?;
+
+    let post_content_size_scale = pre_result_size
+        .output_size
+        .checked_mul(pre_result_size.scale_factor)
+        .map_err(|err| ResultSizeError::Arithmetic {
             msg: "failed to compute scaled content size".to_string(),
             source: err.into(),
         })?;
 
-    let old_base = content_size.min_dim();
-    let new_base = new_content_size.min_dim();
-    let scale = f64::from(new_base) / f64::from(base);
-
-    let frame_width =
-        frame_width
-            .checked_mul(scale)
-            .map_err(|err| ResultSizeError::Arithmetic {
-                msg: "failed to compute scaled frame width".to_string(),
-                source: err.into(),
-            })?;
-
-    let margins = margins
-        .checked_mul(scale)
-        .map_err(|err| ResultSizeError::Arithmetic {
-            msg: "failed to compute scaled margins".to_string(),
+    let pre_content_size = pre_result_size.content_size;
+    let post_content_size = pre_content_size
+        .scale_to(post_content_size_scale, ResizeMode::Contain)
+        .map_err(|err| ResultSizeError::Scale {
+            msg: "failed to compute scaled content size".to_string(),
             source: err.into(),
         })?;
+    debug!(&post_content_size);
+
+    // assert_eq!(pre_content_size, post_content_size);
+    // assert_eq!(
+    //     new_content_size.aspect_ratio(),
+    //     original_content_size.aspect_ratio()
+    // );
+
+    // match border {
+    //     Some(border) => assert_eq!(
+    //         new_content_size.aspect_ratio(),
+    //         border.size().aspect_ratio()
+    //     ),
+    //     None => {}
+    // }
+
+    let pre_base = pre_content_size.min_dim();
+    let post_base = post_content_size.min_dim();
+    // assert_eq!(pre_base, post_base);
+    let scale = CheckedDiv::checked_div(f64::from(post_base), f64::from(pre_base)).unwrap();
+    debug!(&scale);
+
+    let frame_width = pre_result_size
+        .frame_width
+        .checked_mul(scale)
+        .map_err(|err| ResultSizeError::Arithmetic {
+            msg: "failed to compute scaled frame width".to_string(),
+            source: err.into(),
+        })?;
+    debug!(&frame_width);
+    // let frame_width = Sides::uniform(0);
+
+    let margins =
+        pre_result_size
+            .margins
+            .checked_mul(scale)
+            .map_err(|err| ResultSizeError::Arithmetic {
+                msg: "failed to compute scaled margins".to_string(),
+                source: err.into(),
+            })?;
+    debug!(&margins);
+
+    // let margins = Sides::uniform(0);
+    // let reversed = new_content_size
+    //     .checked_sub(margins)
+    //     .unwrap()
+    //     .checked_sub(frame_width)
+    //     .unwrap();
+
+    // match border {
+    //     Some(border) => assert_eq!(
+    //         reversed.aspect_ratio().unwrap(),
+    //         // .and_then(|size| size.checked_sub(frame_width))
+    //         // .and_then(|size| size.checked_sub(frame_width))
+    //         // .map_err(arithmetic::Error::from)
+    //         // .and_then(|size| size.aspect_ratio().map_err(arithmetic::Error::from)),
+    //         original_content_size.aspect_ratio().unwrap() // border.size().aspect_ratio().unwrap()
+    //     ),
+    //     None => {}
+    // };
 
     Ok(ResultSize {
-        content_size: new_content_size,
+        content_size: post_content_size,
         margins,
         frame_width,
-        output_size,
+        ..pre_result_size // output_size: pre_result_size.output_size,
+                          // scale_factor: pre_result_size.scale_factor
     })
 }
 
@@ -478,6 +590,26 @@ fn prepare_primary(primary: &mut img::Image, options: &Options) -> Result<(), Pr
     Ok(())
 }
 
+fn draw_text_mut(image: &mut img::Image, text: &str, top_left: Point) -> Result<(), Error> {
+    use imageproc::drawing::draw_text_mut;
+    use rusttype::{Font, Scale};
+
+    lazy_static::lazy_static! {
+        pub static ref INTER: Font<'static> = {
+            let font_data = include_bytes!("../fonts/Inter-Regular.ttf");
+            Font::try_from_bytes(font_data).unwrap()
+        };
+    };
+
+    let black = Color::black();
+    let top_left = top_left.checked_add(Point { x: 3, y: 3 }).unwrap();
+    let x = top_left.x.cast::<i32>().unwrap();
+    let y = top_left.y.cast::<i32>().unwrap();
+    let scale = Scale::uniform(image.size().max_dim().cast::<f32>().unwrap() * 0.03);
+    draw_text_mut(&mut **image, black.into(), x, y, scale, &INTER, text);
+    Ok(())
+}
+
 #[inline]
 fn overlay_visible_area(image: &mut img::Image) -> Result<(), RenderError> {
     let size = image.size();
@@ -512,9 +644,11 @@ mod tests {
             },
             mode: types::FitMode::Image,
             crop: Some(types::sides::percent::Sides::uniform(0.05)),
-            scale_factor: 0.95,
-            frame_width: types::sides::percent::Sides::uniform(0.02),
-            image_rotation: types::Rotation::Rotate90,
+            scale_factor: 0.90,
+            // frame_width: types::sides::percent::Sides::uniform(0.02),
+            frame_width: types::sides::percent::Sides::uniform(0.1),
+            margin: 0.1,
+            // image_rotation: types::Rotation::Rotate90,
             ..Default::default()
         };
     }

@@ -136,8 +136,9 @@ pub mod abs {
         Cast,
     };
     use crate::types::Point;
+    use serde::Serialize;
 
-    #[derive(PartialEq, Eq, Debug, Default, Copy, Clone)]
+    #[derive(Serialize, PartialEq, Eq, Debug, Default, Copy, Clone)]
     pub struct Sides {
         pub top: u32,
         pub left: u32,

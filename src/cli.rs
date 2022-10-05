@@ -1,9 +1,12 @@
 use chrono::Utc;
 use clap::Parser;
-use filmborders::border::{self, Border};
 #[cfg(feature = "builtin")]
 use filmborders::builtin;
-use filmborders::{img, types, Error, ImageBorders};
+use filmborders::{
+    border::{self, Border},
+    debug::Instant,
+    img, types, Error, ImageBorders,
+};
 use std::path::PathBuf;
 #[cfg(feature = "builtin")]
 use std::str::FromStr;
@@ -85,7 +88,7 @@ struct Options {
 
 fn main() {
     let options = Options::parse();
-    let start = Utc::now().time();
+    let start = Instant::now();
     let images = options
         .images
         .iter()
@@ -110,7 +113,8 @@ fn main() {
                 #[cfg(not(feature = "builtin"))]
                 let border = options
                     .border
-                    .ok_or(Error::MissingBorder)
+                    // .unwrap()
+                    // .ok_or(Error::MissingBorder)
                     .and_then(|border| {
                         Border::open(PathBuf::from(border), None)
                             .map(border::Kind::Custom)
@@ -157,7 +161,7 @@ fn main() {
             };
             filmborders::debug!(&border_options);
             match borders
-                .add_border(border, &border_options)
+                .render(border, &border_options)
                 .and_then(|result| match options.output {
                     Some(output) => result
                         .save_with_filename(output, options.quality)
@@ -165,10 +169,7 @@ fn main() {
                     None => result.save(options.quality).map_err(Error::from),
                 }) {
                 Ok(_) => {
-                    println!(
-                        "completed in {} msec",
-                        (Utc::now().time() - start).num_milliseconds()
-                    );
+                    println!("completed in {} msec", start.elapsed_millis());
                 }
                 Err(err) => eprintln!("{}", err),
             };

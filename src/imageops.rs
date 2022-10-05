@@ -6,14 +6,14 @@ use image::{GenericImage, GenericImageView, Pixel, Rgba};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed convert {alpha} to alpha value")]
 pub struct AlphaError {
     alpha: f64,
     source: CastError<f64, u8>,
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 pub enum TransparentComponentsError {
     #[error(transparent)]
     Pad(#[from] types::rect::PadError),
@@ -92,6 +92,19 @@ pub enum FillMode {
 }
 
 #[inline]
+pub fn clip_alpha(mut image: image::SubImage<&mut image::RgbaImage>, min_alpha: u8, max_alpha: u8) {
+    let (w, h) = image.dimensions();
+    for x in 0..w {
+        for y in 0..h {
+            let mut p = image.get_pixel(x, y);
+            let channels = p.channels_mut();
+            channels[3] = Clamp::clamp(channels[3], min_alpha, max_alpha);
+            image.put_pixel(x, y, p);
+        }
+    }
+}
+
+#[inline]
 pub fn fill_rect(
     mut image: image::SubImage<&mut image::RgbaImage>,
     color: image::Rgba<u8>,
@@ -113,7 +126,7 @@ pub fn fill_rect(
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum FadeError {
     #[error(transparent)]
     Alpha(#[from] AlphaError),
