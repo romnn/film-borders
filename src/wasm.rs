@@ -21,13 +21,33 @@ pub fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
-macro_rules! console_log_json {
-    ($json:expr) => {{
-        if let Ok(json) = js_sys::JSON::parse($json) {
-            web_sys::console::log_1(&json);
-        }
+// macro_rules! to_json {
+//     ($json:expr) => {{
+//         js_sys::JSON::parse($json)
+//         // if let Ok(json) = js_sys::JSON::parse($json) {
+//         //     web_sys::console::log_1(&json);
+//         // }
+//     }};
+// }
+
+macro_rules! console_log {
+    ( $( $value:expr ),* ) => {{
+        // use $crate::debug::AsJson;
+        #[allow(unused_mut)]
+        let mut values = js_sys::Array::new();
+        $(
+            // values.push($value);
+            values.push(&$value.into());
+            // match $value.into_json() {
+            //     Ok(value) => values.push(&value),
+            //     Err(err) => values.push(&err.into()),
+            // };
+        )*
+        web_sys::console::log(&values);
     }};
 }
+
+pub(crate) use console_log;
 
 // macro_rules! console_log {
 //     ($($t:tt)*) => (console_log_one(&format_args!($($t)*).to_string()))
@@ -38,10 +58,10 @@ macro_rules! console_log_json {
 // }
 
 #[inline]
-fn image_from_image_data(img: &ImageData) -> Result<DynamicImage, JsValue> {
+fn image_from_image_data(img: &ImageData) -> Result<DynamicImage, JsError> {
     let pixels = img.data().to_vec();
     let buffer = ImageBuffer::from_vec(img.width(), img.height(), pixels)
-        .ok_or_else(|| JsValue::from_str("failed to create image buffer"))?;
+        .ok_or_else(|| JsError::new("failed to create image buffer"))?;
     Ok(DynamicImage::ImageRgba8(buffer))
 }
 
@@ -50,10 +70,11 @@ fn image_from_canvas(
     canvas: &HtmlCanvasElement,
     ctx: &CanvasRenderingContext2d,
 ) -> Result<DynamicImage, JsValue> {
-    let width = canvas.width();
-    let height = canvas.height();
-    let img = ctx.get_image_data(0.0, 0.0, f64::from(width), f64::from(height))?;
-    image_from_image_data(&img)
+    let width = f64::from(canvas.width());
+    let height = f64::from(canvas.height());
+    let data = ctx.get_image_data(0.0, 0.0, width, height)?;
+    let image = image_from_image_data(&data)?;
+    Ok(image)
 }
 
 #[wasm_bindgen]
@@ -63,6 +84,12 @@ pub struct Border {
     builtin: Option<builtin::Builtin>,
     custom: Option<ImageData>,
 }
+
+// impl Display for Border {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         Display::fmt(&self.0, f)
+//     }
+// }
 
 #[wasm_bindgen]
 impl Border {
@@ -110,7 +137,7 @@ impl Image {
         })
     }
 
-    pub fn from_image_data(data: &ImageData) -> Result<Image, JsValue> {
+    pub fn from_image_data(data: &ImageData) -> Result<Image, JsError> {
         set_panic_hook();
         let inner = image_from_image_data(data)?.to_rgba8();
         Ok(Image {
@@ -139,7 +166,7 @@ impl ImageBorders {
     }
 
     #[inline]
-    pub fn from_image_data(data: &ImageData) -> Result<ImageBorders, JsValue> {
+    pub fn from_image_data(data: &ImageData) -> Result<ImageBorders, JsError> {
         set_panic_hook();
         let img = Image::from_image_data(data)?.inner;
         Ok(Self {
@@ -156,7 +183,13 @@ impl ImageBorders {
         let img = Image::from_canvas(canvas, ctx)?.inner;
         let size = img.size();
         // convert the raw pixels back to an ImageData object
-        ImageData::new_with_u8_clamped_array_and_sh(Clamped(img.as_raw()), size.width, size.height)
+        let data = ImageData::new_with_u8_clamped_array_and_sh(
+            Clamped(img.as_raw()),
+            size.width,
+            size.height,
+        )?;
+        // .map_err(|err| JsError::new(err.to_string()))?;
+        Ok(data)
     }
 
     #[inline]
@@ -165,17 +198,20 @@ impl ImageBorders {
         border: Border,
         options: &options::Options,
     ) -> Result<ImageData, JsValue> {
-        // console::log("border: {:?}", &border);
-        if let Ok(options) = options.serialize() {
-            console_log_json!(&options);
-        }
+        println!("border: {:?}", &border);
+        // let test: options::Options = options.to_owned();
+        crate::debug!(&options);
+        // console_log!("selected border:", Display::fmt(border));
+        // if let Ok(options) = options.serialize() {
+        //     console_log!(&options);
+        // }
         let border = match border.custom {
             None => border.builtin.map(border::Kind::Builtin),
             Some(data) => {
                 let image = Image::from_image_data(&data)?;
                 let border = border::Border::from_image(image.inner, None)
                     .map(border::Kind::Custom)
-                    .map_err(|err| JsValue::from_str(&err.report()))?;
+                    .map_err(|err| JsError::new(&err.report()))?;
                 Some(border)
             }
         };
@@ -184,13 +220,15 @@ impl ImageBorders {
         let result = self
             .inner
             .render(border, options)
-            .map_err(|err| JsValue::from_str(&err.report()))?;
+            .map_err(|err| JsError::new(&err.report()))?;
+        // .map_err(|err| JsValue::from_str(&err.report()))?;
         let size = result.size();
         // convert the raw pixels back to an ImageData object
-        ImageData::new_with_u8_clamped_array_and_sh(
+        let image = ImageData::new_with_u8_clamped_array_and_sh(
             Clamped(result.as_raw()),
             size.width,
             size.height,
-        )
+        )?;
+        Ok(image)
     }
 }
