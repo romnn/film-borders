@@ -46,7 +46,7 @@ type AppState = {
 };
 
 const MAX_PREVIEW_DIM = 1000;
-const DEFAULT_BORDER_WIDTH_PERCENT = 1;
+const DEFAULT_BORDER_WIDTH_PERCENT = 10;
 
 const OUTPUT_SIZES_KEYS: string[] = [
   "Match source",
@@ -115,7 +115,7 @@ export default class App extends React.Component<AppProps, AppState> {
       backgroundColor: "#ffffff",
       scaleFactor: 100.0,
       preview: false,
-      margin: 1.0,
+      margin: 10.0,
       cropTop: 0.0,
       cropRight: 0.0,
       cropBottom: 0.0,
