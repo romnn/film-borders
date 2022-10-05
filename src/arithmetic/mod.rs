@@ -12,9 +12,9 @@ pub use option_ord::OptionOrd;
 pub use round::{Ceil, Floor, Round, RoundingMode};
 use std::fmt::{Debug, Display};
 
-pub trait Type: Display + Debug + PartialEq + Send + Sync + 'static {}
+pub trait Type: Sized + Display + Debug + Clone + PartialEq + Send + Sync + 'static {}
 
-impl<T> Type for T where T: num::Num + Debug + Display + PartialEq + Send + Sync + 'static {}
+impl<T> Type for T where T: num::Num + Debug + Display + Clone + PartialEq + Send + Sync + 'static {}
 
 #[cfg(test)]
 mod tests {}

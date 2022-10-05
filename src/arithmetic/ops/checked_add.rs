@@ -53,7 +53,7 @@ macro_rules! impl_signed_checked_add {
 
 impl_signed_checked_add!(i64);
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct AddError<Lhs, Rhs>(pub arithmetic::error::Operation<Lhs, Rhs>);
 
@@ -62,16 +62,16 @@ where
     Lhs: arithmetic::Type,
     Rhs: arithmetic::Type,
 {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
+    // fn as_any(&self) -> &dyn std::any::Any {
+    //     self
+    // }
 
-    fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
-        match other.as_any().downcast_ref::<Self>() {
-            Some(other) => PartialEq::eq(self, other),
-            None => false,
-        }
-    }
+    // fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
+    //     match other.as_any().downcast_ref::<Self>() {
+    //         Some(other) => PartialEq::eq(self, other),
+    //         None => false,
+    //     }
+    // }
 }
 
 impl<Lhs, Rhs> std::error::Error for AddError<Lhs, Rhs>

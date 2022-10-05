@@ -38,29 +38,93 @@ where
     }
 }
 
-pub trait Arithmetic: AsErr + std::error::Error + 'static {
-    fn as_any(&self) -> &dyn Any;
-    fn eq(&self, other: &dyn Arithmetic) -> bool;
+pub trait Arithmetic:
+    Sized + Clone + PartialEq + AsErr + std::error::Error + Send + Sync + 'static
+{
 }
 
-impl PartialEq for dyn Arithmetic + Send + Sync + 'static {
+pub trait DynArithmetic: AsErr + std::error::Error + Send + Sync + 'static {
+    fn as_any(&self) -> &dyn Any;
+    fn eq(&self, other: &dyn DynArithmetic) -> bool;
+    // fn clone(&self) -> dyn DynArithmetic;
+    // fn clone(&self) -> &dyn DynArithmetic;
+    fn clone(&self) -> Box<dyn DynArithmetic + Send + Sync + 'static>;
+    // fn clone(&self) -> &(dyn DynArithmetic + Send + Sync);
+    // fn clone(self: Box<Self>) -> Box<dyn DynArithmetic>; //  + Send + Sync;
+    // fn clone(self: &Box<Self>) -> Box<dyn DynArithmetic>; //  + Send + Sync;
+}
+
+impl<E> DynArithmetic for E
+where
+    Self: Arithmetic,
+    E: Send + Sync,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn eq(&self, other: &dyn DynArithmetic) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => PartialEq::eq(self, other),
+            None => false,
+        }
+    }
+
+    // fn clone(self: &Box<Self>) -> Box<dyn DynArithmetic> {
+    // fn clone(&self) -> &(dyn DynArithmetic + Send + Sync) {
+    // fn clone(&self) -> &dyn DynArithmetic {
+    fn clone(&self) -> Box<dyn DynArithmetic + Send + Sync + 'static> {
+        // fn clone(self: &Box<Self>) -> Box<dyn DynArithmetic> {  //  + Send + Sync;
+        // fn clone(self: &Box<Self>) -> Box<Self> {  //  + Send + Sync;
+        Box::new(self.clone())
+        // &self.clone()
+    }
+}
+
+impl PartialEq for dyn DynArithmetic + Send + Sync + 'static {
     fn eq(&self, other: &Self) -> bool {
-        Arithmetic::eq(self, other)
+        DynArithmetic::eq(self, other)
     }
 }
 
 // required fix for derived PartialEq that otherwise moves
-impl PartialEq<&Self> for Box<dyn Arithmetic + Send + Sync + 'static> {
+impl PartialEq<&Self> for Box<dyn DynArithmetic + Send + Sync + 'static> {
     fn eq(&self, other: &&Self) -> bool {
-        Arithmetic::eq(self.as_ref(), other.as_ref())
+        DynArithmetic::eq(self.as_ref(), other.as_ref())
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub struct Error(pub Box<dyn Arithmetic + Sync + Send + 'static>);
+impl Clone for Box<dyn DynArithmetic + Send + Sync + 'static> {
+    fn clone(&self) -> Box<dyn DynArithmetic + Send + Sync + 'static> {
+        // let cloned: &(dyn DynArithmetic + Send + Sync + 'static) = DynArithmetic::clone(self.as_ref());
+        // + Send + Sync
+        let source: &dyn DynArithmetic = self.as_ref();
+        // let cloned: &dyn DynArithmetic = source.clone();
+        // let cloned: Box<dyn DynArithmetic> = source.clone();
+        // self
+
+        // let test: Box<dyn DynArithmetic + Send + Sync + 'static> = Box::new(cloned);
+        // let test: Box<dyn DynArithmetic + Send + Sync + 'static> =
+        //     Box::new(DynArithmetic::clone(self.as_ref()));
+        // cloned
+        source.clone()
+        // Box::new(cloned)
+    }
+}
+
+// impl Clone for dyn DynArithmetic {
+//     fn clone(&self) -> dyn DynArithmetic {
+//         DynArithmetic::clone(self)
+//         // self
+//         // self.clone_box()
+//     }
+// }
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct Error(pub Box<dyn DynArithmetic + Sync + Send + 'static>);
 
 impl std::ops::Deref for Error {
-    type Target = dyn Arithmetic + Sync + Send + 'static;
+    type Target = dyn DynArithmetic + Sync + Send + 'static;
 
     fn deref(&self) -> &Self::Target {
         &*self.0
@@ -81,7 +145,7 @@ impl std::error::Error for Error {
 
 impl<E> From<E> for Error
 where
-    E: Arithmetic + Send + Sync,
+    E: Arithmetic, //  + Send + Sync,
 {
     fn from(err: E) -> Self {
         Error(Box::new(err))
@@ -105,7 +169,7 @@ impl Display for Kind {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Operation<Lhs, Rhs> {
     pub lhs: Lhs,
     pub rhs: Rhs,
@@ -181,7 +245,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Arithmetic as ArithmeticError;
+    use super::DynArithmetic as ArithmeticError;
     use crate::arithmetic::{error::Overflow, ops};
 
     #[test]
