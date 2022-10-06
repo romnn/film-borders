@@ -76,7 +76,7 @@ jobs:
       - name: Compile binaries
         run: >-
           cargo build
-          --relase
+          --release
           --features "builtin"
           --all-targets
 
