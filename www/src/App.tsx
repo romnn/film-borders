@@ -532,6 +532,9 @@ export default class App extends React.Component<AppProps, AppState> {
         console.timeEnd(event.data.renderID);
         await this.setState({ rendering: false });
       }
+      if ("error" in event.data) {
+        await this.setState({ rendering: false });
+      }
     };
 
     await this.init();

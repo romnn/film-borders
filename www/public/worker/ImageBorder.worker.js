@@ -30,7 +30,8 @@ const init_wasm_in_worker = async () => {
       self.postMessage({result, renderID, save});
       console.log(`worker: render ${renderID} done`);
       } catch (err) {
-        console.error("error in worker", err);
+        console.error("worker:", err);
+        self.postMessage({error: err});
       }
     }
   };

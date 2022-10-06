@@ -304,11 +304,10 @@ impl Border {
             source: err,
         })?;
         debug!(&new_safe_patch_height);
-        assert!(new_safe_patch_height <= safe_patch_height);
 
         let patch_height = (|| {
             let total_fade_height = CheckedMul::checked_mul(fade_height, 2)?;
-            let height = CheckedAdd::checked_add(safe_patch_height, total_fade_height)?;
+            let height = CheckedAdd::checked_add(new_safe_patch_height, total_fade_height)?;
             Ok::<_, arithmetic::Error>(height)
         })();
         let patch_height = patch_height.map_err(|err| error::Arithmetic {
@@ -325,7 +324,7 @@ impl Border {
         for i in 0..num_patches {
             let patch_top_left = (|| {
                 let mut patch_offset_y =
-                    CheckedMul::checked_mul(i64::from(i), i64::from(safe_patch_height))?;
+                    CheckedMul::checked_mul(i64::from(i), i64::from(new_safe_patch_height))?;
                 patch_offset_y = CheckedSub::checked_sub(patch_offset_y, i64::from(fade_height))?;
 
                 let top_left = top_patch_rect.bottom_left().checked_add(Point {

@@ -1,9 +1,7 @@
 // #![allow(warnings)]
-#![allow(clippy::missing_panics_doc)]
-#![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::missing_errors_doc)]
 #![allow(clippy::unsafe_derive_deserialize)]
-// #![allow(clippy::module_name_repetitions)]
 
 pub mod arithmetic;
 pub mod border;
@@ -126,20 +124,12 @@ impl ImageBorders {
         debug!(&content_rect);
 
         #[cfg(feature = "debug")]
-        {
-            let blue = Color::rgba(0, 0, 255, 100);
-            result_image
-                .fill_rect(blue, &content_rect, FillMode::Blend)
-                .map_err(img::Error::from)?;
-
-            let black = Color::black();
-            draw_text_mut(
-                &mut result_image,
-                "content size",
-                black,
-                content_rect.top_left(),
-            )?;
-        }
+        debug_fill(
+            &mut result_image,
+            "content size",
+            Color::rgba(0, 0, 255, 100),
+            &content_rect,
+        )?;
 
         let content_rect_sub_margins =
             content_rect
@@ -170,12 +160,13 @@ impl ImageBorders {
         })?;
 
         #[cfg(feature = "debug")]
-        {
-            let green = Color::rgba(0, 255, 0, 100);
-            result_image
-                .fill_rect(green, &border_rect, FillMode::Blend)
-                .map_err(img::Error::from)?;
-        }
+        debug_fill(
+            &mut result_image,
+            "border size",
+            Color::rgba(0, 255, 0, 100),
+            &border_rect,
+        )?;
+
         let primary_component = Rect::from(border_size);
 
         debug!("overlay content");
@@ -185,13 +176,12 @@ impl ImageBorders {
                 let components = match border {
                     Some(ref mut border) => {
                         border.resize_and_crop(border_size, ResizeMode::Contain)?;
-
                         let default_image = primary.clone();
-                        images.resize(border.transparent_components().len(), default_image);
-                        border
-                            .transparent_components()
-                            .iter()
-                            .zip(images.iter_mut())
+                        let components = border.transparent_components();
+                        images.resize(components.len(), default_image);
+                        // border
+                        //     .transparent_components()
+                        components.iter().zip(images.iter_mut())
                     }
                     None => primary_component.iter().zip(images.iter_mut()),
                 };
@@ -501,6 +491,23 @@ fn overlay_visible_area(image: &mut img::Image) -> Result<(), RenderError> {
     Ok(())
 }
 
+#[cfg(feature = "debug")]
+#[inline]
+fn debug_fill(
+    image: &mut img::Image,
+    text: &str,
+    color: impl Into<image::Rgba<u8>>,
+    rect: &Rect,
+) -> Result<(), RenderError> {
+    image
+        .fill_rect(color, rect, FillMode::Blend)
+        .map_err(img::Error::from)?;
+
+    let black = Color::black();
+    draw_text_mut(image, text, black, rect.top_left())?;
+    Ok(())
+}
+
 #[inline]
 fn draw_component(
     image: &mut img::Image,
@@ -533,12 +540,15 @@ fn draw_component(
         })?;
 
     #[cfg(feature = "debug")]
-    {
-        let red = Color::rgba(255, 255, 0, 100);
-        image
-            .fill_rect(red, &component_rect, FillMode::Blend)
-            .map_err(img::Error::from)?;
+    debug_fill(
+        image,
+        "component",
+        Color::rgba(255, 255, 0, 100),
+        &component_rect,
+    )?;
 
+    #[cfg(feature = "debug")]
+    {
         let mut component = component.clone();
         component
             .clip_alpha(&Rect::from(component.size()), 0, 60)
@@ -546,18 +556,19 @@ fn draw_component(
         component
             .resize(component_size, ResizeMode::Cover)
             .map_err(img::Error::from)?;
-        let offset = component_size
-            .center(component.size())
-            .map_err(|err| error::Arithmetic {
-                msg: "failed to compute center offset of uncropped component".into(),
-                source: err.into(),
-            })?;
+        let uncropped_offset =
+            component_size
+                .center(component.size())
+                .map_err(|err| error::Arithmetic {
+                    msg: "failed to compute center offset of uncropped component".into(),
+                    source: err.into(),
+                })?;
 
-        debug!(&offset);
+        debug!(&uncropped_offset);
 
         let uncropped_component_top_left = component_rect
             .top_left()
-            .checked_add(offset.top_left())
+            .checked_add(uncropped_offset.top_left())
             .map_err(|err| error::Arithmetic {
                 msg: "failed to compute top left of uncropped component".into(),
                 source: err.into(),
