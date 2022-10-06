@@ -19,6 +19,7 @@ RUN pipenv install --dev
 ADD ./src /build/src
 ADD ./benches /build/benches
 ADD ./examples /build/examples
+ADD ./samples /build/samples
 ADD ./Cargo.* /build/
 ADD ./tasks.py /build/
 ADD ./www /build/www

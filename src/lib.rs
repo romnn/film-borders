@@ -51,7 +51,8 @@ pub struct ImageBorders {
 
 impl ImageBorders {
     #[inline]
-    pub fn new(images: Vec<img::Image>) -> Result<ImageBorders, Error> {
+    pub fn new(images: impl IntoIterator<Item = img::Image>) -> Result<ImageBorders, Error> {
+        let images: Vec<img::Image> = images.into_iter().collect();
         if images.is_empty() {
             Err(Error::MissingImage)
         } else {
@@ -92,9 +93,12 @@ impl ImageBorders {
     ///
     pub fn render(
         &mut self,
-        border_kind: Option<border::Kind>,
+        border_kind: impl Into<Option<border::Kind>>,
+        // border_kind: Option<border::Kind>,
         options: &Options,
     ) -> Result<img::Image, RenderError> {
+        let border_kind = border_kind.into();
+
         let mut images: Vec<img::Image> = self.images.clone();
         let primary = images.get_mut(0).ok_or(RenderError::MissingImage)?;
 

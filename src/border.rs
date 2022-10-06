@@ -27,6 +27,31 @@ pub enum Kind {
     Custom(Border),
 }
 
+impl From<Border> for Kind {
+    fn from(border: Border) -> Self {
+        Kind::Custom(border)
+    }
+}
+impl From<Border> for Option<Kind> {
+    fn from(border: Border) -> Self {
+        Some(Kind::Custom(border))
+    }
+}
+
+#[cfg(feature = "builtin")]
+impl From<super::builtin::Builtin> for Kind {
+    fn from(builtin: super::builtin::Builtin) -> Self {
+        Kind::Builtin(builtin)
+    }
+}
+
+#[cfg(feature = "builtin")]
+impl From<super::builtin::Builtin> for Option<Kind> {
+    fn from(builtin: super::builtin::Builtin) -> Self {
+        Some(Kind::Builtin(builtin))
+    }
+}
+
 impl Kind {
     #[inline]
     pub fn into_border(self) -> Result<Border, Error> {
