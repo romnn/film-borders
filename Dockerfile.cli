@@ -3,11 +3,10 @@ FROM rust:1.63 as build
 WORKDIR /app
 ADD ./ /app
 
-ARG version=0.0.1
 LABEL MAINTAINER="roman <contact@romnn.com>"
 
-RUN cargo build --profile lib --all-targets
+RUN cargo build --release --features "builtin" --all-targets
 
 FROM gcr.io/distroless/cc
-COPY --from=build /app/target/lib/film-borders /
+COPY --from=build /app/target/release/film-borders /
 CMD ["./film-borders"]

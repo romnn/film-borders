@@ -17,6 +17,8 @@ ADD ./Pipfile* /build/
 RUN pipenv install --dev
 
 ADD ./src /build/src
+ADD ./benches /build/benches
+ADD ./examples /build/examples
 ADD ./Cargo.* /build/
 ADD ./tasks.py /build/
 ADD ./www /build/www

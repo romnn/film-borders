@@ -55,7 +55,7 @@ jobs:
           touch build/.nojekyll
 
       - name: Deploy to pages
-        uses: JamesIves/github-pages-deploy-action@latest
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: gh-pages
@@ -76,8 +76,8 @@ jobs:
       - name: Compile binaries
         run: >-
           cargo build
+          --relase
           --features "builtin"
-          --profile lib
           --all-targets
 
       - name: Upload release binaries
