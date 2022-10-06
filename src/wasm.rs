@@ -4,58 +4,23 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
 use web_sys::{console, CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
-// #[wasm_bindgen]
-// extern "C" {
-//     #[wasm_bindgen(js_namespace = console, js_name = log)]
-//     fn console_log_one(msg: &str);
-
-//     #[wasm_bindgen(js_namespace = console, js_name = error)]
-//     fn console_error_one(msg: &str);
-
-//     #[wasm_bindgen(js_namespace = console, js_name = log)]
-//     fn console_log_json(value: &JsValue);
-// }
-
 pub fn set_panic_hook() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
 
-// macro_rules! to_json {
-//     ($json:expr) => {{
-//         js_sys::JSON::parse($json)
-//         // if let Ok(json) = js_sys::JSON::parse($json) {
-//         //     web_sys::console::log_1(&json);
-//         // }
-//     }};
-// }
-
 macro_rules! console_log {
     ( $( $value:expr ),* ) => {{
-        // use $crate::debug::AsJson;
         #[allow(unused_mut)]
         let mut values = js_sys::Array::new();
         $(
-            // values.push($value);
             values.push(&$value.into());
-            // match $value.into_json() {
-            //     Ok(value) => values.push(&value),
-            //     Err(err) => values.push(&err.into()),
-            // };
         )*
         web_sys::console::log(&values);
     }};
 }
 
 pub(crate) use console_log;
-
-// macro_rules! console_log {
-//     ($($t:tt)*) => (console_log_one(&format_args!($($t)*).to_string()))
-// }
-
-// macro_rules! console_error {
-//     ($($t:tt)*) => (console_error_one(&format_args!($($t)*).to_string()))
-// }
 
 #[inline]
 fn image_from_image_data(img: &ImageData) -> Result<DynamicImage, JsError> {
@@ -84,12 +49,6 @@ pub struct Border {
     builtin: Option<builtin::Builtin>,
     custom: Option<ImageData>,
 }
-
-// impl Display for Border {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         Display::fmt(&self.0, f)
-//     }
-// }
 
 #[wasm_bindgen]
 impl Border {
@@ -188,7 +147,6 @@ impl ImageBorders {
             size.width,
             size.height,
         )?;
-        // .map_err(|err| JsError::new(err.to_string()))?;
         Ok(data)
     }
 
@@ -199,12 +157,7 @@ impl ImageBorders {
         options: &options::Options,
     ) -> Result<ImageData, JsValue> {
         println!("border: {:?}", &border);
-        // let test: options::Options = options.to_owned();
         crate::debug!(&options);
-        // console_log!("selected border:", Display::fmt(border));
-        // if let Ok(options) = options.serialize() {
-        //     console_log!(&options);
-        // }
         let border = match border.custom {
             None => border.builtin.map(border::Kind::Builtin),
             Some(data) => {
@@ -215,13 +168,11 @@ impl ImageBorders {
                 Some(border)
             }
         };
-        // console_log!("selected border: {:?}", &border);
 
         let result = self
             .inner
             .render(border, options)
             .map_err(|err| JsError::new(&err.report()))?;
-        // .map_err(|err| JsValue::from_str(&err.report()))?;
         let size = result.size();
         // convert the raw pixels back to an ImageData object
         let image = ImageData::new_with_u8_clamped_array_and_sh(

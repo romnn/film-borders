@@ -14,7 +14,6 @@ pub struct Size {
     pub height: u32,
 }
 
-impl crate::debug::Private for Size {}
 impl arithmetic::Type for Size {}
 
 #[wasm_bindgen]
@@ -26,8 +25,6 @@ impl Size {
         Self::default()
     }
 }
-
-
 
 impl Size {
     #[inline]
@@ -58,7 +55,8 @@ impl Size {
                     f64::min(width_ratio, height_ratio),
                 ),
             };
-            Ok::<(f64, f64), ops::DivError<f64, f64>>(factors)
+            // Ok::<(f64, f64), ops::DivError<f64, f64>>(factors)
+            Ok::<(f64, f64), arithmetic::Error>(factors)
         })() {
             Ok(factors) => Ok(factors),
             Err(err) => Err(ScaleFactorsError {
@@ -96,7 +94,7 @@ impl Size {
             .checked_div(f64::from(self.height))
             .map_err(|err| AspectRatioError {
                 size: *self,
-                source: err,
+                source: err.into(),
             })
     }
 
@@ -233,24 +231,33 @@ impl Size {
                 size: self,
                 bounds,
                 mode,
-                source: err,
+                source: err.into(),
             }),
         }
     }
 
     #[inline]
-    pub fn scale_to<S: Into<Size>>(
+    pub fn scale_to(
         self,
-        size: S,
+        size: impl Into<Size>,
         mode: super::ResizeMode,
     ) -> Result<Self, ScaleToError> {
         let target = size.into();
         if mode == super::ResizeMode::Fill {
-            Ok(target)
-        } else {
+            return Ok(target);
+        }
+        match (|| {
             let scale = self.scale_factor(target, mode)?;
             let scaled = self.scale_by::<_, Ceil>(scale.0)?;
-            Ok(scaled)
+            Ok::<_, arithmetic::Error>(scaled)
+        })() {
+            Ok(scaled_size) => Ok(scaled_size),
+            Err(err) => Err(ScaleToError {
+                size: self,
+                target,
+                mode,
+                source: err,
+            }),
         }
     }
 
@@ -530,17 +537,27 @@ pub struct ScaleFactorsError {
     size: Size,
     target: Size,
     mode: super::ResizeMode,
-    source: ops::DivError<f64, f64>,
+    source: arithmetic::Error,
+    // source: ops::DivError<f64, f64>,
 }
+
+impl arithmetic::error::Arithmetic for ScaleFactorsError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-pub enum ScaleToError {
-    #[error(transparent)]
-    ScaleFactors(#[from] ScaleFactorsError),
+#[error("failed to scale {size} to {target} with mode {mode:?}")]
+pub struct ScaleToError {
+    size: Size,
+    target: Size,
+    mode: super::ResizeMode,
+    source: arithmetic::Error,
+    // #[error(transparent)]
+    // ScaleFactors(#[from] ScaleFactorsError),
 
-    #[error(transparent)]
-    ScaleBy(#[from] ScaleByError),
+    // #[error(transparent)]
+    // ScaleBy(#[from] ScaleByError),
 }
+
+impl arithmetic::error::Arithmetic for ScaleToError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to scale {size} to bounds {bounds:?} with mode {:?}")]
@@ -548,8 +565,11 @@ pub struct ScaleToBoundsError {
     size: Size,
     bounds: super::BoundedSize,
     mode: super::ResizeMode,
-    source: ScaleToError,
+    source: arithmetic::Error,
+    // source: ScaleToError,
 }
+
+impl arithmetic::error::Arithmetic for ScaleToBoundsError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to scale {size} by {scalar:?}")]
@@ -559,39 +579,47 @@ pub struct ScaleByError {
     source: arithmetic::Error,
 }
 
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
-pub enum ScaleError {
-    #[error(transparent)]
-    ScaleBy(#[from] ScaleByError),
-    #[error(transparent)]
-    ScaleTo(#[from] ScaleToError),
-    #[error(transparent)]
-    ScaleToBounds(#[from] ScaleToBoundsError),
-}
+impl arithmetic::error::Arithmetic for ScaleByError {}
 
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
-pub enum CropToFitErrorSource {
-    #[error(transparent)]
-    Center(#[from] CenterError),
+// #[derive(thiserror::Error, PartialEq, Clone, Debug)]
+// pub enum ScaleError {
+//     #[error(transparent)]
+//     ScaleBy(#[from] ScaleByError),
+//     #[error(transparent)]
+//     ScaleTo(#[from] ScaleToError),
+//     #[error(transparent)]
+//     ScaleToBounds(#[from] ScaleToBoundsError),
+// }
 
-    #[error(transparent)]
-    Arithmetic(#[from] arithmetic::Error),
-}
+// #[derive(thiserror::Error, PartialEq, Clone, Debug)]
+// pub enum CropToFitErrorSource {
+//     #[error(transparent)]
+//     Center(#[from] CenterError),
+
+//     #[error(transparent)]
+//     Arithmetic(#[from] arithmetic::Error),
+// }
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute crop such that {size} fits {container}")]
 pub struct CropToFitError {
     size: Size,
     container: Size,
-    source: CropToFitErrorSource,
+    source: arithmetic::Error,
+    // source: CropToFitErrorSource,
 }
+
+impl arithmetic::error::Arithmetic for CropToFitError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute aspect ratio of {size}")]
 pub struct AspectRatioError {
     size: Size,
-    source: ops::DivError<f64, f64>,
+    source: arithmetic::Error,
+    // source: ops::DivError<f64, f64>,
 }
+
+impl arithmetic::error::Arithmetic for AspectRatioError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to center {child} in {parent}")]
@@ -600,6 +628,8 @@ pub struct CenterError {
     parent: Size,
     source: arithmetic::Error,
 }
+
+impl arithmetic::error::Arithmetic for CenterError {}
 
 #[cfg(test)]
 mod tests {

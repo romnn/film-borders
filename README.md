@@ -40,11 +40,12 @@ film-borders --help
 
 #### TODO
 
+- implement arithmetic errors for more types
+- lint
+- add rendering text
+
 - error handling for lib and border
-- make debug statements console log when on wasm target
 - consider: where should into be used, where can be passed by reference
-- add backtraces to all error types
-- make the errors more nuanced, e.g. from what operation they stem from
 
 - add single simple benchmark
 - get out the benchmark data as json or so
@@ -63,11 +64,13 @@ film-borders --help
 - add more tests
 - add examples
 - update the website
-- add rendering text
 - use generic image backend
 
 #### Done
 
+- make the errors more nuanced, e.g. from what operation they stem from
+- add backtraces to all error types
+- make debug statements console log when on wasm target
 - add builder for image such that path can be set more easily
 - crop sides should really only be used for the user right?
 - subimage rect could also directly return a mutable sub image using crop?

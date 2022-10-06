@@ -49,29 +49,69 @@ pub struct ResultSize {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PreparePrimaryError {
-    #[error("{msg}")]
-    Arithmetic {
-        msg: String,
-        source: arithmetic::Error,
-    },
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
     #[error(transparent)]
     Image(#[from] img::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
+// #[error("failed to compute result size")]
 pub enum ResultSizeError {
-    #[error("{msg}")]
-    Arithmetic {
-        msg: String,
-        source: arithmetic::Error,
-    },
-    #[error("{msg}")]
-    Scale {
-        msg: String,
-        source: types::size::ScaleError,
-    },
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
+    // #[error("{msg}")]
+    // Scale {
+    //     msg: String,
+    //     source: types::size::ScaleError,
+    // },
     #[error(transparent)]
     Border(#[from] border::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+// #[error("failed to render")]
+pub enum RenderError {
+    #[error("missing input image")]
+    MissingImage,
+
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
+    #[error("failed to compute result size")]
+    // #[error(transparent)]
+    ResultSize(
+        #[from]
+        #[source]
+        ResultSizeError,
+    ),
+
+    #[error("failed to prepare primary image")]
+    // #[error(transparent)]
+    PreparePrimary(
+        #[from]
+        #[source]
+        PreparePrimaryError,
+    ),
+
+    #[error(transparent)]
+    Border(#[from] border::Error),
+    // #[error(transparent)]
+    // CustomBorder(#[from] border::CustomBorderError),
+
+    // #[error("{msg}")]
+    // Center {
+    //     msg: String,
+    //     source: types::size::CenterError,
+    // },
+
+    // #[error("{msg}")]
+    // Arithmetic {
+    //     msg: String,
+    //     source: arithmetic::Error,
+    // },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -102,44 +142,6 @@ pub enum Error {
 
     // #[error("io error: {0}")]
     // Io(#[from] std::io::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum RenderError {
-    #[error("missing input image")]
-    MissingImage,
-
-    #[error("failed to compute result size")]
-    ResultSize(
-        #[from]
-        #[source]
-        ResultSizeError,
-    ),
-
-    #[error("failed to prepare primary image")]
-    PreparePrimary(
-        #[from]
-        #[source]
-        PreparePrimaryError,
-    ),
-
-    #[error(transparent)]
-    Border(#[from] border::Error),
-
-    #[error(transparent)]
-    CustomBorder(#[from] border::CustomBorderError),
-
-    #[error("{msg}")]
-    Center {
-        msg: String,
-        source: types::size::CenterError,
-    },
-
-    #[error("{msg}")]
-    Arithmetic {
-        msg: String,
-        source: arithmetic::Error,
-    },
 }
 
 pub struct ImageBorders {
@@ -212,7 +214,7 @@ impl ImageBorders {
         let content_rect = result_size
             .output_size
             .center(result_size.content_size)
-            .map_err(|err| RenderError::Center {
+            .map_err(|err| error::Arithmetic {
                 msg: "failed to center content size".to_string(),
                 source: err.into(),
             })?;
@@ -352,14 +354,10 @@ impl ImageBorders {
 fn compute_pre_result_size(
     border: &Option<border::Border>,
     primary: &img::Image,
-    // mode: FitMode,
-    // frame_width:
     options: &Options,
 ) -> Result<ResultSize, ResultSizeError> {
     let scale_factor = options.scale_factor.clamp(0.0, 1.0);
     let margin_factor = f64::from(options.margin).max(0.0);
-    // let scale_factor = 1.0;
-    // let margin_factor = 0.2;
 
     let original_content_size = match border {
         Some(border) => match options.mode {
@@ -377,11 +375,10 @@ fn compute_pre_result_size(
         options
             .frame_width
             .checked_mul(base)
-            .map_err(|err| ResultSizeError::Arithmetic {
+            .map_err(|err| error::Arithmetic {
                 msg: "failed to compute original frame width".to_string(),
                 source: err.into(),
             })?;
-    // let frame_width = Sides::uniform(0);
     debug!(&frame_width);
 
     let margin = (|| {
@@ -389,32 +386,25 @@ fn compute_pre_result_size(
         let margin = margin.cast::<u32>()?;
         Ok::<_, arithmetic::Error>(margin)
     })();
-    let margin = margin.map_err(|err| ResultSizeError::Arithmetic {
+    let margin = margin.map_err(|err| error::Arithmetic {
         msg: "failed to compute original margin width".to_string(),
         source: err.into(),
     })?;
     let margins = Sides::uniform(margin);
     debug!(&margins);
 
-    // assert_eq!(margins, frame_width);
-
-    // debug!("original_content_size", original_content_size);
     let content_size = original_content_size
         .checked_add(frame_width)
         .and_then(|size| size.checked_add(margins))
-        .map_err(|err| ResultSizeError::Arithmetic {
+        .map_err(|err| error::Arithmetic {
             msg: "failed to compute content size".to_string(),
             source: err.into(),
         })?;
     debug!(&content_size);
-    // assert_eq!(
-    //     content_size.aspect_ratio(),
-    //     original_content_size.aspect_ratio()
-    // );
 
     let default_output_size = content_size
         .scale_by::<_, Round>(1.0 / scale_factor)
-        .map_err(|err| ResultSizeError::Scale {
+        .map_err(|err| error::Arithmetic {
             msg: "failed to compute default output size".to_string(),
             source: err.into(),
         })?;
@@ -429,7 +419,7 @@ fn compute_pre_result_size(
         _ => {
             let size = default_output_size
                 .scale_to_bounds(options.output_size, ResizeMode::Contain)
-                .map_err(|err| ResultSizeError::Scale {
+                .map_err(|err| error::Arithmetic {
                     msg: "failed to compute output size".to_string(),
                     source: err.into(),
                 })?;
@@ -439,7 +429,7 @@ fn compute_pre_result_size(
     // bound output size but keep aspect ratio
     let output_size = output_size
         .scale_to_bounds(options.output_size_bounds, ResizeMode::Contain)
-        .map_err(|err| ResultSizeError::Scale {
+        .map_err(|err| error::Arithmetic {
             msg: "failed to bound output size".to_string(),
             source: err.into(),
         })?;
@@ -465,7 +455,7 @@ fn compute_result_size(
     let post_content_size_scale = pre_result_size
         .output_size
         .checked_mul(pre_result_size.scale_factor)
-        .map_err(|err| ResultSizeError::Arithmetic {
+        .map_err(|err| error::Arithmetic {
             msg: "failed to compute scaled content size".to_string(),
             source: err.into(),
         })?;
@@ -473,77 +463,40 @@ fn compute_result_size(
     let pre_content_size = pre_result_size.content_size;
     let post_content_size = pre_content_size
         .scale_to(post_content_size_scale, ResizeMode::Contain)
-        .map_err(|err| ResultSizeError::Scale {
+        .map_err(|err| error::Arithmetic {
             msg: "failed to compute scaled content size".to_string(),
             source: err.into(),
         })?;
     debug!(&post_content_size);
 
-    // assert_eq!(pre_content_size, post_content_size);
-    // assert_eq!(
-    //     new_content_size.aspect_ratio(),
-    //     original_content_size.aspect_ratio()
-    // );
-
-    // match border {
-    //     Some(border) => assert_eq!(
-    //         new_content_size.aspect_ratio(),
-    //         border.size().aspect_ratio()
-    //     ),
-    //     None => {}
-    // }
-
     let pre_base = pre_content_size.min_dim();
     let post_base = post_content_size.min_dim();
-    // assert_eq!(pre_base, post_base);
     let scale = CheckedDiv::checked_div(f64::from(post_base), f64::from(pre_base)).unwrap();
     debug!(&scale);
 
     let frame_width = pre_result_size
         .frame_width
         .checked_mul(scale)
-        .map_err(|err| ResultSizeError::Arithmetic {
+        .map_err(|err| error::Arithmetic {
             msg: "failed to compute scaled frame width".to_string(),
             source: err.into(),
         })?;
     debug!(&frame_width);
-    // let frame_width = Sides::uniform(0);
 
-    let margins =
-        pre_result_size
-            .margins
-            .checked_mul(scale)
-            .map_err(|err| ResultSizeError::Arithmetic {
-                msg: "failed to compute scaled margins".to_string(),
-                source: err.into(),
-            })?;
+    let margins = pre_result_size
+        .margins
+        .checked_mul(scale)
+        .map_err(|err| error::Arithmetic {
+            msg: "failed to compute scaled margins".to_string(),
+            source: err.into(),
+        })?;
     debug!(&margins);
-
-    // let margins = Sides::uniform(0);
-    // let reversed = new_content_size
-    //     .checked_sub(margins)
-    //     .unwrap()
-    //     .checked_sub(frame_width)
-    //     .unwrap();
-
-    // match border {
-    //     Some(border) => assert_eq!(
-    //         reversed.aspect_ratio().unwrap(),
-    //         // .and_then(|size| size.checked_sub(frame_width))
-    //         // .and_then(|size| size.checked_sub(frame_width))
-    //         // .map_err(arithmetic::Error::from)
-    //         // .and_then(|size| size.aspect_ratio().map_err(arithmetic::Error::from)),
-    //         original_content_size.aspect_ratio().unwrap() // border.size().aspect_ratio().unwrap()
-    //     ),
-    //     None => {}
-    // };
 
     Ok(ResultSize {
         content_size: post_content_size,
         margins,
         frame_width,
-        ..pre_result_size // output_size: pre_result_size.output_size,
-                          // scale_factor: pre_result_size.scale_factor
+        ..pre_result_size
     })
 }
 
@@ -566,7 +519,8 @@ fn border_for_primary(
 
     if let Some(ref mut border) = border {
         if let FitMode::Border = options.mode {
-            *border = Border::custom(border.clone(), primary.size(), None)?;
+            *border = Border::custom(border.clone(), primary.size(), None)
+                .map_err(border::Error::from)?;
         }
     }
     Ok(border)
@@ -576,12 +530,12 @@ fn border_for_primary(
 fn prepare_primary(primary: &mut img::Image, options: &Options) -> Result<(), PreparePrimaryError> {
     primary.rotate(&options.image_rotation);
     if let Some(crop_percent) = options.crop {
-        let crop = crop_percent.checked_mul(primary.size()).map_err(|err| {
-            PreparePrimaryError::Arithmetic {
+        let crop = crop_percent
+            .checked_mul(primary.size())
+            .map_err(|err| error::Arithmetic {
                 msg: "failed to compute crop from relative crop".to_string(),
                 source: err.into(),
-            }
-        })?;
+            })?;
         primary
             .crop_sides(crop)
             .map_err(img::CropError::from)

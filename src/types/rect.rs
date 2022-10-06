@@ -30,7 +30,6 @@ mod sealed {
         _sealed: (),
     }
 
-    impl crate::debug::Private for Rect {}
     impl arithmetic::Type for Rect {}
 
     impl Rect {
@@ -232,13 +231,13 @@ impl Rect {
             let child_center = self.center()?;
             let parent_center = parent.center()?;
             let offset = parent_center.checked_sub(child_center)?;
-            Ok::<Point, CenterOffsetErrorSource>(offset)
+            Ok::<Point, arithmetic::Error>(offset)
         })() {
             Ok(center) => Ok(center),
             Err(err) => Err(CenterOffsetError {
                 parent: *parent,
                 child: *self,
-                source: err.into(),
+                source: err,
             }),
         }
     }
@@ -423,12 +422,16 @@ pub struct Error {
     source: ops::AddError<Point, Point>,
 }
 
+impl arithmetic::error::Arithmetic for Error {}
+
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute pixel count for {rect}")]
 pub struct PixelCountError {
     rect: Rect,
     source: arithmetic::Error,
 }
+
+impl arithmetic::error::Arithmetic for PixelCountError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute center point of {rect}")]
@@ -437,22 +440,27 @@ pub struct CenterError {
     source: arithmetic::Error,
 }
 
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
-pub enum CenterOffsetErrorSource {
-    #[error(transparent)]
-    Center(#[from] CenterError),
+impl arithmetic::error::Arithmetic for CenterError {}
 
-    #[error(transparent)]
-    Arithmetic(#[from] ops::SubError<Point, Point>),
-}
+// #[derive(thiserror::Error, PartialEq, Clone, Debug)]
+// pub enum CenterOffsetErrorSource {
+//     #[error(transparent)]
+//     Center(#[from] CenterError),
+
+//     #[error(transparent)]
+//     Arithmetic(#[from] ops::SubError<Point, Point>),
+// }
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute center offset from {parent} to {child}")]
 pub struct CenterOffsetError {
     parent: Rect,
     child: Rect,
-    source: CenterOffsetErrorSource,
+    source: arithmetic::Error,
+    // source: CenterOffsetErrorSource,
 }
+
+impl arithmetic::error::Arithmetic for CenterOffsetError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to compute size for {rect}")]
@@ -461,6 +469,8 @@ pub struct SizeError {
     source: CastError<i64, u32>,
 }
 
+impl arithmetic::error::Arithmetic for SizeError {}
+
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
 #[error("failed to add padding of {padding} to {rect}")]
 pub struct PadError {
@@ -468,6 +478,8 @@ pub struct PadError {
     padding: u32,
     source: ops::AddError<Rect, Sides>,
 }
+
+impl arithmetic::error::Arithmetic for PadError {}
 
 #[cfg(test)]
 mod tests {

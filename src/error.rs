@@ -23,6 +23,13 @@ where
     }
 }
 
+#[derive(thiserror::Error, Clone, Debug)]
+#[error("{msg}")]
+pub struct Arithmetic {
+    pub msg: String,
+    pub source: super::arithmetic::Error,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ParseEnum {
     #[error("unknown enum variant: `{0}`")]

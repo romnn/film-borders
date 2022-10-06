@@ -46,12 +46,7 @@ pub trait Arithmetic:
 pub trait DynArithmetic: AsErr + std::error::Error + Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
     fn eq(&self, other: &dyn DynArithmetic) -> bool;
-    // fn clone(&self) -> dyn DynArithmetic;
-    // fn clone(&self) -> &dyn DynArithmetic;
     fn clone(&self) -> Box<dyn DynArithmetic + Send + Sync + 'static>;
-    // fn clone(&self) -> &(dyn DynArithmetic + Send + Sync);
-    // fn clone(self: Box<Self>) -> Box<dyn DynArithmetic>; //  + Send + Sync;
-    // fn clone(self: &Box<Self>) -> Box<dyn DynArithmetic>; //  + Send + Sync;
 }
 
 impl<E> DynArithmetic for E
@@ -70,14 +65,8 @@ where
         }
     }
 
-    // fn clone(self: &Box<Self>) -> Box<dyn DynArithmetic> {
-    // fn clone(&self) -> &(dyn DynArithmetic + Send + Sync) {
-    // fn clone(&self) -> &dyn DynArithmetic {
     fn clone(&self) -> Box<dyn DynArithmetic + Send + Sync + 'static> {
-        // fn clone(self: &Box<Self>) -> Box<dyn DynArithmetic> {  //  + Send + Sync;
-        // fn clone(self: &Box<Self>) -> Box<Self> {  //  + Send + Sync;
         Box::new(self.clone())
-        // &self.clone()
     }
 }
 
@@ -96,29 +85,10 @@ impl PartialEq<&Self> for Box<dyn DynArithmetic + Send + Sync + 'static> {
 
 impl Clone for Box<dyn DynArithmetic + Send + Sync + 'static> {
     fn clone(&self) -> Box<dyn DynArithmetic + Send + Sync + 'static> {
-        // let cloned: &(dyn DynArithmetic + Send + Sync + 'static) = DynArithmetic::clone(self.as_ref());
-        // + Send + Sync
-        let source: &dyn DynArithmetic = self.as_ref();
-        // let cloned: &dyn DynArithmetic = source.clone();
-        // let cloned: Box<dyn DynArithmetic> = source.clone();
-        // self
-
-        // let test: Box<dyn DynArithmetic + Send + Sync + 'static> = Box::new(cloned);
-        // let test: Box<dyn DynArithmetic + Send + Sync + 'static> =
-        //     Box::new(DynArithmetic::clone(self.as_ref()));
-        // cloned
-        source.clone()
-        // Box::new(cloned)
+        // let source: &dyn DynArithmetic = self.as_ref();
+        self.as_ref().clone()
     }
 }
-
-// impl Clone for dyn DynArithmetic {
-//     fn clone(&self) -> dyn DynArithmetic {
-//         DynArithmetic::clone(self)
-//         // self
-//         // self.clone_box()
-//     }
-// }
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct Error(pub Box<dyn DynArithmetic + Sync + Send + 'static>);
@@ -145,7 +115,7 @@ impl std::error::Error for Error {
 
 impl<E> From<E> for Error
 where
-    E: Arithmetic, //  + Send + Sync,
+    E: Arithmetic,
 {
     fn from(err: E) -> Self {
         Error(Box::new(err))

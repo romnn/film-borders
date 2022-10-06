@@ -41,16 +41,6 @@ where
     Src: arithmetic::Type,
     Target: arithmetic::Type,
 {
-    // fn as_any(&self) -> &dyn Any {
-    //     self
-    // }
-
-    // fn eq(&self, other: &dyn arithmetic::error::Arithmetic) -> bool {
-    //     match other.as_any().downcast_ref::<Self>() {
-    //         Some(other) => PartialEq::eq(self, other),
-    //         None => false,
-    //     }
-    // }
 }
 
 impl<Src, Target> std::error::Error for CastError<Src, Target>

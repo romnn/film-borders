@@ -7,7 +7,6 @@ pub trait ClampMin {
 }
 
 pub trait Clamp {
-    // fn clamp<T>(value: T, min: T, max: T) -> T;
     #[must_use]
     fn clamp<MIN, MAX>(self, min: MIN, max: MAX) -> Self
     where

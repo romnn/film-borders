@@ -53,56 +53,14 @@ impl Options {
     pub fn deserialize(val: &str) -> Result<Options, JsError> {
         let options = serde_json::from_str(val)?;
         Ok(options)
-        // .map_err(|err| JsValue::from_str(&err.to_string()))
     }
 
     #[inline]
     pub fn serialize(&self) -> Result<String, JsError> {
         let json = serde_json::to_string(&self)?;
         Ok(json)
-        // .map_err(|err| JsValue::from_str(&err.to_string()))
     }
 }
-
-impl super::debug::Private for Options {}
-
-// impl super::debug::AsJson for Options {
-//     fn into_json(self) -> Result<JsValue, JsError> {
-//         let json = serde_json::to_string(&self)?;
-//         let json = js_sys::JSON::parse(json)?;
-//         Ok(json)
-//     }
-// }
-
-// impl TryFrom<Options> for JsValue
-// // impl<T> TryInto<JsValue> for T
-// // where
-// //     T: Serialize,
-// {
-//     type Error = JsError;
-
-//     fn try_from(options: Options) -> Result<JsValue, Self::Error> {
-//         let json = serde_json::to_string(&options)?;
-//         let json = js_sys::JSON::parse(json)?;
-//         Ok(json)
-//         // .map_err(|err| JsError::from_str(&err.to_string()))
-//     }
-// }
-
-// impl TryInto<JsValue> for Options
-// // impl<T> TryInto<JsValue> for T
-// // where
-// //     T: Serialize,
-// {
-//     type Error = JsError;
-
-//     fn try_into(self) -> Result<JsValue, Self::Error> {
-//         let json = serde_json::to_string(&self)?;
-//         let json = js_sys::JSON::parse(json)?;
-//         Ok(json)
-//         // .map_err(|err| JsError::from_str(&err.to_string()))
-//     }
-// }
 
 impl Options {
     pub fn background_color(&self) -> types::Color {
