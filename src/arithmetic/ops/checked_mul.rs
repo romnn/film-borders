@@ -77,6 +77,7 @@ macro_rules! impl_float_checked_mul {
     };
 }
 
+impl_float_checked_mul!(f32);
 impl_float_checked_mul!(f64);
 
 #[derive(PartialEq, Clone, Debug)]

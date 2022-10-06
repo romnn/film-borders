@@ -39,7 +39,7 @@ pub enum Orientation {
     Landscape,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Axis {
     X,
     Y,

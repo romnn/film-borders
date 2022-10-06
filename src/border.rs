@@ -546,7 +546,7 @@ fn overlay_and_fade_patch(
     Ok(())
 }
 
-#[derive(thiserror::Error, Clone, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 pub enum TransparentComponentsError {
     #[error(transparent)]
     TransparentComponents(#[from] imageops::TransparentComponentsError),
@@ -559,7 +559,7 @@ pub enum TransparentComponentsError {
     ),
 }
 
-#[derive(thiserror::Error, Clone, Debug)]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
 pub struct InvalidTransparentComponentsError {
     required: (Ordering, usize),
     components: Vec<Rect>,

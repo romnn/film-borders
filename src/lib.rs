@@ -47,103 +47,6 @@ pub struct ResultSize {
     scale_factor: f32,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum PreparePrimaryError {
-    #[error(transparent)]
-    Arithmetic(#[from] error::Arithmetic),
-
-    #[error(transparent)]
-    Image(#[from] img::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-// #[error("failed to compute result size")]
-pub enum ResultSizeError {
-    #[error(transparent)]
-    Arithmetic(#[from] error::Arithmetic),
-
-    // #[error("{msg}")]
-    // Scale {
-    //     msg: String,
-    //     source: types::size::ScaleError,
-    // },
-    #[error(transparent)]
-    Border(#[from] border::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-// #[error("failed to render")]
-pub enum RenderError {
-    #[error("missing input image")]
-    MissingImage,
-
-    #[error(transparent)]
-    Arithmetic(#[from] error::Arithmetic),
-
-    #[error("failed to compute result size")]
-    // #[error(transparent)]
-    ResultSize(
-        #[from]
-        #[source]
-        ResultSizeError,
-    ),
-
-    #[error("failed to prepare primary image")]
-    // #[error(transparent)]
-    PreparePrimary(
-        #[from]
-        #[source]
-        PreparePrimaryError,
-    ),
-
-    #[error(transparent)]
-    Border(#[from] border::Error),
-    // #[error(transparent)]
-    // CustomBorder(#[from] border::CustomBorderError),
-
-    // #[error("{msg}")]
-    // Center {
-    //     msg: String,
-    //     source: types::size::CenterError,
-    // },
-
-    // #[error("{msg}")]
-    // Arithmetic {
-    //     msg: String,
-    //     source: arithmetic::Error,
-    // },
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    // #[error("missing border")]
-    // MissingBorder,
-    #[error("missing input image")]
-    MissingImage,
-
-    #[error("failed to read image")]
-    Read(
-        #[from]
-        #[source]
-        img::ReadError,
-    ),
-
-    #[error("render error")]
-    Render(
-        #[from]
-        #[source]
-        RenderError,
-    ),
-    // #[error("image error: {0}")]
-    // Image(#[from] super::img::Error),
-
-    // #[error("border error: {0}")]
-    // Border(#[from] super::border::Error),
-
-    // #[error("io error: {0}")]
-    // Io(#[from] std::io::Error),
-}
-
 pub struct ImageBorders {
     images: Vec<img::Image>,
 }
@@ -225,37 +128,58 @@ impl ImageBorders {
             let blue = Color::rgba(0, 0, 255, 100);
             result_image
                 .fill_rect(blue, &content_rect, FillMode::Blend)
-                .unwrap();
+                .map_err(img::Error::from)?;
 
-            draw_text_mut(&mut result_image, "content size", content_rect.top_left()).unwrap();
+            let black = Color::black();
+            draw_text_mut(
+                &mut result_image,
+                "content size",
+                black,
+                content_rect.top_left(),
+            )?;
         }
 
-        let content_rect_sub_margins = content_rect.checked_sub(result_size.margins).unwrap();
+        let content_rect_sub_margins =
+            content_rect
+                .checked_sub(result_size.margins)
+                .map_err(|err| error::Arithmetic {
+                    msg: "failed to compute content rect without margins".into(),
+                    source: err.into(),
+                })?;
+
         result_image
             .fill_rect(
                 options.frame_color,
                 &content_rect_sub_margins,
                 FillMode::Set,
             )
-            .unwrap();
+            .map_err(img::Error::from)?;
 
         let border_rect = content_rect_sub_margins
             .checked_sub(result_size.frame_width)
-            .unwrap();
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute border rect".into(),
+                source: err.into(),
+            })?;
         debug!(&border_rect);
-        let border_size = border_rect.size().unwrap();
+        let border_size = border_rect.size().map_err(|err| error::Arithmetic {
+            msg: "failed to compute border size".into(),
+            source: err.into(),
+        })?;
 
         #[cfg(feature = "debug")]
         {
             let green = Color::rgba(0, 255, 0, 100);
-            result_image.fill_rect(green, &border_rect, FillMode::Blend);
+            result_image
+                .fill_rect(green, &border_rect, FillMode::Blend)
+                .map_err(img::Error::from)?;
         }
-        let default_component = Rect::from(border_size);
+        let primary_component = Rect::from(border_size);
 
         debug!("overlay content");
         match options.mode {
             FitMode::Image => {
-                let default_component = vec![default_component];
+                let primary_component = vec![primary_component];
                 let components = match border {
                     Some(ref mut border) => {
                         border.resize_and_crop(border_size, ResizeMode::Contain)?;
@@ -267,51 +191,17 @@ impl ImageBorders {
                             .iter()
                             .zip(images.iter_mut())
                     }
-                    None => default_component.iter().zip(images.iter_mut()),
+                    None => primary_component.iter().zip(images.iter_mut()),
                 };
 
-                for (c, image) in components {
-                    debug!("drawing", &c);
-                    let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                    image_rect = image_rect.padded(3).unwrap();
-                    image_rect = image_rect.clamp(&border_rect);
-                    let image_size = image_rect.size().unwrap();
-
-                    let center_offset = image_rect.center_offset_to(&border_rect).unwrap();
-
-                    #[cfg(feature = "debug")]
-                    {
-                        let red = Color::rgba(255, 255, 0, 100);
-                        result_image.fill_rect(red, &image_rect, FillMode::Blend);
-
-                        let mut image = image.clone();
-                        image.clip_alpha(&Rect::from(image.size()), 0, 60);
-                        image.resize(image_size, ResizeMode::Cover);
-                        let offset = image_size.center(image.size()).unwrap();
-                        debug!(&offset);
-
-                        result_image.overlay(
-                            &image,
-                            image_rect
-                                .top_left()
-                                .checked_add(offset.top_left())
-                                .unwrap(),
-                        );
-                    }
-
-                    image
-                        .resize_and_crop(
-                            image_size,
-                            ResizeMode::Cover,
-                            CropMode::Custom {
-                                x: center_offset.x,
-                                y: center_offset.y,
-                            },
-                        )
-                        .unwrap();
-                    assert_eq!(image_size, image.size());
-
-                    result_image.overlay(image, image_rect.top_left());
+                for (idx, (component_rect, component)) in components.enumerate() {
+                    draw_component(&mut result_image, component, component_rect, &border_rect)
+                        .map_err(|err| RenderComponentError {
+                            idx,
+                            rect: *component_rect,
+                            size: component.size(),
+                            source: err.into(),
+                        })?;
                 }
 
                 if let Some(border) = border {
@@ -319,23 +209,35 @@ impl ImageBorders {
                 }
             }
             FitMode::Border => {
-                let c = match border {
+                let primary_component_rect = match border {
                     Some(ref mut border) => {
-                        let border_size = border_rect.size().unwrap();
+                        // let border_size = border_rect.size().unwrap();
                         border.resize_and_crop(border_size, ResizeMode::Contain)?;
                         border.content_rect().map_err(border::Error::from)?
                     }
-                    None => &default_component,
+                    None => &primary_component,
                 };
 
-                let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                image_rect = image_rect.padded(3).unwrap();
-                image_rect = image_rect.clamp(&border_rect);
-                let image_size = image_rect.size().unwrap();
+                draw_component(
+                    &mut result_image,
+                    primary,
+                    primary_component_rect,
+                    &border_rect,
+                )
+                .map_err(|err| RenderComponentError {
+                    idx: 0,
+                    rect: *primary_component_rect,
+                    size: primary.size(),
+                    source: err.into(),
+                })?;
+                // let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
+                // image_rect = image_rect.padded(3).unwrap();
+                // image_rect = image_rect.clamp(&border_rect);
+                // let image_size = image_rect.size().unwrap();
 
-                primary.resize_and_crop(image_size, ResizeMode::Cover, CropMode::Center);
+                // primary.resize_and_crop(image_size, ResizeMode::Cover, CropMode::Center);
 
-                result_image.overlay(&*primary, image_rect.top_left());
+                // result_image.overlay(&*primary, image_rect.top_left());
                 if let Some(border) = border {
                     result_image.overlay(&*border, border_rect.top_left());
                 }
@@ -456,7 +358,7 @@ fn compute_result_size(
         .output_size
         .checked_mul(pre_result_size.scale_factor)
         .map_err(|err| error::Arithmetic {
-            msg: "failed to compute scaled content size".to_string(),
+            msg: "failed to compute scaled content size".into(),
             source: err.into(),
         })?;
 
@@ -464,21 +366,25 @@ fn compute_result_size(
     let post_content_size = pre_content_size
         .scale_to(post_content_size_scale, ResizeMode::Contain)
         .map_err(|err| error::Arithmetic {
-            msg: "failed to compute scaled content size".to_string(),
+            msg: "failed to compute scaled content size".into(),
             source: err.into(),
         })?;
     debug!(&post_content_size);
 
-    let pre_base = pre_content_size.min_dim();
-    let post_base = post_content_size.min_dim();
-    let scale = CheckedDiv::checked_div(f64::from(post_base), f64::from(pre_base)).unwrap();
+    let pre_base = f64::from(pre_content_size.min_dim());
+    let post_base = f64::from(post_content_size.min_dim());
+    let scale = CheckedDiv::checked_div(post_base, pre_base).map_err(|err| error::Arithmetic {
+        msg: "failed to compute post base scale".into(),
+        source: err.into(),
+    })?;
+
     debug!(&scale);
 
     let frame_width = pre_result_size
         .frame_width
         .checked_mul(scale)
         .map_err(|err| error::Arithmetic {
-            msg: "failed to compute scaled frame width".to_string(),
+            msg: "failed to compute scaled frame width".into(),
             source: err.into(),
         })?;
     debug!(&frame_width);
@@ -487,7 +393,7 @@ fn compute_result_size(
         .margins
         .checked_mul(scale)
         .map_err(|err| error::Arithmetic {
-            msg: "failed to compute scaled margins".to_string(),
+            msg: "failed to compute scaled margins".into(),
             source: err.into(),
         })?;
     debug!(&margins);
@@ -544,23 +450,44 @@ fn prepare_primary(primary: &mut img::Image, options: &Options) -> Result<(), Pr
     Ok(())
 }
 
-fn draw_text_mut(image: &mut img::Image, text: &str, top_left: Point) -> Result<(), Error> {
-    use imageproc::drawing::draw_text_mut;
+fn draw_text_mut(
+    image: &mut img::Image,
+    text: &str,
+    color: impl Into<image::Rgba<u8>>,
+    top_left: Point,
+) -> Result<(), RenderError> {
     use rusttype::{Font, Scale};
 
     lazy_static::lazy_static! {
         pub static ref INTER: Font<'static> = {
             let font_data = include_bytes!("../fonts/Inter-Regular.ttf");
-            Font::try_from_bytes(font_data).unwrap()
+            Font::try_from_bytes(font_data).expect("read font bytes")
         };
     };
 
-    let black = Color::black();
-    let top_left = top_left.checked_add(Point { x: 3, y: 3 }).unwrap();
-    let x = top_left.x.cast::<i32>().unwrap();
-    let y = top_left.y.cast::<i32>().unwrap();
-    let scale = Scale::uniform(image.size().max_dim().cast::<f32>().unwrap() * 0.03);
-    draw_text_mut(&mut **image, black.into(), x, y, scale, &INTER, text);
+    let top_left = (|| {
+        let top_left = top_left.checked_add(Point { x: 3, y: 3 })?;
+        let x = top_left.x.cast::<i32>()?;
+        let y = top_left.y.cast::<i32>()?;
+        Ok::<_, arithmetic::Error>((x, y))
+    })();
+    let (x, y) = top_left.map_err(|err| error::Arithmetic {
+        msg: format!("failed to compute top left point for text `{}`", text),
+        source: err,
+    })?;
+
+    let scale = image
+        .size()
+        .max_dim()
+        .cast::<f32>()
+        .map_err(arithmetic::Error::from)
+        .and_then(|max_dim| CheckedMul::checked_mul(max_dim, 0.03).map_err(arithmetic::Error::from))
+        .map_err(|err| error::Arithmetic {
+            msg: "failed to compute text scale".into(),
+            source: err,
+        })?;
+    let scale = Scale::uniform(scale);
+    imageproc::drawing::draw_text_mut(&mut **image, color.into(), x, y, scale, &INTER, text);
     Ok(())
 }
 
@@ -571,12 +498,183 @@ fn overlay_visible_area(image: &mut img::Image) -> Result<(), RenderError> {
         width: size.min_dim(),
         height: size.min_dim(),
     };
-    let preview_rect = size.center(preview_size).unwrap();
+    let preview_rect = size.center(preview_size).map_err(|err| error::Arithmetic {
+        msg: "failed to compute centered preview rect".into(),
+        source: err.into(),
+    })?;
+
     let transparent_red = Color::rgba(255, 0, 0, 50);
     image
         .fill_rect(transparent_red, &preview_rect, FillMode::Blend)
-        .unwrap();
+        .map_err(img::Error::from)?;
     Ok(())
+}
+
+#[inline]
+fn draw_component(
+    image: &mut img::Image,
+    component: &mut img::Image,
+    component_rect: &Rect,
+    border_rect: &Rect,
+) -> Result<(), RenderError> {
+    debug!("drawing", &component_rect);
+
+    let component_rect = (|| {
+        let mut component_rect = component_rect.checked_add(border_rect.top_left())?;
+        component_rect = component_rect.padded(3)?;
+        component_rect = component_rect.clamp(&border_rect);
+        Ok::<_, arithmetic::Error>(component_rect)
+    })();
+    let component_rect = component_rect.map_err(|err| error::Arithmetic {
+        msg: "failed to compute component rect".into(),
+        source: err,
+    })?;
+    let component_size = component_rect.size().map_err(|err| error::Arithmetic {
+        msg: "failed to compute component rect size".into(),
+        source: err.into(),
+    })?;
+
+    let center_offset = component_rect
+        .center_offset_to(&border_rect)
+        .map_err(|err| error::Arithmetic {
+            msg: "failed to compute center offset of component".into(),
+            source: err.into(),
+        })?;
+
+    #[cfg(feature = "debug")]
+    {
+        let red = Color::rgba(255, 255, 0, 100);
+        image
+            .fill_rect(red, &component_rect, FillMode::Blend)
+            .map_err(img::Error::from)?;
+
+        let mut component = component.clone();
+        component
+            .clip_alpha(&Rect::from(component.size()), 0, 60)
+            .map_err(img::Error::from)?;
+        component
+            .resize(component_size, ResizeMode::Cover)
+            .map_err(img::Error::from)?;
+        let offset = component_size
+            .center(component.size())
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute center offset of uncropped component".into(),
+                source: err.into(),
+            })?;
+
+        debug!(&offset);
+
+        let uncropped_component_top_left = component_rect
+            .top_left()
+            .checked_add(offset.top_left())
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute top left of uncropped component".into(),
+                source: err.into(),
+            })?;
+
+        image.overlay(&component, uncropped_component_top_left);
+    }
+
+    component
+        .resize_and_crop(
+            component_size,
+            ResizeMode::Cover,
+            CropMode::Custom {
+                x: center_offset.x,
+                y: center_offset.y,
+            },
+        )
+        .map_err(img::Error::from)?;
+    assert_eq!(component_size, component.size());
+
+    image.overlay(component, component_rect.top_left());
+    Ok(())
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum PreparePrimaryError {
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
+    #[error(transparent)]
+    Image(#[from] img::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ResultSizeError {
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
+    // #[error("{msg}")]
+    // Scale {
+    //     msg: String,
+    //     source: types::size::ScaleError,
+    // },
+    #[error(transparent)]
+    Border(#[from] border::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to render component {idx} with size {size:#?} in {rect:#?}")]
+pub struct RenderComponentError {
+    idx: usize,
+    rect: Rect,
+    size: Size,
+    source: Box<RenderError>,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum RenderError {
+    #[error("missing input image")]
+    MissingImage,
+
+    #[error(transparent)]
+    Image(#[from] img::Error),
+
+    #[error(transparent)]
+    RenderComponent(#[from] RenderComponentError),
+
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
+
+    #[error("failed to compute result size")]
+    ResultSize(
+        #[from]
+        #[source]
+        ResultSizeError,
+    ),
+
+    #[error("failed to prepare primary image")]
+    PreparePrimary(
+        #[from]
+        #[source]
+        PreparePrimaryError,
+    ),
+
+    #[error(transparent)]
+    Border(#[from] border::Error),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    // #[error("missing border")]
+    // MissingBorder,
+    #[error("missing input image")]
+    MissingImage,
+
+    #[error("failed to read image")]
+    Read(
+        #[from]
+        #[source]
+        img::ReadError,
+    ),
+
+    #[error("render error")]
+    Render(
+        #[from]
+        #[source]
+        RenderError,
+    ),
 }
 
 #[cfg(test)]

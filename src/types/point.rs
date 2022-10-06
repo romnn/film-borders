@@ -217,13 +217,15 @@ where
     }
 }
 
-#[derive(thiserror::Error, PartialEq, Debug)]
-#[error("failed to scale {point} by {scalar:?}")]
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to scale {point:#?} by {scalar:?}")]
 pub struct ScaleByError {
     point: Point,
     scalar: Option<f64>,
     source: arithmetic::Error,
 }
+
+impl arithmetic::error::Arithmetic for ScaleByError {}
 
 #[cfg(test)]
 mod tests {

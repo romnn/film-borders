@@ -8,216 +8,6 @@ use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 
-#[derive(thiserror::Error, Debug)]
-pub enum ReadErrorSource {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    Image(#[from] image::error::ImageError),
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error("failed to read image from path {path:?}")]
-pub struct ReadError {
-    path: Option<PathBuf>,
-    source: ReadErrorSource,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum SaveErrorSource {
-    #[error("missing output file path")]
-    MissingOutputPath,
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error(transparent)]
-    Image(#[from] image::error::ImageError),
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error("failed to save image to {path:?} with format {format:?} and quality {quality:?}")]
-pub struct SaveError {
-    path: Option<PathBuf>,
-    format: Option<ImageFormat>,
-    quality: Option<u8>,
-    source: SaveErrorSource,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to fill {rect:#?} of image with size {size:#?}")]
-pub struct FillError {
-    rect: Rect,
-    size: Size,
-    source: SubImageError,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum FadeErrorSource {
-    #[error(transparent)]
-    SubImage(#[from] SubImageError),
-
-    #[error(transparent)]
-    Fade(#[from] imageops::FadeError),
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to fade out image with size {:#?} from {start:#?} to {end:#?} along {axis}")]
-pub struct FadeError {
-    size: Size,
-    start: Point,
-    end: Point,
-    axis: types::Axis,
-    source: FadeErrorSource,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to resize image with size {size:#?} to {target:#?} with mode {mode:?}")]
-pub struct ResizeError {
-    size: Size,
-    target: Size,
-    mode: super::ResizeMode,
-    source: types::size::ScaleToError,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum CropErrorSource {
-    #[error(transparent)]
-    CropToFit(#[from] types::size::CropToFitError),
-
-    #[error(transparent)]
-    SubImage(#[from] SubImageError),
-
-    #[error(transparent)]
-    Sides(#[from] types::rect::SubSidesError),
-
-    #[error(transparent)]
-    CropRect(#[from] Box<CropRectError>),
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to crop image with size {size} to fit {target}")]
-pub struct CropToFitError {
-    size: Size,
-    target: Size,
-    source: CropErrorSource,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to crop image with size {size} to {rect}")]
-pub struct CropRectError {
-    size: Size,
-    rect: Rect,
-    source: CropErrorSource,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to crop image with size {size} by {sides}")]
-pub struct CropSidesError {
-    size: Size,
-    sides: Sides,
-    source: CropErrorSource,
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum CropError {
-    #[error(transparent)]
-    CropSides(#[from] CropSidesError),
-
-    #[error(transparent)]
-    CropRect(#[from] CropRectError),
-
-    #[error(transparent)]
-    CropToFit(#[from] CropToFitError),
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum ResizeAndCropError {
-    #[error(transparent)]
-    Resize(#[from] ResizeError),
-    #[error(transparent)]
-    Crop(#[from] CropToFitError),
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum SubImageErrorSource {
-    #[error(transparent)]
-    OutOfBounds(#[from] OutOfBoundsError),
-
-    #[error(transparent)]
-    Cast(#[from] CastError<i64, u32>),
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to get sub image {rect} for image with size {size}")]
-pub struct SubImageError {
-    size: Size,
-    rect: Rect,
-    source: SubImageErrorSource,
-}
-
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("point {point} exceeds image bounds {bounds}")]
-pub struct OutOfBoundsError {
-    point: Point,
-    bounds: Rect,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    // #[error("failed to resize image")]
-    #[error(transparent)]
-    Resize(#[from] ResizeError),
-
-    //     #[error("failed to crop image")]
-    #[error(transparent)]
-    Crop(#[from] CropError),
-
-    #[error(transparent)]
-    ResizeAndCrop(#[from] ResizeAndCropError),
-
-    // #[error("failed to get subview of image")]
-    #[error(transparent)]
-    SubImage(
-        #[from]
-        // #[source]
-        SubImageError,
-    ),
-
-    // #[error("failed to fill image")]
-    #[error(transparent)]
-    Fill(
-        #[from]
-        // #[source]
-        FillError,
-    ),
-
-    // #[error("failed to fade out image")]
-    #[error(transparent)]
-    FadeOut(
-        #[from]
-        // #[source]
-        imageops::FadeError,
-    ),
-
-    // #[error("failed to read image")]
-    #[error(transparent)]
-    Read(
-        #[from]
-        // #[source]
-        ReadError,
-    ),
-
-    // #[error("failed to save image")]
-    #[error(transparent)]
-    Save(
-        #[from]
-        // #[source]
-        SaveError,
-    ),
-}
-
 #[derive(Clone)]
 pub struct Image {
     pub(crate) inner: image::RgbaImage,
@@ -327,17 +117,17 @@ impl Image {
             right: u32,
         }
 
-        let image_rect: Rect = self.size().into();
+        let image_rect = Rect::from(self.size());
         match (|| {
             if !image_rect.contains(&rect.top_left()) {
-                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
+                return Err(arithmetic::Error::from(OutOfBoundsError {
                     bounds: image_rect,
                     point: rect.top_left(),
                 }));
             }
 
             if !image_rect.contains(&rect.bottom_right()) {
-                return Err(SubImageErrorSource::OutOfBounds(OutOfBoundsError {
+                return Err(arithmetic::Error::from(OutOfBoundsError {
                     bounds: image_rect,
                     point: rect.bottom_right(),
                 }));
@@ -349,7 +139,7 @@ impl Image {
                 bottom: rect.bottom.cast::<u32>()?,
                 right: rect.right.cast::<u32>()?,
             };
-            Ok::<_, SubImageErrorSource>(sub_image_rect)
+            Ok::<_, arithmetic::Error>(sub_image_rect)
         })() {
             Ok(sub_image_rect) => {
                 use image::GenericImage;
@@ -434,7 +224,7 @@ impl Image {
             let sub_image_rect = Rect::from_points(start, end);
             let sub_image = self.sub_image(&sub_image_rect)?;
             imageops::fade_out(sub_image, axis, switch_direction)?;
-            Ok::<_, FadeErrorSource>(())
+            Ok::<_, arithmetic::Error>(())
         })() {
             Ok(_) => Ok(()),
             Err(err) => Err(FadeError {
@@ -499,13 +289,14 @@ impl Image {
         let target = size.into();
         match (|| {
             let rect = self.size().crop_to_fit(target, mode)?;
-            self.crop(&rect).map_err(Box::new)?;
-            Ok::<_, CropErrorSource>(())
+            self.crop(&rect)?;
+            Ok::<_, arithmetic::Error>(())
         })() {
             Ok(_) => Ok(()),
             Err(err) => Err(CropToFitError {
                 size: self.size(),
                 target,
+                mode,
                 source: err,
             }),
         }
@@ -529,8 +320,8 @@ impl Image {
     pub fn crop_sides(&mut self, sides: Sides) -> Result<(), CropSidesError> {
         match (|| {
             let rect = Rect::from(self.size()).checked_sub(sides)?;
-            self.crop(&rect).map_err(Box::new)?;
-            Ok::<_, CropErrorSource>(())
+            self.crop(&rect)?;
+            Ok::<_, arithmetic::Error>(())
         })() {
             Ok(_) => Ok(()),
             Err(err) => Err(CropSidesError {
@@ -682,6 +473,203 @@ impl Image {
         });
         (path, format)
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ReadErrorSource {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Image(#[from] image::error::ImageError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to read image from path {path:?}")]
+pub struct ReadError {
+    path: Option<PathBuf>,
+    source: ReadErrorSource,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SaveErrorSource {
+    #[error("missing output file path")]
+    MissingOutputPath,
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Image(#[from] image::error::ImageError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("failed to save image to {path:?} with format {format:?} and quality {quality:?}")]
+pub struct SaveError {
+    path: Option<PathBuf>,
+    format: Option<ImageFormat>,
+    quality: Option<u8>,
+    source: SaveErrorSource,
+}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to fill {rect:#?} of image with size {size:#?}")]
+pub struct FillError {
+    rect: Rect,
+    size: Size,
+    source: SubImageError,
+}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to fade out image with size {:#?} from {start:#?} to {end:#?} along {axis}")]
+pub struct FadeError {
+    size: Size,
+    start: Point,
+    end: Point,
+    axis: types::Axis,
+    source: arithmetic::Error,
+}
+
+impl arithmetic::error::Arithmetic for FadeError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to resize image with size {size:#?} to {target:#?} with mode {mode:?}")]
+pub struct ResizeError {
+    size: Size,
+    target: Size,
+    mode: super::ResizeMode,
+    source: types::size::ScaleToError,
+}
+
+impl arithmetic::error::Arithmetic for ResizeError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to crop image with size {size:#?} to fit {target:#?} with mode {:?}")]
+pub struct CropToFitError {
+    size: Size,
+    target: Size,
+    mode: super::CropMode,
+    source: arithmetic::Error,
+}
+
+impl arithmetic::error::Arithmetic for CropToFitError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to crop image with size {size:#?} to {rect:#?}")]
+pub struct CropRectError {
+    size: Size,
+    rect: Rect,
+    source: arithmetic::Error,
+}
+
+impl arithmetic::error::Arithmetic for CropRectError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to crop image with size {size:#?} by {sides:#?}")]
+pub struct CropSidesError {
+    size: Size,
+    sides: Sides,
+    source: arithmetic::Error,
+}
+
+impl arithmetic::error::Arithmetic for CropSidesError {}
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum CropError {
+    #[error(transparent)]
+    CropSides(#[from] CropSidesError),
+
+    #[error(transparent)]
+    CropRect(#[from] CropRectError),
+
+    #[error(transparent)]
+    CropToFit(#[from] CropToFitError),
+}
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum ResizeAndCropError {
+    #[error(transparent)]
+    Resize(#[from] ResizeError),
+    #[error(transparent)]
+    Crop(#[from] CropToFitError),
+}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("failed to get sub image {rect:#?} for image with size {size:#?}")]
+pub struct SubImageError {
+    size: Size,
+    rect: Rect,
+    source: arithmetic::Error,
+}
+
+impl arithmetic::error::Arithmetic for SubImageError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[error("point {point:#?} exceeds image bounds {bounds:#?}")]
+pub struct OutOfBoundsError {
+    point: Point,
+    bounds: Rect,
+}
+
+impl arithmetic::error::Arithmetic for OutOfBoundsError {}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("failed to resize image")]
+    Resize(
+        #[from]
+        #[source]
+        ResizeError,
+    ),
+
+    #[error("failed to crop image")]
+    Crop(
+        #[from]
+        #[source]
+        CropError,
+    ),
+
+    #[error("failed to resize and crop image")]
+    ResizeAndCrop(
+        #[from]
+        #[source]
+        ResizeAndCropError,
+    ),
+
+    #[error("failed to get subview of image")]
+    SubImage(
+        #[from]
+        #[source]
+        SubImageError,
+    ),
+
+    #[error("failed to fill image")]
+    Fill(
+        #[from]
+        #[source]
+        FillError,
+    ),
+
+    #[error("failed to fade out image")]
+    FadeOut(
+        #[from]
+        #[source]
+        imageops::FadeError,
+    ),
+
+    #[error("failed to read image")]
+    Read(
+        #[from]
+        #[source]
+        ReadError,
+    ),
+
+    #[error("failed to save image")]
+    Save(
+        #[from]
+        #[source]
+        SaveError,
+    ),
 }
 
 #[cfg(test)]

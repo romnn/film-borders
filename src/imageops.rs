@@ -1,4 +1,8 @@
-use super::arithmetic::{self, ops::CheckedAdd, Cast, CastError, Clamp};
+use super::arithmetic::{
+    self,
+    ops::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
+    Cast, CastError, Clamp,
+};
 use super::types::{self, Point, Rect, Size};
 use super::{error, img};
 pub use image::imageops::*;
@@ -6,20 +10,10 @@ use image::{GenericImage, GenericImageView, Pixel, Rgba};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed convert {alpha} to alpha value")]
-pub struct AlphaError {
-    alpha: f64,
-    source: CastError<f64, u8>,
-}
-
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
-pub enum TransparentComponentsError {
-    #[error(transparent)]
-    Pad(#[from] types::rect::PadError),
-
-    #[error(transparent)]
-    Alpha(#[from] AlphaError),
+#[derive(Clone, Copy, Debug)]
+pub enum FillMode {
+    Blend,
+    Set,
 }
 
 #[inline]
@@ -30,11 +24,11 @@ pub fn find_transparent_components(
     component_threshold: u32,
 ) -> Result<Vec<Rect>, TransparentComponentsError> {
     let mut components: Vec<Rect> = Vec::new();
-    let alpha_threshold = (alpha_threshold * 255.0);
-    let alpha_threshold = alpha_threshold.cast::<u8>().map_err(|err| AlphaError {
-        alpha: alpha_threshold,
-        source: err,
-    })?;
+    let alpha_threshold =
+        CheckedMul::checked_mul(alpha_threshold, 255.0).map_err(arithmetic::Error::from)?;
+    let alpha_threshold = alpha_threshold
+        .cast::<u8>()
+        .map_err(arithmetic::Error::from)?;
 
     let (w, h) = image.inner.dimensions();
     for y in 0..h {
@@ -52,8 +46,10 @@ pub fn find_transparent_components(
             let mut updated = None;
             // check if this is a new component
             for c in &mut components {
-                let contained = c.padded(component_threshold)?.contains(&point);
-                if contained {
+                let padded = c
+                    .padded(component_threshold)
+                    .map_err(arithmetic::Error::from)?;
+                if padded.contains(&point) {
                     // update component
                     updated = Some(*c);
                     c.extend_to(&point);
@@ -83,12 +79,6 @@ pub fn find_transparent_components(
         }
     }
     Ok(components)
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum FillMode {
-    Blend,
-    Set,
 }
 
 #[inline]
@@ -126,12 +116,6 @@ pub fn fill_rect(
     }
 }
 
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum FadeError {
-    #[error(transparent)]
-    Alpha(#[from] AlphaError),
-}
-
 #[inline]
 pub fn fade_out(
     mut image: image::SubImage<&mut image::RgbaImage>,
@@ -149,12 +133,15 @@ pub fn fade_out(
         Axis::Y => (width, height),
     };
     for y in 0..h {
-        let mut frac = f64::from(y) / f64::from(h);
-        frac = (switch_direction - frac).abs();
-        let alpha = 255.0 * frac;
-        let alpha = alpha
-            .cast::<u8>()
-            .map_err(|err| AlphaError { alpha, source: err })?;
+        let alpha = (|| {
+            let mut frac = CheckedDiv::checked_div(f64::from(y), f64::from(h))?;
+            frac = switch_direction - frac;
+            frac = frac.abs();
+            let alpha = CheckedMul::checked_mul(frac, 255.0)?;
+            let alpha = alpha.cast::<u8>()?;
+            Ok::<_, arithmetic::Error>(alpha)
+        })();
+        let alpha = alpha?;
 
         for x in 0..w {
             let (x, y) = match axis {
@@ -170,3 +157,19 @@ pub fn fade_out(
     }
     Ok(())
 }
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+pub enum TransparentComponentsError {
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+}
+
+impl arithmetic::error::Arithmetic for TransparentComponentsError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+pub enum FadeError {
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+}
+
+impl arithmetic::error::Arithmetic for FadeError {}

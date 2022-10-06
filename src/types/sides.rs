@@ -159,24 +159,6 @@ pub mod abs {
                 bottom: side,
             }
         }
-
-        // #[inline]
-        // #[must_use]
-        // pub fn top_left(&self) -> Point {
-        //     Point {
-        //         x: i64::from(self.left),
-        //         y: i64::from(self.top),
-        //     }
-        // }
-
-        // #[inline]
-        // #[must_use]
-        // pub fn bottom_right(&self) -> Point {
-        //     Point {
-        //         x: i64::from(self.right),
-        //         y: i64::from(self.bottom),
-        //     }
-        // }
     }
 
     impl std::fmt::Display for Sides {

@@ -323,14 +323,6 @@ impl std::fmt::Display for Rect {
     }
 }
 
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum SubSidesError {
-    #[error("subtracting {sides} from {rect} exceeds bounds")]
-    OutOfBounds { sides: Sides, rect: Rect },
-    #[error(transparent)]
-    Arithmetic(#[from] arithmetic::Error),
-}
-
 impl CheckedSub<Sides> for Rect {
     type Output = Self;
     type Error = SubSidesError;
@@ -415,7 +407,7 @@ impl CheckedAdd<Sides> for Rect {
 }
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to create rect at {top_left} of size {size}")]
+#[error("failed to create rect at {top_left:#?} of size {size:#?}")]
 pub struct Error {
     top_left: Point,
     size: Size,
@@ -425,7 +417,7 @@ pub struct Error {
 impl arithmetic::error::Arithmetic for Error {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to compute pixel count for {rect}")]
+#[error("failed to compute pixel count for {rect:#?}")]
 pub struct PixelCountError {
     rect: Rect,
     source: arithmetic::Error,
@@ -434,7 +426,7 @@ pub struct PixelCountError {
 impl arithmetic::error::Arithmetic for PixelCountError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to compute center point of {rect}")]
+#[error("failed to compute center point of {rect:#?}")]
 pub struct CenterError {
     rect: Rect,
     source: arithmetic::Error,
@@ -442,28 +434,18 @@ pub struct CenterError {
 
 impl arithmetic::error::Arithmetic for CenterError {}
 
-// #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-// pub enum CenterOffsetErrorSource {
-//     #[error(transparent)]
-//     Center(#[from] CenterError),
-
-//     #[error(transparent)]
-//     Arithmetic(#[from] ops::SubError<Point, Point>),
-// }
-
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to compute center offset from {parent} to {child}")]
+#[error("failed to compute center offset from {parent:#?} to {child:#?}")]
 pub struct CenterOffsetError {
     parent: Rect,
     child: Rect,
     source: arithmetic::Error,
-    // source: CenterOffsetErrorSource,
 }
 
 impl arithmetic::error::Arithmetic for CenterOffsetError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to compute size for {rect}")]
+#[error("failed to compute size for {rect:#?}")]
 pub struct SizeError {
     rect: Rect,
     source: CastError<i64, u32>,
@@ -472,7 +454,7 @@ pub struct SizeError {
 impl arithmetic::error::Arithmetic for SizeError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to add padding of {padding} to {rect}")]
+#[error("failed to add padding of {padding:#?} to {rect:#?}")]
 pub struct PadError {
     rect: Rect,
     padding: u32,
@@ -480,6 +462,16 @@ pub struct PadError {
 }
 
 impl arithmetic::error::Arithmetic for PadError {}
+
+#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+pub enum SubSidesError {
+    #[error("subtracting {sides:#?} from {rect:#?} exceeds bounds")]
+    OutOfBounds { sides: Sides, rect: Rect },
+    #[error(transparent)]
+    Arithmetic(#[from] arithmetic::Error),
+}
+
+impl arithmetic::error::Arithmetic for SubSidesError {}
 
 #[cfg(test)]
 mod tests {
