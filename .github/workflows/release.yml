@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - id: query
-        uses: romnnn/query-git-action@master
+        uses: romnn/query-git-action@master
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -25,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - id: query
+        uses: romnn/query-git-action@master
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -43,6 +46,8 @@ jobs:
           pipenv run invoke pack
 
       - name: Build page
+        env:
+          REACT_APP_VERSION: ${{ steps.query.outputs.stable_semver_version }}
         run: |
           cd www
           yarn install
@@ -62,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - id: query
-        uses: romnnn/query-git-action@master
+        uses: romnn/query-git-action@master
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -96,7 +101,7 @@ jobs:
           toolchain: stable
           override: true
       - id: query
-        uses: romnnn/query-git-action@master
+        uses: romnn/query-git-action@master
 
       - name: Cache docker layers
         uses: actions/cache@v2
@@ -137,7 +142,7 @@ jobs:
           toolchain: stable
           override: true
       - id: query
-        uses: romnnn/query-git-action@master
+        uses: romnn/query-git-action@master
 
       - name: Cache docker layers
         uses: actions/cache@v2

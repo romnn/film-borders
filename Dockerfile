@@ -3,6 +3,7 @@ FROM rust:1.63 as build
 ARG version=0.0.1
 ARG publicURL
 ENV PUBLIC_URL=$publicURL
+ENV REACT_APP_VERSION=$version
 
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 RUN apt-get update && apt-get install -y python3 python3-pip nodejs

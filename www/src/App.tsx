@@ -733,9 +733,13 @@ export default class App extends React.Component<AppProps, AppState> {
         </div>
 
         <form className="parameters" onSubmit={this.update}>
+          <div id="title">
+            <span id="app-title">film borders.</span>
+            <span id="app-version">{process.env.REACT_APP_VERSION}</span>
+          </div>
+
           <fieldset>
             <div className="formgrid">
-              <p id="app-title">film borders.</p>
               <input
                 type="file"
                 disabled={this.state.rendering || this.state.exporting}
@@ -984,17 +988,12 @@ export default class App extends React.Component<AppProps, AppState> {
                 Export
               </button>
             </div>
-            <div className="about">
-              <p>WASM based film border overlays.</p>
-              <p>
-                by <a href="https://romnn.com">romnn</a>
-              </p>
-              <p>
-                code on{" "}
-                <a href="https://github.com/romnn/film-borders">github</a>
-              </p>
-            </div>
           </fieldset>
+          <div className="about">
+            film border overlays by <a href="https://romnn.com">romnn</a>.
+            <br />
+            code on <a href="https://github.com/romnn/film-borders">github</a>
+          </div>
         </form>
       </div>
     );
