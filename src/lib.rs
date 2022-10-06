@@ -211,7 +211,6 @@ impl ImageBorders {
             FitMode::Border => {
                 let primary_component_rect = match border {
                     Some(ref mut border) => {
-                        // let border_size = border_rect.size().unwrap();
                         border.resize_and_crop(border_size, ResizeMode::Contain)?;
                         border.content_rect().map_err(border::Error::from)?
                     }
@@ -230,14 +229,6 @@ impl ImageBorders {
                     size: primary.size(),
                     source: err.into(),
                 })?;
-                // let mut image_rect = c.checked_add(border_rect.top_left()).unwrap();
-                // image_rect = image_rect.padded(3).unwrap();
-                // image_rect = image_rect.clamp(&border_rect);
-                // let image_size = image_rect.size().unwrap();
-
-                // primary.resize_and_crop(image_size, ResizeMode::Cover, CropMode::Center);
-
-                // result_image.overlay(&*primary, image_rect.top_left());
                 if let Some(border) = border {
                     result_image.overlay(&*border, border_rect.top_left());
                 }
@@ -605,11 +596,6 @@ pub enum ResultSizeError {
     #[error(transparent)]
     Arithmetic(#[from] error::Arithmetic),
 
-    // #[error("{msg}")]
-    // Scale {
-    //     msg: String,
-    //     source: types::size::ScaleError,
-    // },
     #[error(transparent)]
     Border(#[from] border::Error),
 }
@@ -657,8 +643,6 @@ pub enum RenderError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    // #[error("missing border")]
-    // MissingBorder,
     #[error("missing input image")]
     MissingImage,
 
@@ -668,6 +652,9 @@ pub enum Error {
         #[source]
         img::ReadError,
     ),
+
+    #[error(transparent)]
+    Image(#[from] img::Error),
 
     #[error("render error")]
     Render(

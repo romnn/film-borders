@@ -586,6 +586,9 @@ impl std::fmt::Display for InvalidTransparentComponentsError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("missing border")]
+    Missing,
+
     #[error("invalid transparent components")]
     Invalid(
         #[from]

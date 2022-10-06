@@ -1,10 +1,10 @@
-use chrono::Utc;
 use clap::Parser;
 #[cfg(feature = "builtin")]
 use filmborders::builtin;
 use filmborders::{
     border::{self, Border},
     debug::Instant,
+    error::Report,
     img, types, Error, ImageBorders,
 };
 use std::path::PathBuf;
@@ -113,18 +113,17 @@ fn main() {
                 #[cfg(not(feature = "builtin"))]
                 let border = options
                     .border
-                    // .unwrap()
-                    // .ok_or(Error::MissingBorder)
+                    .ok_or(border::Error::Missing)
                     .and_then(|border| {
                         Border::open(PathBuf::from(border), None)
                             .map(border::Kind::Custom)
-                            .map_err(Into::into)
+                            .map_err(border::Error::from)
                     });
 
                 let border = match border {
                     Ok(border) => border,
                     Err(err) => {
-                        eprintln!("failed to read border: {:?}", err);
+                        eprintln!("failed to read border: {:?}", err.report());
                         return;
                     }
                 };
@@ -162,18 +161,23 @@ fn main() {
             filmborders::debug!(&border_options);
             match borders
                 .render(border, &border_options)
+                .map_err(Error::from)
                 .and_then(|result| match options.output {
                     Some(output) => result
                         .save_with_filename(output, options.quality)
+                        .map_err(img::Error::from)
                         .map_err(Error::from),
-                    None => result.save(options.quality).map_err(Error::from),
+                    None => result
+                        .save(options.quality)
+                        .map_err(img::Error::from)
+                        .map_err(Error::from),
                 }) {
                 Ok(_) => {
                     println!("completed in {} msec", start.elapsed_millis());
                 }
-                Err(err) => eprintln!("{}", err),
+                Err(err) => eprintln!("{}", err.report()),
             };
         }
-        Err(err) => eprintln!("{}", err),
+        Err(err) => eprintln!("{}", err.report()),
     }
 }
