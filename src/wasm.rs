@@ -1,26 +1,7 @@
 use crate::{border, builtin, error::Report, img, options};
 use image::{DynamicImage, ImageBuffer};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::Clamped;
-use web_sys::{console, CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
-
-pub fn set_panic_hook() {
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
-}
-
-macro_rules! console_log {
-    ( $( $value:expr ),* ) => {{
-        #[allow(unused_mut)]
-        let mut values = js_sys::Array::new();
-        $(
-            values.push(&$value.into());
-        )*
-        web_sys::console::log(&values);
-    }};
-}
-
-pub(crate) use console_log;
+use wasm_bindgen::{prelude::*, Clamped};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 #[inline]
 fn image_from_image_data(img: &ImageData) -> Result<DynamicImage, JsError> {
@@ -89,7 +70,6 @@ impl Image {
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
     ) -> Result<Image, JsValue> {
-        set_panic_hook();
         let inner = image_from_canvas(canvas, ctx)?.to_rgba8();
         Ok(Image {
             inner: img::Image { inner, path: None },
@@ -97,7 +77,6 @@ impl Image {
     }
 
     pub fn from_image_data(data: &ImageData) -> Result<Image, JsError> {
-        set_panic_hook();
         let inner = image_from_image_data(data)?.to_rgba8();
         Ok(Image {
             inner: img::Image { inner, path: None },
@@ -117,7 +96,6 @@ impl ImageBorders {
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
     ) -> Result<ImageBorders, JsValue> {
-        set_panic_hook();
         let img = Image::from_canvas(canvas, ctx)?.inner;
         Ok(Self {
             inner: crate::ImageBorders::single(img),
@@ -126,7 +104,6 @@ impl ImageBorders {
 
     #[inline]
     pub fn from_image_data(data: &ImageData) -> Result<ImageBorders, JsError> {
-        set_panic_hook();
         let img = Image::from_image_data(data)?.inner;
         Ok(Self {
             inner: crate::ImageBorders::single(img),
@@ -138,7 +115,6 @@ impl ImageBorders {
         canvas: &HtmlCanvasElement,
         ctx: &CanvasRenderingContext2d,
     ) -> Result<ImageData, JsValue> {
-        set_panic_hook();
         let img = Image::from_canvas(canvas, ctx)?.inner;
         let size = img.size();
         // convert the raw pixels back to an ImageData object

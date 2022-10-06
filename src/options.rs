@@ -63,6 +63,7 @@ impl Options {
 }
 
 impl Options {
+    #[must_use]
     pub fn background_color(&self) -> types::Color {
         self.background_color.unwrap_or(if self.preview {
             types::Color::gray()

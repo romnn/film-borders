@@ -1,14 +1,14 @@
 use super::arithmetic::{
     self,
-    ops::{CheckedAdd, CheckedDiv, CheckedMul, CheckedSub},
-    Cast, CastError, Clamp,
+    ops::{CheckedDiv, CheckedMul},
+    Cast, Clamp,
 };
-use super::types::{self, Point, Rect, Size};
-use super::{error, img};
+use super::{
+    img,
+    types::{Point, Rect},
+};
 pub use image::imageops::*;
 use image::{GenericImage, GenericImageView, Pixel, Rgba};
-#[cfg(feature = "rayon")]
-use rayon::prelude::*;
 
 #[derive(Clone, Copy, Debug)]
 pub enum FillMode {
@@ -17,7 +17,6 @@ pub enum FillMode {
 }
 
 #[inline]
-#[must_use]
 pub fn find_transparent_components(
     image: &img::Image,
     alpha_threshold: f64,
@@ -127,14 +126,15 @@ pub fn fade_out(
     let switch_direction = if switch_direction { 1.0 } else { 0.0 };
 
     let (width, height) = image.dimensions();
-
-    let (w, h) = match axis {
+    let (width, height) = match axis {
         Axis::X => (height, width),
         Axis::Y => (width, height),
     };
-    for y in 0..h {
+    for y in 0..height {
         let alpha = (|| {
-            let mut frac = CheckedDiv::checked_div(f64::from(y), f64::from(h))?;
+            let y = f64::from(y);
+            let height = f64::from(height);
+            let mut frac = CheckedDiv::checked_div(y, height)?;
             frac = switch_direction - frac;
             frac = frac.abs();
             let alpha = CheckedMul::checked_mul(frac, 255.0)?;
@@ -143,7 +143,7 @@ pub fn fade_out(
         })();
         let alpha = alpha?;
 
-        for x in 0..w {
+        for x in 0..width {
             let (x, y) = match axis {
                 Axis::X => (y, x),
                 Axis::Y => (x, y),

@@ -1,3 +1,4 @@
+#[allow(clippy::module_name_repetitions)]
 pub trait ClampMin {
     #[must_use]
     fn clamp_min<MIN>(self, min: MIN) -> Self
@@ -47,19 +48,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::{Clamp, ClampMin};
+    use approx::assert_abs_diff_eq;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn clamp_using_partial_ord() {
         assert_eq!(Clamp::clamp(10u32, 5u32, 12u32), 10u32);
         assert_eq!(Clamp::clamp(10u32, 11u32, 12u32), 11u32);
-        assert_eq!(Clamp::clamp(3f32, 0f32, 2f32), 2f32);
+        assert_abs_diff_eq!(Clamp::clamp(3f32, 0f32, 2f32), 2f32);
     }
 
     #[test]
     fn clamp_min_using_partial_ord() {
         assert_eq!(ClampMin::clamp_min(10u32, 5u32), 10u32);
         assert_eq!(ClampMin::clamp_min(10u32, 11u32), 11u32);
-        assert_eq!(ClampMin::clamp_min(3f32, 0f32), 3f32);
+        assert_abs_diff_eq!(ClampMin::clamp_min(3f32, 0f32), 3f32);
     }
 }

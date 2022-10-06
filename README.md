@@ -38,13 +38,17 @@ For a list of options, see
 film-borders --help
 ```
 
+#### Linting
+
+```bash
+cargo clippy --tests --benches --examples --all-features -- -Dclippy::all -Dclippy::pedantic
+```
+
 #### TODO
 
-- implement arithmetic errors for more types
 - lint
 - add rendering text
 
-- error handling for lib and border
 - consider: where should into be used, where can be passed by reference
 
 - add single simple benchmark
@@ -68,6 +72,8 @@ film-borders --help
 
 #### Done
 
+- error handling for lib and border
+- implement arithmetic errors for more types
 - make the errors more nuanced, e.g. from what operation they stem from
 - add backtraces to all error types
 - make debug statements console log when on wasm target

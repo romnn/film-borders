@@ -1,16 +1,6 @@
-use super::border;
-use super::error;
-use super::img;
+use super::{border, error};
 use std::io;
 use wasm_bindgen::prelude::*;
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    // #[error("point {point} exceeds image bounds {bounds}")]
-    // OutOfBounds { point: Point, bounds: Rect },
-    // #[error("failed to resize image")]
-    // Resize(#[source] error::Arithmetic),
-}
 
 #[wasm_bindgen]
 #[derive(Debug, Copy, Clone)]

@@ -1,4 +1,4 @@
-#![allow(warnings)]
+// #![allow(warnings)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
@@ -34,7 +34,7 @@ use arithmetic::{
     Cast, Round,
 };
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -112,7 +112,9 @@ impl ImageBorders {
             ..img::Image::with_size(result_size.output_size)
         };
 
-        result_image.fill(options.background_color(), FillMode::Set);
+        result_image
+            .fill(options.background_color(), FillMode::Set)
+            .map_err(img::Error::from)?;
 
         let content_rect = result_size
             .output_size
@@ -281,7 +283,7 @@ fn compute_pre_result_size(
     })();
     let margin = margin.map_err(|err| error::Arithmetic {
         msg: "failed to compute original margin width".to_string(),
-        source: err.into(),
+        source: err,
     })?;
     let margins = Sides::uniform(margin);
     debug!(&margins);
@@ -309,15 +311,12 @@ fn compute_pre_result_size(
             width: Some(width),
             height: Some(height),
         } => Size { width, height },
-        _ => {
-            let size = default_output_size
-                .scale_to_bounds(options.output_size, ResizeMode::Contain)
-                .map_err(|err| error::Arithmetic {
-                    msg: "failed to compute output size".to_string(),
-                    source: err.into(),
-                })?;
-            size
-        }
+        _ => default_output_size
+            .scale_to_bounds(options.output_size, ResizeMode::Contain)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute output size".to_string(),
+                source: err.into(),
+            })?,
     };
     // bound output size but keep aspect ratio
     let output_size = output_size
@@ -329,10 +328,10 @@ fn compute_pre_result_size(
 
     debug!(&output_size);
     Ok(ResultSize {
+        output_size,
         content_size,
         margins,
         frame_width,
-        output_size,
         scale_factor,
     })
 }
@@ -441,6 +440,7 @@ fn prepare_primary(primary: &mut img::Image, options: &Options) -> Result<(), Pr
     Ok(())
 }
 
+#[cfg(feature = "debug")]
 fn draw_text_mut(
     image: &mut img::Image,
     text: &str,
@@ -513,7 +513,7 @@ fn draw_component(
     let component_rect = (|| {
         let mut component_rect = component_rect.checked_add(border_rect.top_left())?;
         component_rect = component_rect.padded(3)?;
-        component_rect = component_rect.clamp(&border_rect);
+        component_rect = component_rect.clamp(border_rect);
         Ok::<_, arithmetic::Error>(component_rect)
     })();
     let component_rect = component_rect.map_err(|err| error::Arithmetic {
@@ -526,7 +526,7 @@ fn draw_component(
     })?;
 
     let center_offset = component_rect
-        .center_offset_to(&border_rect)
+        .center_offset_to(border_rect)
         .map_err(|err| error::Arithmetic {
             msg: "failed to compute center offset of component".into(),
             source: err.into(),

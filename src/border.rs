@@ -3,7 +3,7 @@ use super::img::{self, Image};
 use super::types::{self, Point, Rect, Size};
 use super::{arithmetic, debug, error, imageops};
 use std::cmp::Ordering;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Options {
@@ -110,7 +110,7 @@ impl Border {
             Cast,
         };
 
-        let components = border.transparent_components().to_vec();
+        let components = border.transparent_components().clone();
         if components.len() != 1 {
             return Err(Error::Invalid(InvalidTransparentComponentsError {
                 required: (Ordering::Equal, 1),
@@ -133,7 +133,7 @@ impl Border {
 
         // border is portrait now, we stich vertically
         // todo: find optimal overlay patches somehow
-        let (top_patch_rect, top_patch_size) =
+        let (top_patch_rect, _) =
             compute_patch_rect(border_size, 0.0, 0.25).map_err(|err| error::Arithmetic {
                 msg: "failed to compute top patch".into(),
                 source: err,
@@ -145,8 +145,8 @@ impl Border {
                 source: err,
             })?;
 
-        let (overlay_patch_rect, overlay_patch_size) = compute_patch_rect(border_size, 0.3, 0.7)
-            .map_err(|err| error::Arithmetic {
+        let (_, overlay_patch_size) =
+            compute_patch_rect(border_size, 0.3, 0.7).map_err(|err| error::Arithmetic {
                 msg: "failed to compute overlay patch rect".into(),
                 source: err,
             })?;
@@ -214,7 +214,11 @@ impl Border {
         border_top
             .clip_alpha(&border_top.size().into(), 0, 200)
             .map_err(img::Error::from)?;
-        border_top.crop(&top_patch_rect);
+        border_top
+            .crop(&top_patch_rect)
+            .map_err(img::CropError::from)
+            .map_err(img::Error::from)?;
+
         new_border.overlay(&border_top, Point::origin());
 
         // draw bottom patch
@@ -223,7 +227,10 @@ impl Border {
         border_bottom
             .clip_alpha(&border_bottom.size().into(), 0, 200)
             .map_err(img::Error::from)?;
-        border_bottom.crop(&bottom_patch_rect);
+        border_bottom
+            .crop(&bottom_patch_rect)
+            .map_err(img::CropError::from)
+            .map_err(img::Error::from)?;
 
         let bottom_patch_top_left = Point::from(new_border_size)
             .checked_sub(bottom_patch_size.into())
@@ -401,20 +408,16 @@ impl Border {
     }
 
     #[inline]
-    #[must_use]
     pub fn content_rect(&self) -> Result<&Rect, TransparentComponentsError> {
-        self.transparent_components
-            .first()
-            .ok_or(TransparentComponentsError::Invalid(
-                InvalidTransparentComponentsError {
-                    required: (Ordering::Greater, 0),
-                    components: self.transparent_components.clone(),
-                },
-            ))
+        self.transparent_components.first().ok_or_else(|| {
+            TransparentComponentsError::Invalid(InvalidTransparentComponentsError {
+                required: (Ordering::Greater, 0),
+                components: self.transparent_components.clone(),
+            })
+        })
     }
 
     #[inline]
-    #[must_use]
     pub fn content_size(&self) -> Result<Size, Error> {
         let rect = self.content_rect()?;
         let size = rect.size().map_err(|err| error::Arithmetic {
@@ -425,17 +428,15 @@ impl Border {
     }
 
     #[inline]
-    #[must_use]
     pub fn size_for(
         &self,
         target_content_size: impl Into<types::BoundedSize>,
     ) -> Result<Size, Error> {
         use types::ResizeMode;
 
-        let border_size = self.size();
         let border_content_size = self.content_size()?;
         let target_content_size = target_content_size.into();
-        debug!(&border_size);
+        debug!(&self.size());
         debug!(&border_content_size);
         debug!(&target_content_size);
 
@@ -516,7 +517,10 @@ fn overlay_and_fade_patch(
     patch_size: Size,
     fade_height: u32,
 ) -> Result<(), Error> {
-    patch.crop_to_fit(patch_size, types::CropMode::Center);
+    patch
+        .crop_to_fit(patch_size, types::CropMode::Center)
+        .map_err(img::CropError::from)
+        .map_err(img::Error::from)?;
 
     #[cfg(feature = "debug")]
     patch
@@ -530,18 +534,22 @@ fn overlay_and_fade_patch(
         y: i64::from(fade_height),
     };
     let fade_end = Point::origin();
-    patch.fade_out(fade_start, fade_end, axis);
+    patch
+        .fade_out(fade_start, fade_end, axis)
+        .map_err(img::Error::from)?;
 
     // fade out to bottom
     let fade_start = Point::from(patch_size)
-        .checked_sub(Point::from(fade_start))
+        .checked_sub(fade_start)
         .map_err(|err| error::Arithmetic {
             msg: "failed to compute fade start point for bottom patch".into(),
             source: err.into(),
         })?;
 
     let fade_end = Point::from(patch_size);
-    patch.fade_out(fade_start, fade_end, axis);
+    patch
+        .fade_out(fade_start, fade_end, axis)
+        .map_err(img::Error::from)?;
     image.overlay(&patch, top_left);
     Ok(())
 }
@@ -559,7 +567,7 @@ pub enum TransparentComponentsError {
     ),
 }
 
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, Clone, Debug)]
 pub struct InvalidTransparentComponentsError {
     required: (Ordering, usize),
     components: Vec<Rect>,
@@ -634,7 +642,7 @@ mod tests {
                 red,
                 &Rect::from_points(top_left, bottom_right),
                 FillMode::Blend,
-            );
+            )?;
         }
         border.save_with_filename(output.as_ref(), None)?;
         Ok(())

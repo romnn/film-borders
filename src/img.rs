@@ -1,9 +1,8 @@
-use super::arithmetic::{self, ops::CheckedSub, Cast, CastError};
+use super::arithmetic::{self, ops::CheckedSub, Cast};
 use super::types::{self, sides::abs::Sides, Point, Rect, Size};
-use super::{defaults, error, imageops};
+use super::{defaults, imageops};
 use crate::{debug, debug::Instant};
 pub use image::ImageFormat;
-use std::borrow::Borrow;
 use std::fs;
 use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
@@ -67,7 +66,7 @@ impl Image {
             Ok(image) => Ok(image),
             Err(err) => Err(ReadError {
                 path: None,
-                source: err.into(),
+                source: err,
             }),
         }
     }
@@ -88,7 +87,7 @@ impl Image {
             source: err.source,
         })?;
         Ok(Self {
-            path: Some(path.clone()),
+            path: Some(path),
             ..image
         })
     }
@@ -152,7 +151,7 @@ impl Image {
             Err(err) => Err(SubImageError {
                 rect: *rect,
                 size: self.size(),
-                source: err.into(),
+                source: err,
             }),
         }
     }
@@ -604,7 +603,7 @@ pub struct SubImageError {
 
 impl arithmetic::error::Arithmetic for SubImageError {}
 
-#[derive(thiserror::Error, PartialEq, Clone, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, Clone, Debug)]
 #[error("point {point:#?} exceeds image bounds {bounds:#?}")]
 pub struct OutOfBoundsError {
     point: Point,
@@ -651,10 +650,10 @@ pub enum Error {
     ),
 
     #[error("failed to fade out image")]
-    FadeOut(
+    Fade(
         #[from]
         #[source]
-        imageops::FadeError,
+        FadeError,
     ),
 
     #[error("failed to read image")]

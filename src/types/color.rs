@@ -27,7 +27,7 @@ macro_rules! from_hex {
 #[inline]
 fn hex_to_color(hex: &str) -> Result<Color, Error> {
     lazy_static::lazy_static! {
-        pub static ref HEX_REGEX: Regex = Regex::new(r"^[\s#]*(?P<r>[a-f\d]{2})(?P<g>[a-f\d]{2})(?P<b>[a-f\d]{2})\s*$").unwrap();
+        pub static ref HEX_REGEX: Regex = Regex::new(r"^[\s#]*(?P<r>[a-f\d]{2})(?P<g>[a-f\d]{2})(?P<b>[a-f\d]{2})\s*$").expect("build hex regex");
     };
     let hex = hex.to_ascii_lowercase();
     let components = HEX_REGEX

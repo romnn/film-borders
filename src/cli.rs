@@ -123,7 +123,7 @@ fn main() {
                 let border = match border {
                     Ok(border) => border,
                     Err(err) => {
-                        eprintln!("failed to read border: {:?}", err.report());
+                        eprintln!("failed to read border: {}", err.report());
                         return;
                     }
                 };

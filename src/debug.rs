@@ -7,6 +7,7 @@ pub struct Instant(chrono::NaiveTime);
 impl std::ops::Deref for Instant {
     type Target = chrono::NaiveTime;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -17,35 +18,41 @@ pub struct Duration(chrono::Duration);
 impl std::ops::Deref for Duration {
     type Target = chrono::Duration;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl std::fmt::Display for Duration {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use duration_string::DurationString;
-        let duration = self
-            .0
-            .to_std()
-            .ok()
-            .map(|duration| DurationString::from(duration).to_string())
-            .unwrap_or("?".to_string());
+        let duration = self.0.to_std().ok().map_or_else(
+            || "?".to_string(),
+            |duration| DurationString::from(duration).to_string(),
+        );
         write!(f, "{}", duration)
     }
 }
 
 impl Instant {
+    #[inline]
+    #[must_use]
     pub fn now() -> Self {
         Self(chrono::Utc::now().time())
     }
 
+    #[inline]
+    #[must_use]
     pub fn elapsed(&self) -> Duration {
         let now = Self::now();
         let duration = *now - **self;
         Duration(duration)
     }
 
+    #[inline]
+    #[must_use]
     pub fn elapsed_millis(&self) -> i64 {
         self.elapsed().num_milliseconds()
     }
@@ -59,6 +66,7 @@ impl<T> AsJson for T
 where
     T: Serialize,
 {
+    #[inline]
     fn into_json(self) -> Result<JsValue, JsValue> {
         let json = serde_json::to_string(&self).map_err(JsError::from)?;
         let json = js_sys::JSON::parse(&json)?;

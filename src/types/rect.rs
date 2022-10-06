@@ -21,6 +21,7 @@ mod sealed {
 
     #[wasm_bindgen]
     #[derive(Serialize, PartialEq, Eq, Clone, Copy)]
+    #[allow(clippy::manual_non_exhaustive)]
     pub struct Rect {
         pub top: i64,
         pub left: i64,
@@ -186,7 +187,7 @@ impl Rect {
             Ok(pixel_count) => Ok(pixel_count),
             Err(err) => Err(PixelCountError {
                 rect: *self,
-                source: err.into(),
+                source: err,
             }),
         }
     }
@@ -201,7 +202,7 @@ impl Rect {
             Ok(size) => Ok(size),
             Err(err) => Err(SizeError {
                 rect: *self,
-                source: err.into(),
+                source: err,
             }),
         }
     }
@@ -253,6 +254,7 @@ impl Rect {
     }
 
     #[inline]
+    #[must_use]
     pub fn contains(&self, point: &Point) -> bool {
         let bounds = Bounds {
             x: self.left..=self.right,
@@ -262,6 +264,7 @@ impl Rect {
     }
 
     #[inline]
+    #[must_use]
     pub fn has_intersection(&self, other: &Self) -> bool {
         let self_intersects_other = self.intersects(other);
         let other_intersects_self = other.intersects(self);
@@ -269,6 +272,7 @@ impl Rect {
     }
 
     #[inline]
+    #[must_use]
     pub fn intersects(&self, other: &Self) -> bool {
         let contains_tl = self.contains(&other.top_left());
         let contains_br = self.contains(&other.bottom_right());

@@ -135,7 +135,6 @@ pub mod abs {
         ops::{self, CheckedMul},
         Cast,
     };
-    use crate::types::Point;
     use serde::Serialize;
 
     #[derive(Serialize, PartialEq, Eq, Debug, Default, Copy, Clone)]

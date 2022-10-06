@@ -33,6 +33,7 @@ impl Size {
         size: impl Into<Size>,
         mode: super::ResizeMode,
     ) -> Result<(f64, f64), ScaleFactorsError> {
+        use super::ResizeMode;
         let target = size.into();
         match (|| {
             let target_width = f64::from(target.width);
@@ -43,7 +44,6 @@ impl Size {
             let width_ratio = target_width.checked_div(width)?;
             let height_ratio = target_height.checked_div(height)?;
 
-            use super::ResizeMode;
             let factors = match mode {
                 ResizeMode::Fill => (width_ratio, height_ratio),
                 ResizeMode::Cover => (
@@ -72,7 +72,7 @@ impl Size {
     #[must_use]
     pub fn contains(&self, point: &Point) -> bool {
         let rect = Rect::from(*self);
-        rect.contains(&point)
+        rect.contains(point)
     }
 
     #[inline]
@@ -88,7 +88,6 @@ impl Size {
     }
 
     #[inline]
-    #[must_use]
     pub fn aspect_ratio(&self) -> Result<f64, AspectRatioError> {
         f64::from(self.width)
             .checked_div(f64::from(self.height))
@@ -140,7 +139,6 @@ impl Size {
     }
 
     #[inline]
-    #[must_use]
     pub fn center(self, size: Self) -> Result<super::Rect, CenterError> {
         let parent: Point = self.into();
         let child: Point = size.into();
@@ -191,41 +189,40 @@ impl Size {
         bounds: super::BoundedSize,
         mode: super::ResizeMode,
     ) -> Result<Self, ScaleToBoundsError> {
-        match (|| {
-            match bounds {
-                // unbounded
-                super::BoundedSize {
-                    width: None,
-                    height: None,
-                } => Ok(self),
-                // single dimension is bounded
-                super::BoundedSize {
-                    width: None,
-                    height: Some(height),
-                } => self.scale_to(
-                    Size {
-                        width: self.width,
-                        height,
-                    },
-                    mode,
-                ),
-                super::BoundedSize {
-                    width: Some(width),
-                    height: None,
-                } => self.scale_to(
-                    Size {
-                        width,
-                        height: self.height,
-                    },
-                    mode,
-                ),
-                // all dimensions bounded
-                super::BoundedSize {
-                    width: Some(width),
-                    height: Some(height),
-                } => self.scale_to(Size { width, height }, mode),
-            }
-        })() {
+        let size = match bounds {
+            // unbounded
+            super::BoundedSize {
+                width: None,
+                height: None,
+            } => Ok(self),
+            // single dimension is bounded
+            super::BoundedSize {
+                width: None,
+                height: Some(height),
+            } => self.scale_to(
+                Size {
+                    width: self.width,
+                    height,
+                },
+                mode,
+            ),
+            super::BoundedSize {
+                width: Some(width),
+                height: None,
+            } => self.scale_to(
+                Size {
+                    width,
+                    height: self.height,
+                },
+                mode,
+            ),
+            // all dimensions bounded
+            super::BoundedSize {
+                width: Some(width),
+                height: Some(height),
+            } => self.scale_to(Size { width, height }, mode),
+        };
+        match size {
             Ok(scaled_size) => Ok(scaled_size),
             Err(err) => Err(ScaleToBoundsError {
                 size: self,
@@ -307,7 +304,7 @@ impl Size {
             Err(err) => Err(CropToFitError {
                 size: *self,
                 container: size,
-                source: err.into(),
+                source: err,
             }),
         }
     }
@@ -606,10 +603,7 @@ impl arithmetic::error::Arithmetic for CenterError {}
 #[cfg(test)]
 mod tests {
     use super::Size;
-    use crate::arithmetic::{ops::CheckedAdd, Ceil, Floor, Round};
-    use crate::error::Report;
-    use crate::test::assert_matches_regex;
-    use crate::types::{sides::abs::Sides, CropMode, Point, Rect};
+    use crate::types::{CropMode, Point, Rect};
     use pretty_assertions::assert_eq;
 
     #[test]
