@@ -7,8 +7,9 @@ jobs:
     uses: ./.github/workflows/feature-matrix.yml
 
   build:
-    runs-on: ubuntu-latest
     name: build (features ${{ matrix.features }})
+    runs-on: ubuntu-latest
+    needs: [feature-matrix]
     strategy:
       fail-fast: false
       matrix:
