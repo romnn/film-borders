@@ -21,6 +21,42 @@ jobs:
         with:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+  publish-webapp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: actions/setup-python@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "18"
+
+      - name: Pack wasm
+        run: |
+          pip install pipenv
+          pipenv install --dev
+          npm install --global yarn
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          pipenv run invoke pack
+
+      - name: Build page
+        run: |
+          cd www
+          yarn install
+          yarn build
+          touch build/.nojekyll
+
+      - name: Deploy to pages
+        uses: JamesIves/github-pages-deploy-action@latest
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: gh-pages
+          FOLDER: www/build
+          CLEAN: true
+
   publish-release-binaries:
     runs-on: ubuntu-latest
     steps:
