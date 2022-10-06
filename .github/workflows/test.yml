@@ -3,13 +3,16 @@ name: test
 on: [push, pull_request]
 
 jobs:
+  feature-matrix:
+    uses: ./.github/workflows/feature-matrix.yml
+
   test:
     runs-on: ubuntu-latest
     name: test (features ${{ matrix.features }})
     strategy:
       fail-fast: false
       matrix:
-        features: ["", "borders", "wasm"]
+        features: ${{ fromJson(needs.feature-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
