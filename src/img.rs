@@ -46,7 +46,7 @@ pub struct SaveError {
 }
 
 #[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to fill {rect} of image with size {size}")]
+#[error("failed to fill {rect:#?} of image with size {size:#?}")]
 pub struct FillError {
     rect: Rect,
     size: Size,
@@ -63,7 +63,7 @@ pub enum FadeErrorSource {
 }
 
 #[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to fade out image with size {} from {start} to {end} along {axis}")]
+#[error("failed to fade out image with size {:#?} from {start:#?} to {end:#?} along {axis}")]
 pub struct FadeError {
     size: Size,
     start: Point,
@@ -73,7 +73,7 @@ pub struct FadeError {
 }
 
 #[derive(thiserror::Error, Clone, Debug)]
-#[error("failed to resize image with size {size} to {target} with mode {mode:?}")]
+#[error("failed to resize image with size {size:#?} to {target:#?} with mode {mode:?}")]
 pub struct ResizeError {
     size: Size,
     target: Size,

@@ -69,6 +69,17 @@ where
 #[cfg(feature = "debug")]
 #[macro_export]
 macro_rules! debug {
+    ($val:literal $(,)?) => {{
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log(&js_sys::Array::from_iter([
+            &match $crate::debug::AsJson::into_json($val) {
+                Ok(json) => json,
+                Err(err) => err,
+            }
+        ]));
+        #[cfg(not(target_arch = "wasm32"))]
+        eprintln!("[{}:{}] {}", file!(), line!(), &$val);
+    }};
     ($val:expr $(,)?) => {{
         match $val {
             tmp => {
@@ -111,9 +122,7 @@ macro_rules! debug {
         {
             eprint!("[{}:{}]", file!(), line!());
             $(
-                eprint!(" ");
-                eprint!("{}", $t);
-                eprint!(" ");
+                eprint!(" {}", $t);
             )*
             eprintln!("");
         }

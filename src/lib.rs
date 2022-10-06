@@ -593,10 +593,11 @@ mod tests {
     lazy_static::lazy_static! {
         pub static ref OPTIONS: Options = Options {
             output_size: types::BoundedSize {
-                width: Some(750),
-                height: Some(750),
+                width: Some(2000),
+                height: Some(2000),
             },
-            mode: types::FitMode::Image,
+            // mode: types::FitMode::Image,
+            mode: types::FitMode::Border,
             crop: Some(types::sides::percent::Sides::uniform(0.05)),
             scale_factor: 0.90,
             // frame_width: types::sides::percent::Sides::uniform(0.02),

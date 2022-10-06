@@ -20,6 +20,7 @@ type AppState = {
   filename?: string;
   fitMode?: FitMode;
   fitModeName?: string;
+  customBorder?: string;
   borderOverlay?: Builtin;
   borderOverlayName?: string;
   canvasScale: number;
@@ -105,6 +106,7 @@ export default class App extends React.Component<AppProps, AppState> {
       filename: undefined,
       fitMode: undefined,
       fitModeName: undefined,
+      customBorder: undefined,
       borderOverlay: undefined,
       borderOverlayName: undefined,
       canvasScale: 0.0,
@@ -228,6 +230,26 @@ export default class App extends React.Component<AppProps, AppState> {
     return options;
   };
 
+  getBorderData = async (): Promise<ImageData | null> => {
+    const borderCanvas = this.borderCanvas.current;
+    if (!borderCanvas) return null;
+    const borderCtx = borderCanvas.getContext("2d");
+    if (!borderCtx) return null;
+
+    if (
+      this.state.borderOverlayName === "Custom" &&
+      this.state.customBorder !== undefined
+    ) {
+      return borderCtx.getImageData(
+        0,
+        0,
+        borderCanvas.width,
+        borderCanvas.height
+      );
+    }
+    return null;
+  };
+
   update = async (e?: React.FormEvent<HTMLFormElement>, force = false) => {
     if (!this.state.workerReady) return;
     try {
@@ -274,15 +296,11 @@ export default class App extends React.Component<AppProps, AppState> {
       }
 
       this.lastRenderConfigHash = configHash;
-      const canvas = this.canvas.current;
       const previewCanvas = this.previewCanvas.current;
-      const borderCanvas = this.borderCanvas.current;
-      if (!canvas || !previewCanvas || !borderCanvas) return;
+      if (!previewCanvas) return;
 
-      const canvasCtx = canvas.getContext("2d");
       const previewCtx = previewCanvas.getContext("2d");
-      const borderCtx = borderCanvas.getContext("2d");
-      if (!canvasCtx || !previewCtx || !borderCtx) return;
+      if (!previewCtx) return;
 
       let renderID = uuidv4();
       console.time(renderID);
@@ -295,15 +313,7 @@ export default class App extends React.Component<AppProps, AppState> {
         previewCanvas.height
       );
 
-      let borderData = null;
-      if (this.state.borderOverlayName === "Custom") {
-        borderData = borderCtx.getImageData(
-          0,
-          0,
-          borderCanvas.width,
-          borderCanvas.height
-        );
-      }
+      let borderData = await this.getBorderData();
 
       await this.worker.postMessage({ imageData, borderData });
       let options = await this.getOptions();
@@ -335,18 +345,11 @@ export default class App extends React.Component<AppProps, AppState> {
   exportHighRes = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     await this.setState({ exporting: true });
 
-    let borderCanvas = this.borderCanvas.current;
     let originalCanvas = this.originalCanvas.current;
-    let resultCanvas = this.resultCanvas.current;
-    if (!resultCanvas || !originalCanvas || !borderCanvas) return;
-
-    const borderCtx = borderCanvas.getContext("2d");
+    if (!originalCanvas) return;
     const originalCtx = originalCanvas.getContext("2d");
-    const resultCtx = resultCanvas.getContext("2d");
-    if (!resultCtx || !originalCtx || !borderCtx) return;
+    if (!originalCtx) return;
 
-    // resultCanvas.width = this.state.outputWidth;
-    // resultCanvas.height = this.state.outputHeight;
     let renderID = uuidv4();
     console.time(renderID);
 
@@ -357,27 +360,12 @@ export default class App extends React.Component<AppProps, AppState> {
       originalCanvas.height
     );
 
-    let borderData = null;
-    if (this.state.borderOverlayName === "Custom") {
-      borderData = borderCtx.getImageData(
-        0,
-        0,
-        borderCanvas.width,
-        borderCanvas.height
-      );
-    }
+    let borderData = await this.getBorderData();
 
     await this.worker.postMessage({ imageData, borderData });
     let options = await this.getOptions();
-    // let size = new BoundedSize();
-    // size.width = resultCanvas.width;
-    // size.height = resultCanvas.height;
-    // options.output_size = size;
-    // options.output_size.width = this.state.outputWidth;
-    // options.output_size.height = this.state.outputHeight;
     options.preview = false;
 
-    // console.log(options);
     await this.worker.postMessage({
       borderName: this.state.borderOverlay,
       options: options.serialize(),
@@ -412,8 +400,8 @@ export default class App extends React.Component<AppProps, AppState> {
       img.onload = () => {
         let width = img.width;
         let height = img.height;
-        // canvas.width = width;
-        // canvas.height = height;
+        canvas.width = width;
+        canvas.height = height;
         canvas
           .getContext("2d")
           ?.drawImage(
@@ -434,6 +422,8 @@ export default class App extends React.Component<AppProps, AppState> {
   };
 
   loadBorderImage = async (src: string) => {
+    // await this.setState({ hasBorderImage });
+    console.log(src);
     await this.drawToCanvas(src, this.borderCanvas.current);
   };
 
@@ -446,24 +436,16 @@ export default class App extends React.Component<AppProps, AppState> {
 
         let originalCanvas = this.originalCanvas.current;
         let previewCanvas = this.previewCanvas.current;
-        // let canvas = this.canvas.current;
-        // if (!previewCanvas || !originalCanvas || !canvas) return reject();
         if (!previewCanvas || !originalCanvas) return reject();
 
         this.maxPreviewDim = this.computeMaxPreviewDim(width, height);
         let maxImageDim = Math.max(width, height);
         let previewScale = this.maxPreviewDim / maxImageDim;
 
-        // canvas.width = width * previewScaledownFac;
-        // canvas.height = height * previewScaledownFac;
-
         originalCanvas.width = width;
         originalCanvas.height = height;
         previewCanvas.width = width * previewScale;
         previewCanvas.height = height * previewScale;
-
-        // previewCanvas.width = canvas.width;
-        // previewCanvas.height = canvas.height;
 
         previewCanvas
           .getContext("2d")
@@ -520,20 +502,7 @@ export default class App extends React.Component<AppProps, AppState> {
 
   handleResize = async () => {
     await this.scheduleUpdate();
-    // clearTimeout(this.resizeTimer);
-    // this.resizeTimer = setTimeout(async () => {
-    //   console.log("resize");
-    //   await this.update(undefined, false);
-    // }, 300);
   };
-
-  // scheduleResize = async () => {
-  //   clearTimeout(this.resizeTimer);
-  //   this.resizeTimer = setTimeout(async () => {
-  //     console.log("resize");
-  //     await this.update(undefined, false);
-  //   }, 300);
-  // };
 
   componentDidMount = async () => {
     this.worker = new Worker(
@@ -579,27 +548,33 @@ export default class App extends React.Component<AppProps, AppState> {
 
   openBorderImage = async (files: FileList | null) => {
     if (!files || files.length < 1) return;
-    console.log(`loading ${files[0]}...`);
+    let file = files[0];
+    console.log(`loading ${file}...`);
     let reader = new FileReader();
     reader.onload = async () => {
+      await this.setState({
+        customBorder: file.name,
+      });
       await this.loadBorderImage(reader.result as string);
       await this.update(undefined, true);
     };
-    reader.readAsDataURL(files[0]);
+    reader.readAsDataURL(file);
   };
 
   openImage = async (files: FileList | null) => {
     if (!files || files.length < 1) return;
-    await this.setState({
-      filename: `${this.stripExtension(files[0].name)}_border.png`,
-    });
-    console.log(`loading ${files[0]}...`);
+    let file = files[0];
+    console.log(`loading ${file}...`);
     let reader = new FileReader();
     reader.onload = async () => {
+      await this.setState({
+        filename: `${this.stripExtension(file.name)}_border.png`,
+      });
+      console.log(this.state.filename);
       await this.loadImage(reader.result as string);
       await this.update(undefined, true);
     };
-    reader.readAsDataURL(files[0]);
+    reader.readAsDataURL(file);
   };
 
   updateFitMode = async (e: React.ChangeEvent<HTMLSelectElement>) => {

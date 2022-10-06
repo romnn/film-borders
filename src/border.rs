@@ -1,121 +1,9 @@
 use super::arithmetic::{ops::CheckedSub, Round};
 use super::img::{self, Image};
 use super::types::{self, Point, Rect, Size};
-use super::{arithmetic, error, imageops};
+use super::{arithmetic, debug, error, imageops};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum TransparentComponentsError {
-    #[error(transparent)]
-    TransparentComponents(#[from] imageops::TransparentComponentsError),
-
-    #[error("invalid transparent components")]
-    Invalid(
-        #[from]
-        #[source]
-        InvalidTransparentComponentsError,
-    ),
-}
-
-// #[derive(thiserror::Error, Debug)]
-// pub struct ContentSizeError {
-//     #[error(transparent)]
-//     Size(#[from] types::rect::SizeError)
-
-//     #[error(transparent)]
-//     TransparentComponents(#[from] TransparentComponentsError)
-// }
-
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub struct InvalidTransparentComponentsError {
-    required: (Ordering, usize),
-    components: Vec<Rect>,
-}
-
-impl std::fmt::Display for InvalidTransparentComponentsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let (predicate, required) = self.required;
-        let (predicate_string, required) = match predicate {
-            Ordering::Less => ("at most", required - 1),
-            Ordering::Equal => ("exactly", required),
-            Ordering::Greater => ("at least", required + 1),
-        };
-        write!(
-            f,
-            "have {} components ({:?}), but {} {} are required",
-            self.components.len(),
-            self.components,
-            predicate_string,
-            required
-        )
-    }
-}
-
-// #[derive(thiserror::Error, Debug)]
-// pub enum CustomBorderError {
-//     #[error("invalid transparent components")]
-//     Invalid(
-//         #[from]
-//         #[source]
-//         InvalidTransparentComponentsError,
-//     ),
-
-//     #[error(transparent)]
-//     TransparentComponents(#[from] TransparentComponentsError),
-
-//     // #[error(transparent)]
-//     // Size(#[from] types::rect::SizeError),
-
-//     // #[error(transparent)]
-//     // Border(#[from] Error),
-
-//     #[error(transparent)]
-//     Arithmetic(#[from] error::Arithmetic),
-
-// // ContentSizeError 
-// }
-
-// #[derive(thiserror::Error, Clone, Debug)]
-// #[error("{msg}")]
-// pub struct ArithmeticError {
-//         msg: String,
-//         source: arithmetic::Error,
-//     }
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    // #[error("insufficient transparent components")]
-    // InsufficientTransparentComponents(
-    //     #[from]
-    //     #[source]
-    //     InsufficientTransparentComponentsError,
-    // ),
-    // #[error(transparent)]
-    // TransparentComponents(#[from] TransparentComponentsError),
-    #[error("invalid transparent components")]
-    Invalid(
-        #[from]
-        #[source]
-        InvalidTransparentComponentsError,
-    ),
-
-    #[error(transparent)]
-    TransparentComponents(#[from] TransparentComponentsError),
-
-    // #[error(transparent)]
-    // CustomBorder(#[from] CustomBorderError),
-
-    #[error(transparent)]
-    Image(#[from] img::Error),
-
-    #[error(transparent)]
-    Arithmetic(#[from] error::Arithmetic),
-
-    // #[error(transparent)]
-    // Size(#[from] types::rect::SizeError),
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Options {
@@ -167,77 +55,19 @@ pub struct Border {
     transparent_components: Vec<Rect>,
 }
 
-fn compute_patch_rect(
-    size: Size,
-    top_percent: f64,
-    bottom_percent: f64,
-) -> Result<(Rect, Size), arithmetic::Error> {
-        use arithmetic::{
-            ops::{CheckedMul},
-            Cast,
-        };
+impl std::ops::Deref for Border {
+    type Target = Image;
 
-    let top_left = Point {
-        x: 0,
-        y: f64::from(size.height)
-            .checked_mul(top_percent)?
-            .cast::<i64>()?,
-    };
-    let bottom_right = Point {
-        x: i64::from(size.width),
-        y: f64::from(size.height)
-            .checked_mul(bottom_percent)?
-            .cast::<i64>()?,
-    };
-    let rect = Rect::from_points(top_left, bottom_right);
-    let size = rect.size()?;
-    Ok((rect, size))
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
-fn overlay_and_fade_patch(
-    image: &mut img::Image,
-    mut patch: img::Image,
-    top_left: Point,
-    patch_size: Size,
-    fade_height: u32,
-    // top_percent: f64,
-    // bottom_percent: f64,
-// ) -> Result<(), CustomBorderError> {
-) -> Result<(), Error> {
-        // let mut border_overlay_patch = border.inner.clone();
-    // let patch_size = patch.size();
-    // let fade_size = Size {
-    //         width: patch_size.width,
-    //         height: fade_height,
-    //     };
-            patch.crop_to_fit(patch_size, types::CropMode::Center);
-
-
-            let axis = types::Axis::Y;
-            // fade out to top
-            let fade_start = Point {
-                x: i64::from(patch_size.width),
-                y: i64::from(fade_height),
-            };
-            let fade_end = Point::origin();
-            patch.fade_out(fade_start, fade_end, axis);
-            
-            // fade out to bottom
-            let fade_start = Point::from(patch_size).checked_sub(Point::from(fade_start)).map_err(|err| error::Arithmetic{
-                msg: "failed to compute fade start point to fade out bottom of patch".to_string(),
-                source: err.into(),
-            })?;
-
-            let fade_end = Point::from(patch_size);
-            patch.fade_out(
-                fade_start,
-                fade_end,
-                axis,
-            );
-            image.overlay(&patch, top_left);
-            Ok(())
+impl std::ops::DerefMut for Border {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
-
 
 impl Border {
     #[inline]
@@ -274,7 +104,6 @@ impl Border {
         mut border: Self,
         content_size: Size,
         stich_direction: Option<types::Orientation>,
-    // ) -> Result<Self, CustomBorderError> {
     ) -> Result<Self, Error> {
         use arithmetic::{
             ops::{CheckedAdd, CheckedDiv, CheckedMul},
@@ -283,167 +112,141 @@ impl Border {
 
         let components = border.transparent_components().to_vec();
         if components.len() != 1 {
-            return Err(Error::Invalid(
-                InvalidTransparentComponentsError {
-                    required: (Ordering::Equal, 1),
-                    components,
-                },
-            ));
+            return Err(Error::Invalid(InvalidTransparentComponentsError {
+                required: (Ordering::Equal, 1),
+                components,
+            }));
         }
         // by default, use the longer dimension to stich
         let stich_direction = stich_direction.unwrap_or(types::Orientation::Portrait);
         border.rotate_to_orientation(stich_direction)?;
-        let target_content_size = content_size.rotate_to_orientation(stich_direction);
+        let original_orientation = content_size.orientation();
+        let content_size = content_size.rotate_to_orientation(stich_direction);
+        debug!(&content_size);
+
         let border_size = border.size_for(types::BoundedSize {
-            width: Some(target_content_size.width),
+            width: Some(content_size.width),
             height: None,
         })?;
-        crate::debug!(&border_size);
+        debug!(&border_size);
         border.resize_and_crop(border_size, types::ResizeMode::Cover)?;
-        crate::debug!(border.content_size().as_ref().ok().copied());
 
         // border is portrait now, we stich vertically
         // todo: find optimal overlay patches somehow
-        let (top_patch_rect, top_patch_size) = compute_patch_rect(border_size, 0.0, 0.25).map_err(|err| 
-        // let top_patch_rect = (|| {
-        //     let top_left = Point { x: 0, y: 0 };
-        //     let bottom_right = Point {
-        //         x: i64::from(border_size.width),
-        //         y: f64::from(border_size.height)
-        //             .checked_mul(0.25)?
-        //             .cast::<i64>()?, // .map_err(arithmetic::Error::from)
-        //                              // .and_then(|y| y.cast::<i64>().map_err(arithmetic::Error::from))
-        //                              // .map_err(|err| CustomBorderError::Arithmetic {
-        //                              //     msg: "".to_string(),
-        //                              //     source: err,
-        //                              // })?,
-        //     };
-        //     let rect = Rect::from_points(top_left, bottom_right);
-        //     Ok::<_, arithmetic::Error>(rect)
-        // })();
-        // let top_patch_rect = top_patch_rect.map_err(|err| 
-        error::Arithmetic{
-            msg: "failed to compute top patch".to_string(),
-            source: err,
-        })?;
-
-        // let top_patch_size = top_patch_rect.size()?;
-
-        // let bottom_patch_rect = (|| {
-        //     let top_left = Point {
-        //         x: 0,
-        //         y: f64::from(border_size.height)
-        //             .checked_mul(0.75)?
-        //             .cast::<i64>()?, // .map_err(arithmetic::Error::from)
-        //                              // .and_then(|y| y.cast::<i64>().map_err(arithmetic::Error::from))
-        //                              // .map_err(|err| CustomBorderError::Arithmetic {
-        //                              //     msg: "failed to compute bottom patch rect".to_string(),
-        //                              //     source: err,
-        //                              // })?,
-        //     };
-        //     let bottom_right = Point {
-        //         x: i64::from(border_size.width),
-        //         y: i64::from(border_size.height),
-        //     };
-        //     let rect = Rect::from_points(top_left, bottom_right);
-        //     Ok::<_, arithmetic::Error>(rect)
-        // })();
-        let (bottom_patch_rect, bottom_patch_size) = compute_patch_rect(border_size, 0.75, 1.0).map_err(|err|
-        // let bottom_patch_rect = bottom_patch_rect.map_err(|err| 
-                                                          error::Arithmetic{
-            msg: "failed to compute bottom patch".to_string(),
-            source: err,
-        })?;
-        // let bottom_patch_size = bottom_patch_rect.size().map_err(|err|
-        //     error::Arithmetic{
-        //     msg: "failed to compute bottom patch size".to_string(),
-        //     source: err.into(),
-        // })?;
-
-        // let overlay_patch_rect = (|| {
-        //     let top_left = Point {
-        //         x: 0,
-        //         y: f64::from(border_size.height)
-        //             .checked_mul(0.3)?
-        //             .cast::<i64>()?,
-        //     };
-        //     let bottom_right = Point {
-        //         x: i64::from(border_size.width),
-        //         y: f64::from(border_size.height)
-        //             .checked_mul(0.7)?
-        //             .cast::<i64>()?,
-        //     };
-        //     let rect = Rect::from_points(top_left, bottom_right);
-        //     Ok::<_, arithmetic::Error>(rect)
-        // })();
-        let (overlay_patch_rect, overlay_patch_size) = compute_patch_rect(border_size, 0.3, 0.7).map_err(|err| {
-            error::Arithmetic{
-                msg: "failed to compute overlay patch rect".to_string(),
+        let (top_patch_rect, top_patch_size) =
+            compute_patch_rect(border_size, 0.0, 0.25).map_err(|err| error::Arithmetic {
+                msg: "failed to compute top patch".into(),
                 source: err,
-            }
-        })?;
-        // let overlay_patch_size = overlay_patch_rect.size()?;
+            })?;
+
+        let (bottom_patch_rect, bottom_patch_size) = compute_patch_rect(border_size, 0.75, 1.0)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute bottom patch".into(),
+                source: err,
+            })?;
+
+        let (overlay_patch_rect, overlay_patch_size) = compute_patch_rect(border_size, 0.3, 0.7)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute overlay patch rect".into(),
+                source: err,
+            })?;
 
         // create buffer for the new border
         let border_content_size = border.content_size()?;
+        debug!(&border_content_size);
+
         let border_padding = border_size
             .checked_sub(border_content_size)
-            .map_err(|err| error::Arithmetic{
+            .map_err(|err| error::Arithmetic {
                 msg: "failed to compute border padding".to_string(),
                 source: err.into(),
             })?;
-        let new_border_size = target_content_size
-            .checked_add(border_padding)
-            .map_err(|err| error::Arithmetic{
-                msg: "failed to compute new border size".to_string(),
-                source: err.into(),
-            })?;
+        debug!(&border_padding);
+
+        let new_border_size =
+            content_size
+                .checked_add(border_padding)
+                .map_err(|err| error::Arithmetic {
+                    msg: "failed to compute new border size".to_string(),
+                    source: err.into(),
+                })?;
+
         let mut new_border = Image::with_size(new_border_size);
-        crate::debug!(&new_border.size());
+        debug!(&new_border.size());
 
         #[cfg(feature = "debug")]
         {
-            use imageops::FillMode;
-            let green = types::Color::rgba(0, 100, 0, 255);
+            let green = types::Color::rgba(0, 255, 0, 255);
             let clear = types::Color::clear();
-            new_border.fill(green, FillMode::Set);
-            new_border.fill_rect(clear, border.content_rect()?, FillMode::Set);
+            new_border
+                .fill(green, imageops::FillMode::Set)
+                .map_err(img::Error::from)?;
+
+            let content_rect = border.content_rect()?;
+            debug!(&content_rect);
+
+            let new_border_content_rect = (|| {
+                let bottom_right_padding =
+                    Point::from(border.size()).checked_sub(content_rect.bottom_right())?;
+                let new_border_content_rect_bottom_right =
+                    Point::from(new_border_size).checked_sub(bottom_right_padding)?;
+
+                let rect = Rect::from_points(
+                    content_rect.top_left(),
+                    new_border_content_rect_bottom_right,
+                );
+                Ok::<_, arithmetic::Error>(rect)
+            })();
+            let new_border_content_rect =
+                new_border_content_rect.map_err(|err| error::Arithmetic {
+                    msg: "failed to compute new border content rect".into(),
+                    source: err,
+                })?;
+
+            new_border
+                .fill_rect(clear, &new_border_content_rect, imageops::FillMode::Set)
+                .map_err(img::Error::from)?;
         }
 
         // draw top patch
         let mut border_top: Image = border.inner.clone();
+        #[cfg(feature = "debug")]
+        border_top
+            .clip_alpha(&border_top.size().into(), 0, 200)
+            .map_err(img::Error::from)?;
         border_top.crop(&top_patch_rect);
         new_border.overlay(&border_top, Point::origin());
 
         // draw bottom patch
         let mut border_bottom = border.inner.clone();
+        #[cfg(feature = "debug")]
+        border_bottom
+            .clip_alpha(&border_bottom.size().into(), 0, 200)
+            .map_err(img::Error::from)?;
         border_bottom.crop(&bottom_patch_rect);
 
-        assert_eq!(new_border_size.width, bottom_patch_size.width);
-        let bottom_patch_top_left = 
-            // CheckedSub::checked_sub(new_border_size.height, bottom_patch_size.height)
-            Point::from(new_border_size)
+        let bottom_patch_top_left = Point::from(new_border_size)
             .checked_sub(bottom_patch_size.into())
-            .map_err(|err| error::Arithmetic{
+            .map_err(|err| error::Arithmetic {
                 msg: "failed to compute bottom patch top left".to_string(),
                 source: err.into(),
             })?;
-        // new_border.overlay(&border_bottom, (0, i64bottom_patch_top_left_y));
         new_border.overlay(&border_bottom, bottom_patch_top_left);
 
         // draw patches in between
         let fill_height = (|| {
             let mut height = i64::from(new_border_size.height);
             height = CheckedSub::checked_sub(height, bottom_patch_rect.height())?;
-            // height = CheckedSub::checked_sub(height, i64::from(top_patch_size.height))?;
             height = CheckedSub::checked_sub(height, top_patch_rect.height())?;
             let height = height.cast::<u32>()?;
             Ok::<_, arithmetic::Error>(height)
         })();
-        let fill_height: u32 = fill_height.map_err(|err| error::Arithmetic{
+        let fill_height: u32 = fill_height.map_err(|err| error::Arithmetic {
             msg: "failed to compute fill height".to_string(),
             source: err,
         })?;
+        debug!(&fill_height);
+        debug!(&overlay_patch_size.height);
 
         let fade_height = (|| {
             let height = f64::from(overlay_patch_size.height)
@@ -452,26 +255,22 @@ impl Border {
                 .cast::<u32>()?;
             Ok::<_, arithmetic::Error>(height)
         })();
-        let fade_height = fade_height.map_err(|err| error::Arithmetic{
+        let fade_height = fade_height.map_err(|err| error::Arithmetic {
             msg: "failed to compute fade height".to_string(),
             source: err,
         })?;
+        debug!(&fade_height);
 
-        // let fade_size = Size {
-        //     width: overlay_patch_size.width,
-        //     height: fade_height,
-        // };
-        // let safe_patch_height = overlay_patch_size.height - 2 * fade_size.height;
         let safe_patch_height = (|| {
             let total_fade_height = CheckedMul::checked_mul(fade_height, 2)?;
             let height = CheckedSub::checked_sub(overlay_patch_size.height, total_fade_height)?;
             Ok::<_, arithmetic::Error>(height)
         })();
-        let safe_patch_height = safe_patch_height.map_err(|err| error::Arithmetic{
+        let safe_patch_height = safe_patch_height.map_err(|err| error::Arithmetic {
             msg: "failed to compute safe patch height".to_string(),
             source: err,
         })?;
-
+        debug!(&safe_patch_height);
 
         let num_patches = (|| {
             let patches = f64::from(fill_height)
@@ -480,24 +279,24 @@ impl Border {
                 .cast::<u32>()?;
             Ok::<_, arithmetic::Error>(patches)
         })();
-        let num_patches = num_patches.map_err(|err| error::Arithmetic{
+        let num_patches = num_patches.map_err(|err| error::Arithmetic {
             msg: "failed to compute number of patches".to_string(),
             source: err,
         })?;
-        // assert!(num_patches > 0);
-        crate::debug!(&num_patches);
+        debug!(&num_patches);
 
         let new_safe_patch_height = (|| {
             let height = f64::from(fill_height)
-            .checked_div(f64::from(num_patches))?
-            .ceil()
-            .cast::<u32>()?;
+                .checked_div(f64::from(num_patches))?
+                .ceil()
+                .cast::<u32>()?;
             Ok::<_, arithmetic::Error>(height)
         })();
-        let new_safe_patch_height = new_safe_patch_height.map_err(|err| error::Arithmetic{
+        let new_safe_patch_height = new_safe_patch_height.map_err(|err| error::Arithmetic {
             msg: "failed to compute new safe patch height".to_string(),
             source: err,
         })?;
+        debug!(&new_safe_patch_height);
         assert!(new_safe_patch_height <= safe_patch_height);
 
         let patch_height = (|| {
@@ -505,10 +304,11 @@ impl Border {
             let height = CheckedAdd::checked_add(safe_patch_height, total_fade_height)?;
             Ok::<_, arithmetic::Error>(height)
         })();
-        let patch_height = patch_height.map_err(|err| error::Arithmetic{
+        let patch_height = patch_height.map_err(|err| error::Arithmetic {
             msg: "failed to compute patch height".to_string(),
             source: err,
         })?;
+        debug!(&patch_height);
 
         let patch_size = Size {
             width: overlay_patch_size.width,
@@ -516,45 +316,34 @@ impl Border {
         };
 
         for i in 0..num_patches {
-                        let patch_top_left = (|| {
-// overlay_patch_size.height
-            let mut patch_offset_y = CheckedMul::checked_mul(i64::from(i), 
-                i64::from(safe_patch_height))?;
-            patch_offset_y = CheckedSub::checked_sub(patch_offset_y, i64::from(fade_height))?;
-                // .checked_mul(
-                //     i64::from(patch_safe_height)
-                //         .checked_sub(i64::from(fade_height))
-                //         .unwrap(),
-                // )
-                // .unwrap();
+            let patch_top_left = (|| {
+                let mut patch_offset_y =
+                    CheckedMul::checked_mul(i64::from(i), i64::from(safe_patch_height))?;
+                patch_offset_y = CheckedSub::checked_sub(patch_offset_y, i64::from(fade_height))?;
 
-                let top_left = top_patch_rect
-                    .bottom_left()
-                    .checked_add(Point {
-                        x: 0,
-                        y: patch_offset_y,
-                    })?;
-                    // .unwrap();
-                    Ok::<_, arithmetic::Error>(top_left)
+                let top_left = top_patch_rect.bottom_left().checked_add(Point {
+                    x: 0,
+                    y: patch_offset_y,
+                })?;
+                Ok::<_, arithmetic::Error>(top_left)
             })();
 
-            let patch_top_left = patch_top_left.map_err(|err| error::Arithmetic{
+            let patch_top_left = patch_top_left.map_err(|err| error::Arithmetic {
                 msg: "failed to compute patch top left".to_string(),
                 source: err,
             })?;
 
-
-            overlay_and_fade_patch(&mut new_border, border.inner.clone(), patch_top_left, patch_size, fade_height)?;
-            // .map_err(|err| ArithmeticError {
-            //     msg: "failed to compute patch top left".to_string(),
-            //     source: err,
-            // })?;
+            overlay_and_fade_patch(
+                &mut new_border,
+                border.inner.clone(),
+                patch_top_left,
+                patch_size,
+                fade_height,
+            )?;
         }
 
         let mut new_border = Self::from_image(new_border, border.options)?;
-
-        // match orientation to target content size
-        new_border.rotate_to_orientation(content_size.orientation())?;
+        new_border.rotate_to_orientation(original_orientation)?;
         Ok(new_border)
     }
 
@@ -614,8 +403,9 @@ impl Border {
     #[inline]
     #[must_use]
     pub fn content_rect(&self) -> Result<&Rect, TransparentComponentsError> {
-        self.transparent_components.first().ok_or(
-TransparentComponentsError::Invalid(
+        self.transparent_components
+            .first()
+            .ok_or(TransparentComponentsError::Invalid(
                 InvalidTransparentComponentsError {
                     required: (Ordering::Greater, 0),
                     components: self.transparent_components.clone(),
@@ -627,41 +417,65 @@ TransparentComponentsError::Invalid(
     #[must_use]
     pub fn content_size(&self) -> Result<Size, Error> {
         let rect = self.content_rect()?;
-        let size = rect.size().map_err(|err| error::Arithmetic{
-                msg: "failed to compute size of content rect".to_string(),
-                source: err.into(),
-            })?;
+        let size = rect.size().map_err(|err| error::Arithmetic {
+            msg: "failed to compute size of content rect".to_string(),
+            source: err.into(),
+        })?;
         Ok(size)
     }
 
     #[inline]
     #[must_use]
-    pub fn size_for(&self, target_content_size: impl Into<types::BoundedSize>) -> Result<Size, Error> {
-        let content_size = self.content_size()?;
+    pub fn size_for(
+        &self,
+        target_content_size: impl Into<types::BoundedSize>,
+    ) -> Result<Size, Error> {
+        use types::ResizeMode;
+
+        let border_size = self.size();
+        let border_content_size = self.content_size()?;
         let target_content_size = target_content_size.into();
-        crate::debug!(&self.size());
-        crate::debug!(&content_size);
-        crate::debug!(&target_content_size);
+        debug!(&border_size);
+        debug!(&border_content_size);
+        debug!(&target_content_size);
 
         // scale down if larger than target content size
-        let new_content_size = content_size
-            .scale_to_bounds(target_content_size, types::ResizeMode::Contain)
-            .unwrap();
-        crate::debug!(&new_content_size);
+        let contain_content_size = border_content_size
+            .scale_to_bounds(target_content_size, ResizeMode::Contain)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to scale border content size".into(),
+                source: err.into(),
+            })?;
+        debug!(&contain_content_size);
 
         // scale up as little as possible to cover target content size
-        let new_content_size = new_content_size
-            .scale_to_bounds(target_content_size, types::ResizeMode::Cover)
-            .unwrap();
-        crate::debug!(&new_content_size);
+        let cover_content_size = contain_content_size
+            .scale_to_bounds(target_content_size, ResizeMode::Cover)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to scale border content size".into(),
+                source: err.into(),
+            })?;
+        debug!(&cover_content_size);
 
-        let scale_factor = content_size
-            .scale_factor(new_content_size, types::ResizeMode::Cover)
-            .unwrap();
-        crate::debug!(&scale_factor);
+        let border_scale_factor = border_content_size
+            .scale_factor(cover_content_size, ResizeMode::Cover)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute scale factor for border".into(),
+                source: err.into(),
+            })?;
 
-        let scaled = self.size().scale_by::<_, Round>(scale_factor.0).unwrap();
-        Ok(scaled)
+        debug!(&border_scale_factor);
+
+        let scaled_border_size = self
+            .size()
+            .scale_by::<_, Round>(border_scale_factor.0)
+            .map_err(|err| error::Arithmetic {
+                msg: "failed to compute scaled border size".into(),
+                source: err.into(),
+            })?;
+
+        debug!(&scaled_border_size);
+        Ok(scaled_border_size)
     }
 
     #[inline]
@@ -671,18 +485,122 @@ TransparentComponentsError::Invalid(
     }
 }
 
-impl std::ops::Deref for Border {
-    type Target = Image;
+fn compute_patch_rect(
+    size: Size,
+    top_percent: f64,
+    bottom_percent: f64,
+) -> Result<(Rect, Size), arithmetic::Error> {
+    use arithmetic::{ops::CheckedMul, Cast};
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    let top_left = Point {
+        x: 0,
+        y: f64::from(size.height)
+            .checked_mul(top_percent)?
+            .cast::<i64>()?,
+    };
+    let bottom_right = Point {
+        x: i64::from(size.width),
+        y: f64::from(size.height)
+            .checked_mul(bottom_percent)?
+            .cast::<i64>()?,
+    };
+    let rect = Rect::from_points(top_left, bottom_right);
+    let size = rect.size()?;
+    Ok((rect, size))
+}
+
+fn overlay_and_fade_patch(
+    image: &mut img::Image,
+    mut patch: img::Image,
+    top_left: Point,
+    patch_size: Size,
+    fade_height: u32,
+) -> Result<(), Error> {
+    patch.crop_to_fit(patch_size, types::CropMode::Center);
+
+    #[cfg(feature = "debug")]
+    patch
+        .clip_alpha(&patch.size().into(), 0, 200)
+        .map_err(img::Error::from)?;
+
+    let axis = types::Axis::Y;
+    // fade out to top
+    let fade_start = Point {
+        x: i64::from(patch_size.width),
+        y: i64::from(fade_height),
+    };
+    let fade_end = Point::origin();
+    patch.fade_out(fade_start, fade_end, axis);
+
+    // fade out to bottom
+    let fade_start = Point::from(patch_size)
+        .checked_sub(Point::from(fade_start))
+        .map_err(|err| error::Arithmetic {
+            msg: "failed to compute fade start point for bottom patch".into(),
+            source: err.into(),
+        })?;
+
+    let fade_end = Point::from(patch_size);
+    patch.fade_out(fade_start, fade_end, axis);
+    image.overlay(&patch, top_left);
+    Ok(())
+}
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum TransparentComponentsError {
+    #[error(transparent)]
+    TransparentComponents(#[from] imageops::TransparentComponentsError),
+
+    #[error("invalid transparent components")]
+    Invalid(
+        #[from]
+        #[source]
+        InvalidTransparentComponentsError,
+    ),
+}
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub struct InvalidTransparentComponentsError {
+    required: (Ordering, usize),
+    components: Vec<Rect>,
+}
+
+impl std::fmt::Display for InvalidTransparentComponentsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let (predicate, required) = self.required;
+        let (predicate_string, required) = match predicate {
+            Ordering::Less => ("at most", required - 1),
+            Ordering::Equal => ("exactly", required),
+            Ordering::Greater => ("at least", required + 1),
+        };
+        write!(
+            f,
+            "have {} components ({:?}), but {} {} are required",
+            self.components.len(),
+            self.components,
+            predicate_string,
+            required
+        )
     }
 }
 
-impl std::ops::DerefMut for Border {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("invalid transparent components")]
+    Invalid(
+        #[from]
+        #[source]
+        InvalidTransparentComponentsError,
+    ),
+
+    #[error(transparent)]
+    TransparentComponents(#[from] TransparentComponentsError),
+
+    #[error(transparent)]
+    Image(#[from] img::Error),
+
+    #[error(transparent)]
+    Arithmetic(#[from] error::Arithmetic),
 }
 
 #[cfg(test)]
@@ -709,17 +627,11 @@ mod tests {
                 y: c.bottom,
                 x: c.right,
             };
-            // let size: Size = bottom_right
-            //     .checked_sub(top_left)
-            //     .unwrap()
-            //     .try_into()
-            //     .unwrap();
             border.fill_rect(
                 red,
                 &Rect::from_points(top_left, bottom_right),
                 FillMode::Blend,
             );
-            // border.fill_rect(red, top_left, size, FillMode::Blend);
         }
         border.save_with_filename(output.as_ref(), None)?;
         Ok(())
