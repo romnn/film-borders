@@ -3,6 +3,8 @@
 **/*.rs.bk
 **/*.svg
 testing/
+examples/*
+!examples/*.rs
 bin/
 pkg/
 wasm-pack.log
