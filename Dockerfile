@@ -1,5 +1,7 @@
 FROM rust:1.63 as build
 
+LABEL MAINTAINER="roman <contact@romnn.com>"
+
 ARG version=0.0.1
 ARG publicURL
 ENV PUBLIC_URL=$publicURL
@@ -13,16 +15,9 @@ RUN pip install pipenv
 RUN npm install --global yarn
 
 WORKDIR /build
-ADD ./Pipfile* /build/
-RUN pipenv install --dev
+ADD ./ /build/
 
-ADD ./src /build/src
-ADD ./benches /build/benches
-ADD ./examples /build/examples
-ADD ./samples /build/samples
-ADD ./Cargo.* /build/
-ADD ./tasks.py /build/
-ADD ./www /build/www
+RUN pipenv install --dev
 RUN pipenv run invoke pack
 
 RUN echo "Using version ${version}"
