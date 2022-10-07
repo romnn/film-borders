@@ -1,6 +1,6 @@
 [package]
 name = "filmborders"
-version = "0.0.30"
+version = "0.0.31"
 authors = ["romnn <contact@romnn.com>"]
 edition = "2021"
 description = "add hipster film borders to your images :)"
