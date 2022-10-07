@@ -53,6 +53,7 @@ jobs:
           cd www
           yarn install
           yarn build
+          tree build
           touch build/.nojekyll
 
       - name: Deploy to pages

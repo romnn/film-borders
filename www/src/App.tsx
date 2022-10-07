@@ -162,7 +162,7 @@ export default class App extends React.Component<AppProps, AppState> {
       return;
     }
     try {
-      await this.loadImage("/sample.jpg");
+      await this.loadImage(`${process.env.PUBLIC_URL}/sample.jpg`);
       await this.update(undefined, true);
       console.log("loaded image");
     } catch (err: unknown) {
