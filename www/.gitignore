@@ -1,3 +1,6 @@
+# generated
+/public/wasm/
+
 # dependencies
 /node_modules
 /.pnp

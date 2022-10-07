@@ -79,6 +79,7 @@ def pack(c):
 
     c.run("mkdir -p {}".format(WWW_PUBLIC_WASM_DIR))
     c.run("rm -rf {}".format(WWW_PUBLIC_WASM_DIR))
+    c.run("rm {}".format("pkg/.gitignore"))
     c.run("cp -R {} {}".format("pkg", WWW_PUBLIC_WASM_DIR))
 
 

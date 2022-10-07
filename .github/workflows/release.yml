@@ -59,10 +59,9 @@ jobs:
       - name: Deploy to pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: www/build
-          CLEAN: true
+          branch: gh-pages
+          folder: www/build
+          clean: true
 
   publish-release-binaries:
     runs-on: ubuntu-latest
