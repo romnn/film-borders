@@ -1,16 +1,16 @@
 {
   "files": {
     "main.css": "https://romnn.github.io/film-borders/static/css/main.bea759fc.css",
-    "main.js": "https://romnn.github.io/film-borders/static/js/main.6204b995.js",
+    "main.js": "https://romnn.github.io/film-borders/static/js/main.a087640d.js",
     "static/js/787.184ee296.chunk.js": "https://romnn.github.io/film-borders/static/js/787.184ee296.chunk.js",
-    "static/media/filmborders_bg.wasm": "https://romnn.github.io/film-borders/static/media/filmborders_bg.afcf03bf28221674b514.wasm",
+    "static/media/filmborders_bg.wasm": "https://romnn.github.io/film-borders/static/media/filmborders_bg.5303e568db50d4cc5a36.wasm",
     "index.html": "https://romnn.github.io/film-borders/index.html",
     "main.bea759fc.css.map": "https://romnn.github.io/film-borders/static/css/main.bea759fc.css.map",
-    "main.6204b995.js.map": "https://romnn.github.io/film-borders/static/js/main.6204b995.js.map",
+    "main.a087640d.js.map": "https://romnn.github.io/film-borders/static/js/main.a087640d.js.map",
     "787.184ee296.chunk.js.map": "https://romnn.github.io/film-borders/static/js/787.184ee296.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.bea759fc.css",
-    "static/js/main.6204b995.js"
+    "static/js/main.a087640d.js"
   ]
 }

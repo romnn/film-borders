@@ -1,0 +1,28 @@
+{
+  "name": "filmborders",
+  "collaborators": [
+    "romnn <contact@romnn.com>"
+  ],
+  "description": "add hipster film borders to your images :)",
+  "version": "0.0.32",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/romnn/film-borders"
+  },
+  "files": [
+    "filmborders_bg.wasm",
+    "filmborders.js",
+    "filmborders.d.ts"
+  ],
+  "browser": "filmborders.js",
+  "homepage": "https://film-borders.romnn.com",
+  "types": "filmborders.d.ts",
+  "keywords": [
+    "image",
+    "35mm",
+    "film",
+    "photography",
+    "borders"
+  ]
+}
