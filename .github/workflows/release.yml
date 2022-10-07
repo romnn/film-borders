@@ -48,6 +48,7 @@ jobs:
       - name: Build page
         env:
           REACT_APP_VERSION: ${{ steps.query.outputs.stable_semver_version }}
+          PUBLIC_URL: https://romnn.github.io/film-borders
         run: |
           cd www
           yarn install

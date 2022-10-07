@@ -551,7 +551,7 @@ pub struct ScaleToError {
 impl arithmetic::error::Arithmetic for ScaleToError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to scale {size:#?} to bounds {bounds:#?} with mode {:?}")]
+#[error("failed to scale {size:#?} to bounds {bounds:#?} with mode {mode:?}")]
 pub struct ScaleToBoundsError {
     size: Size,
     bounds: super::BoundedSize,

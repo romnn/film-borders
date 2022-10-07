@@ -520,7 +520,7 @@ pub struct FillError {
 }
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to fade out image with size {:#?} from {start:#?} to {end:#?} along {axis}")]
+#[error("failed to fade out image with size {size:#?} from {start:#?} to {end:#?} along {axis}")]
 pub struct FadeError {
     size: Size,
     start: Point,
@@ -543,7 +543,7 @@ pub struct ResizeError {
 impl arithmetic::error::Arithmetic for ResizeError {}
 
 #[derive(thiserror::Error, PartialEq, Clone, Debug)]
-#[error("failed to crop image with size {size:#?} to fit {target:#?} with mode {:?}")]
+#[error("failed to crop image with size {size:#?} to fit {target:#?} with mode {mode:?}")]
 pub struct CropToFitError {
     size: Size,
     target: Size,
