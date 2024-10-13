@@ -1,5 +1,4 @@
 body
-  background-color: #e1f5fe
   // background-color: #003147
   color: white
   color: #ffe81e
@@ -7,16 +6,36 @@ body
   color: #ff7fba
   color: black
   
-#app
+#root
+  // background-color: green
   display: flex
   flex-flow: column wrap
-  min-height: 0
-  min-width: 0
 
   @media (min-width: 600px)
     flex-flow: row nowrap
-    height: 100%
-    overflow: hidden
+    align-items: center
+    justify-content: center
+
+#app
+  background-color: #e1f5fe
+  background-color: #a9b6bc
+  background-color: #ebebeb
+  // background-color: red
+  display: flex
+  flex-flow: column wrap
+  // min-height: 0
+  // min-width: 0
+  
+  @media (min-width: 600px)
+    flex-flow: row nowrap
+    max-width: 1000px
+    border-radius: 10px
+    height: 80%
+    padding: 5px
+    flex: 1
+
+    // height: 100%
+    // overflow: hidden
 
 .parameters
   // display: inline-flex

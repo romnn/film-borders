@@ -1,11 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap')
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;600&display=swap')
+// @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap')
+// @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;600&display=swap')
+pt-root-ui_regular.woff
+
+@mixin font($font-family, $font-weight, $font-file)
+  @font-face
+    font-family: $font-family
+    src: url($font-file+'.woff2') format('woff2')
+    src: url($font-file+'.woff') format('woff')
+    font-weight: $font-weight
+    font-style: normal
+
+
+@include font('PTRootUI', 400, 'fonts/pt-root-ui_regular')
+@include font('PTRootUI', 500, 'fonts/pt-root-ui_medium')
+@include font('PTRootUI', 600, 'fonts/pt-root-ui_bold')
 
 html, body, #root
   margin: 0
   height: 100%
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif
+  // font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif
+  // font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif
+  font-family: 'PTRootUI', -apple-system, BlinkMacSystemFont, sans-serif
   font-weight: 400
   font-size: 1rem
   text-transform: lowercase
@@ -45,33 +60,68 @@ fieldset
   margin: 2em auto
   border: 0 none
 
+input[type="text"], input[type="file"], input[type="color"], textarea, select
+  line-height: 30px
+  height: 30px
+
 input, textarea, select, button
+  font-family: inherit
+  font-weight: 500
   color: inherit
   box-sizing: border-box
   background-color: transparent
-  padding: 2px
+  // padding: 2px
   margin: 0
   outline: 0 none
   box-shadow: none
-  border: 1px solid transparent
+  // border: 1px solid transparent
+  border: none
   clear: both
   float: right
   width: 50%
   // &:focus
   //   border: 1px solid #ff1288
   &:hover
-    border: 1px solid #ff1288
+    // border: 1px solid #ff1288
   &:disabled
     opacity: 0.5
     &:hover
-      border: 1px solid transparent
+      // border: 1px solid transparent
+
+input[type="color"]
+  -webkit-appearance: none
+  border: none
+  padding: 6px
+  // width: 32px
+  // height: 32px
+
+input[type="color"]::-webkit-color-swatch-wrapper
+  padding: 0
+
+input[type="color"]::-webkit-color-swatch
+  border: none
+
+input[type=file]::file-selector-button,
+input[type=file]::-webkit-file-upload-button
+  // visibility: hidden
+  font-weight: 500
+  font-family: inherit
+  color: black
+  background-color: transparent
+  border: none
+
+input[type=file]::file-selector-button,
+input[type=file]::-webkit-file-upload-button
+
+  &:hover
+    color: red
 
 button
   color: inherit
   // font-weight: 600
   // color: white
   border: 1px solid #ff1288
-  margin-bottom: 10px
+  // margin-bottom: 10px
   // border: 1px solid black
   padding: 2px
   // background-color: lightblue
@@ -84,8 +134,10 @@ button
 
 
 label
-  margin-bottom: 10px
+  line-height: 30px
+  height: 30px
+  // margin-bottom: 10px
   float: left
-  width: calc(50% - 10px)
+  // width: calc(50% - 10px)
   text-align: right
   padding-right: 10px

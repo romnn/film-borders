@@ -126,17 +126,20 @@ where
         match self.0.kind {
             Some(kind) => {
                 let kind = match kind {
-                    arithmetic::error::Kind::DivideByZero => "is undefined".to_string(),
-                    other => other.to_string(),
+                    arithmetic::error::Kind::DivideByZero => {
+                        write!(f, "dividing {} by {} is undefined", self.0.lhs, self.0.rhs)
+                    }
+                    other => {
+                        write!(
+                            f,
+                            "dividing {} by {} would {} {}",
+                            self.0.lhs,
+                            self.0.rhs,
+                            other,
+                            std::any::type_name::<Lhs>(),
+                        )
+                    }
                 };
-                write!(
-                    f,
-                    "dividing {} by {} would {} {}",
-                    self.0.lhs,
-                    self.0.rhs,
-                    kind,
-                    std::any::type_name::<Lhs>(),
-                )
             }
             None => write!(f, "cannot divide {} by {}", self.0.lhs, self.0.rhs),
         }
